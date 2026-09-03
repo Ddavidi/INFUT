@@ -1,0 +1,50 @@
+// Prisma Schema - INFUT
+// Issues #12 (User table), #18 (Profile fields), #22 (Pelada table)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(uuid())
+  name         String
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  sport        String?
+  position     String?
+  photoUrl     String?  @map("photo_url")
+  region       String?  // Para o mapa de localização (Sprint 3)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  // Relações
+  organizedPeladas Pelada[] @relation("organizer")
+
+  @@map("users")
+}
+
+model Pelada {
+  id             String   @id @default(uuid())
+  title          String
+  sport          String
+  dateTime       DateTime @map("date_time")
+  location       String
+  locationAddress String?  @map("location_address")
+  price          Float?
+  isRecurring    Boolean  @default(false) @map("is_recurring")
+  recurrenceDay  String?  @map("recurrence_day") // 'monday', 'tuesday', etc.
+  maxPlayers     Int?     @map("max_players")
+  organizerId    String   @map("organizer_id")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  // Relações
+  organizer User @relation("organizer", fields: [organizerId], references: [id])
+
+  @@map("peladas")
+}

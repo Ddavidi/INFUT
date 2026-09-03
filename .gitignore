@@ -1,0 +1,38 @@
+﻿# Node
+node_modules/
+npm-debug.log*
+
+# Expo
+.expo/
+dist/
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build
+build/
+*.tsbuildinfo
+
+# Prisma
+backend/prisma/migrations/**/migration_lock.toml
+
+# Docker
+docker-compose.override.yml
