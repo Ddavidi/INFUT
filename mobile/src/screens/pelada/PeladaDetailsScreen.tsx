@@ -71,6 +71,9 @@ export function PeladaDetailsScreen({ route, navigation }: Props) {
         <Text style={styles.title}>{pelada.title}</Text>
         <Text style={styles.subtitle}>{pelada.sport} - {new Date(pelada.dateTime).toLocaleString()}</Text>
         <Text style={styles.subtitle}>{pelada.location}</Text>
+        {pelada.price != null && pelada.price > 0 && (
+          <Text style={styles.priceTag}>Valor: R$ {pelada.price.toFixed(2)} por pessoa</Text>
+        )}
       </View>
 
       <View style={styles.rsvpSection}>
@@ -151,6 +154,7 @@ const styles = StyleSheet.create({
   backButtonText: { color: colors.primary, fontWeight: '600', fontSize: fonts.sizes.md },
   title: { fontSize: fonts.sizes.xxl, fontWeight: '800', color: colors.textPrimary },
   subtitle: { fontSize: fonts.sizes.md, color: colors.textSecondary, marginTop: 4 },
+  priceTag: { fontSize: fonts.sizes.lg, fontWeight: '700', color: colors.primary, marginTop: spacing.sm },
   rsvpSection: { padding: spacing.lg, backgroundColor: colors.card, margin: spacing.md, borderRadius: borderRadius.lg, borderWidth: 1, borderColor: colors.borderLight },
   sectionTitle: { fontSize: fonts.sizes.lg, fontWeight: '700', color: colors.textPrimary, marginBottom: spacing.sm },
   statusConfirmed: { color: colors.success, fontWeight: '600', marginBottom: spacing.md, fontSize: fonts.sizes.md },
