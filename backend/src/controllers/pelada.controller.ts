@@ -43,4 +43,19 @@ export class PeladaController {
       next(error);
     }
   }
+
+  async join(req: Request, res: Response, next: NextFunction) {
+    try {
+      const userId = req.user!.userId;
+      const { inviteCode } = req.body;
+      if (!inviteCode) {
+        return res.status(400).json({ error: 'O código de convite (inviteCode) é obrigatório' });
+      }
+      const result = await peladaService.join(userId, inviteCode);
+      res.status(200).json(result);
+    } catch (error) {
+      next(error);
+    }
+  }
 }
+

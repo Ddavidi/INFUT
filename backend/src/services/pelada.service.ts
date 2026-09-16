@@ -4,6 +4,10 @@ import { CreatePeladaInput } from '../schemas/pelada.schema';
 
 const prisma = new PrismaClient();
 
+function generateInviteCode(): string {
+  return Math.random().toString(36).substring(2, 8).toUpperCase();
+}
+
 export class PeladaService {
   async create(organizerId: string, data: CreatePeladaInput) {
     const pelada = await prisma.pelada.create({
@@ -18,6 +22,7 @@ export class PeladaService {
         recurrenceDay: data.recurrenceDay,
         maxPlayers: data.maxPlayers,
         organizerId,
+        inviteCode: generateInviteCode(),
       },
       include: {
         organizer: {
@@ -43,7 +48,7 @@ export class PeladaService {
       where: {
         OR: [
           { organizerId: userId },
-          // Futuramente: peladas onde o usuario foi convidado
+          { participants: { some: { userId: userId, status: 'CONFIRMED' } } },
         ],
       },
       include: {
@@ -106,6 +111,53 @@ export class PeladaService {
     return { message: 'Peladinha cancelada com sucesso' };
   }
 
+  async join(userId: string, inviteCode: string) {
+    const pelada = await prisma.pelada.findUnique({
+      where: { inviteCode },
+    });
+
+    if (!pelada) {
+      const error: any = new Error('Código de convite inválido ou inexistente');
+      error.statusCode = 404;
+      throw error;
+    }
+
+    if (pelada.organizerId === userId) {
+      const error: any = new Error('Você já é o organizador desta pelada');
+      error.statusCode = 400;
+      throw error;
+    }
+
+    if (pelada.maxPlayers) {
+      const currentParticipants = await prisma.participant.count({
+        where: { peladaId: pelada.id, status: 'CONFIRMED' }
+      });
+      if (currentParticipants >= pelada.maxPlayers) {
+        const error: any = new Error('A pelada já atingiu o número máximo de jogadores');
+        error.statusCode = 400;
+        throw error;
+      }
+    }
+
+    try {
+      await prisma.participant.create({
+        data: {
+          userId,
+          peladaId: pelada.id,
+          status: 'CONFIRMED'
+        }
+      });
+      return { message: 'Você entrou na pelada com sucesso!', pelada };
+    } catch (e: any) {
+      if (e.code === 'P2002') { // Prisma Unique Constraint Violation
+        const error: any = new Error('Você já está participando desta pelada');
+        error.statusCode = 400;
+        throw error;
+      }
+      throw e;
+    }
+  }
+
   // Cria instancias futuras para peladas recorrentes
   private async createRecurringInstances(
     basePelada: any,
@@ -134,6 +186,7 @@ export class PeladaService {
           recurrenceDay: basePelada.recurrenceDay,
           maxPlayers: basePelada.maxPlayers,
           organizerId: basePelada.organizerId,
+          inviteCode: generateInviteCode(),
         },
       });
     }

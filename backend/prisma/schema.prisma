@@ -24,6 +24,7 @@ model User {
 
   // Relações
   organizedPeladas Pelada[] @relation("organizer")
+  participations   Participant[]
 
   @@map("users")
 }
@@ -40,11 +41,28 @@ model Pelada {
   recurrenceDay  String?  @map("recurrence_day") // 'monday', 'tuesday', etc.
   maxPlayers     Int?     @map("max_players")
   organizerId    String   @map("organizer_id")
+  inviteCode     String?  @unique @map("invite_code")
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
   // Relações
   organizer User @relation("organizer", fields: [organizerId], references: [id])
+  participants Participant[]
 
   @@map("peladas")
+}
+
+model Participant {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  peladaId  String   @map("pelada_id")
+  status    String   @default("CONFIRMED") // Para uso futuro na US06 (RSVP)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user   User   @relation(fields: [userId], references: [id])
+  pelada Pelada @relation(fields: [peladaId], references: [id])
+
+  @@unique([userId, peladaId])
+  @@map("participants")
 }

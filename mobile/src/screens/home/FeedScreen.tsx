@@ -1,10 +1,12 @@
 // Feed Screen - Pelada listing (Issue #26)
 import React, { useState, useCallback } from 'react';
-import { View, Text, FlatList, StyleSheet, TouchableOpacity, RefreshControl } from 'react-native';
+import { View, Text, FlatList, StyleSheet, TouchableOpacity, RefreshControl, Share, Modal, TextInput, Alert, ActivityIndicator } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { listPeladas } from '../../services/peladaService';
+import { listPeladas, joinPelada } from '../../services/peladaService';
 import { Pelada } from '../../types';
+import { AuthContext } from '../../contexts/AuthContext';
+import { useContext } from 'react';
 import { colors, fonts, spacing, borderRadius } from '../../constants/theme';
 
 type Props = {
@@ -20,7 +22,7 @@ function formatDate(dateStr: string): string {
   return day + '/' + month + ' as ' + hours + ':' + mins;
 }
 
-function PeladaCard({ pelada }: { pelada: Pelada }) {
+function PeladaCard({ pelada, isOrganizer }: { pelada: Pelada, isOrganizer: boolean }) {
   const sportEmojis: Record<string, string> = {
     'Futebol': '\u26BD', 'Futsal': '\uD83C\uDFDF\uFE0F', 'Volei': '\uD83C\uDFD0',
     'Basquete': '\uD83C\uDFC0', 'Handebol': '\uD83E\uDD3E', 'Beach Tennis': '\uD83C\uDFBE',
@@ -67,15 +69,34 @@ function PeladaCard({ pelada }: { pelada: Pelada }) {
 
       <View style={styles.cardFooter}>
         <Text style={styles.organizerText}>Organizado por {pelada.organizer.name}</Text>
+        {isOrganizer && pelada.inviteCode && (
+          <TouchableOpacity 
+            style={styles.shareButton} 
+            onPress={async () => {
+              try {
+                await Share.share({
+                  message: `Vem jogar na minha pelada "${pelada.title}"! \nBaixe o app INFUT e insira o código: ${pelada.inviteCode}`,
+                });
+              } catch (e) {}
+            }}
+          >
+            <Text style={styles.shareButtonText}>{'\uD83D\uDCE4'} Convite</Text>
+          </TouchableOpacity>
+        )}
       </View>
     </TouchableOpacity>
   );
 }
 
 export function FeedScreen({ navigation }: Props) {
+  const { user } = useContext(AuthContext);
   const [peladas, setPeladas] = useState<Pelada[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
+  
+  const [modalVisible, setModalVisible] = useState(false);
+  const [inviteCode, setInviteCode] = useState('');
+  const [isJoining, setIsJoining] = useState(false);
 
   const loadPeladas = useCallback(async () => {
     try {
@@ -100,17 +121,43 @@ export function FeedScreen({ navigation }: Props) {
     loadPeladas();
   }, [loadPeladas]);
 
+  const handleJoin = async () => {
+    if (!inviteCode || inviteCode.length < 5) {
+      Alert.alert('Erro', 'Código inválido');
+      return;
+    }
+    setIsJoining(true);
+    try {
+      await joinPelada(inviteCode.trim().toUpperCase());
+      Alert.alert('Sucesso!', 'Você entrou na peladinha!');
+      setModalVisible(false);
+      setInviteCode('');
+      loadPeladas();
+    } catch (error: any) {
+      Alert.alert('Erro', error.response?.data?.error || 'Erro ao entrar na pelada');
+    } finally {
+      setIsJoining(false);
+    }
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>INFUT</Text>
-        <Text style={styles.headerSubtitle}>Suas peladinhas</Text>
+        <View style={styles.headerRow}>
+          <View>
+            <Text style={styles.headerTitle}>INFUT</Text>
+            <Text style={styles.headerSubtitle}>Suas peladinhas</Text>
+          </View>
+          <TouchableOpacity style={styles.joinButton} onPress={() => setModalVisible(true)}>
+            <Text style={styles.joinButtonText}>+ Entrar</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <FlatList
         data={peladas}
         keyExtractor={(item) => item.id}
-        renderItem={({ item }) => <PeladaCard pelada={item} />}
+        renderItem={({ item }) => <PeladaCard pelada={item} isOrganizer={user?.id === item.organizerId} />}
         contentContainerStyle={styles.list}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
@@ -123,6 +170,32 @@ export function FeedScreen({ navigation }: Props) {
           </View>
         }
       />
+
+      <Modal visible={modalVisible} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Entrar na Pelada</Text>
+            <Text style={styles.modalSubtitle}>Digite o código recebido do organizador.</Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Ex: AB12C"
+              placeholderTextColor={colors.textMuted}
+              value={inviteCode}
+              onChangeText={setInviteCode}
+              autoCapitalize="characters"
+              maxLength={8}
+            />
+            <View style={styles.modalActions}>
+              <TouchableOpacity style={styles.modalCancel} onPress={() => setModalVisible(false)}>
+                <Text style={styles.modalCancelText}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.modalSubmit} onPress={handleJoin} disabled={isJoining}>
+                {isJoining ? <ActivityIndicator color={colors.background} /> : <Text style={styles.modalSubmitText}>Entrar</Text>}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -152,10 +225,25 @@ const styles = StyleSheet.create({
   cardRow: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.xs },
   cardIcon: { fontSize: 16, marginRight: spacing.sm, width: 24 },
   cardInfo: { fontSize: fonts.sizes.sm, color: colors.textSecondary },
-  cardFooter: { borderTopWidth: 1, borderTopColor: colors.borderLight, paddingTop: spacing.sm },
   organizerText: { fontSize: fonts.sizes.xs, color: colors.textMuted },
   empty: { alignItems: 'center', paddingTop: 80 },
   emptyEmoji: { fontSize: 64, marginBottom: spacing.md },
   emptyTitle: { fontSize: fonts.sizes.xl, fontWeight: '700', color: colors.textPrimary },
   emptySubtitle: { fontSize: fonts.sizes.md, color: colors.textSecondary, marginTop: spacing.xs },
+  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  joinButton: { backgroundColor: colors.primary, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: borderRadius.md },
+  joinButtonText: { color: colors.background, fontWeight: '700', fontSize: fonts.sizes.sm },
+  shareButton: { backgroundColor: colors.lightTeal, paddingHorizontal: spacing.md, paddingVertical: spacing.xs, borderRadius: borderRadius.sm },
+  shareButtonText: { color: colors.primary, fontWeight: '600', fontSize: fonts.sizes.xs },
+  cardFooter: { borderTopWidth: 1, borderTopColor: colors.borderLight, paddingTop: spacing.sm, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
+  modalContent: { backgroundColor: colors.card, padding: spacing.lg, borderRadius: borderRadius.lg, width: '85%' },
+  modalTitle: { fontSize: fonts.sizes.xl, fontWeight: '700', color: colors.textPrimary, marginBottom: spacing.xs },
+  modalSubtitle: { fontSize: fonts.sizes.sm, color: colors.textSecondary, marginBottom: spacing.md },
+  modalInput: { backgroundColor: colors.background, borderWidth: 1, borderColor: colors.borderLight, borderRadius: borderRadius.md, padding: spacing.md, fontSize: fonts.sizes.lg, color: colors.textPrimary, textAlign: 'center', letterSpacing: 3 },
+  modalActions: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: spacing.lg, gap: spacing.md },
+  modalCancel: { padding: spacing.sm },
+  modalCancelText: { color: colors.textSecondary, fontWeight: '600', fontSize: fonts.sizes.md },
+  modalSubmit: { backgroundColor: colors.primary, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, borderRadius: borderRadius.md, justifyContent: 'center' },
+  modalSubmitText: { color: colors.background, fontWeight: '700', fontSize: fonts.sizes.md },
 });

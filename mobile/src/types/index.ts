@@ -29,6 +29,7 @@ export interface Pelada {
   recurrenceDay: string | null;
   maxPlayers: number | null;
   organizerId: string;
+  inviteCode: string | null;
   createdAt: string;
   updatedAt: string;
   organizer: {

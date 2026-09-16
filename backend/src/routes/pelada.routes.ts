@@ -9,6 +9,7 @@ const router = Router();
 const peladaController = new PeladaController();
 
 router.post('/', authMiddleware, validate(createPeladaSchema), (req, res, next) => peladaController.create(req, res, next));
+router.post('/join', authMiddleware, (req, res, next) => peladaController.join(req, res, next));
 router.get('/', authMiddleware, (req, res, next) => peladaController.list(req, res, next));
 router.get('/:id', authMiddleware, (req, res, next) => peladaController.getById(req, res, next));
 router.delete('/:id', authMiddleware, (req, res, next) => peladaController.delete(req, res, next));

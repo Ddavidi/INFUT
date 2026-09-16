@@ -20,3 +20,8 @@ export async function getPeladaById(id: string): Promise<Pelada> {
 export async function deletePelada(id: string): Promise<void> {
   await api.delete(`/peladas/${id}`);
 }
+
+export async function joinPelada(inviteCode: string): Promise<{ message: string, pelada: Pelada }> {
+  const response = await api.post('/peladas/join', { inviteCode });
+  return response.data;
+}
