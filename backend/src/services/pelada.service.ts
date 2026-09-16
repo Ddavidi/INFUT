@@ -88,6 +88,9 @@ export class PeladaService {
                 region: true,
               },
             },
+            _count: {
+              select: { receivedVotes: true }
+            }
           },
         },
       },
@@ -221,6 +224,63 @@ export class PeladaService {
     });
 
     return { message: 'Status de pagamento atualizado com sucesso' };
+  }
+
+  async updateStats(organizerId: string, peladaId: string, participantId: string, stats: { goals?: number, assists?: number, defenses?: number }) {
+    const pelada = await prisma.pelada.findUnique({ where: { id: peladaId } });
+    
+    if (!pelada) {
+      const error: any = new Error('Pelada não encontrada');
+      error.statusCode = 404;
+      throw error;
+    }
+
+    if (pelada.organizerId !== organizerId) {
+      const error: any = new Error('Apenas o organizador pode alterar as estatísticas');
+      error.statusCode = 403;
+      throw error;
+    }
+
+    await prisma.participant.update({
+      where: { id: participantId },
+      data: {
+        goals: stats.goals,
+        assists: stats.assists,
+        defenses: stats.defenses,
+      }
+    });
+
+    return { message: 'Estatísticas atualizadas com sucesso' };
+  }
+
+  async voteMvp(userId: string, peladaId: string, candidateParticipantId: string) {
+    const voterParticipant = await prisma.participant.findUnique({
+      where: { userId_peladaId: { userId, peladaId } }
+    });
+
+    if (!voterParticipant) {
+      const error: any = new Error('Você não é participante desta pelada para votar');
+      error.statusCode = 403;
+      throw error;
+    }
+
+    // Verificar se o candidato existe na pelada
+    const candidateParticipant = await prisma.participant.findUnique({
+      where: { id: candidateParticipantId }
+    });
+
+    if (!candidateParticipant || candidateParticipant.peladaId !== peladaId) {
+      const error: any = new Error('Candidato inválido ou não pertence a esta pelada');
+      error.statusCode = 400;
+      throw error;
+    }
+
+    await prisma.participant.update({
+      where: { id: voterParticipant.id },
+      data: { votedForMvpId: candidateParticipantId }
+    });
+
+    return { message: 'Voto registrado com sucesso!' };
   }
 
   // Cria instancias futuras para peladas recorrentes

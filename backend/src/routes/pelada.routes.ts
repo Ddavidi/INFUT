@@ -15,6 +15,8 @@ router.get('/', authMiddleware, (req, res, next) => peladaController.list(req, r
 router.get('/:id', authMiddleware, (req, res, next) => peladaController.getById(req, res, next));
 router.put('/:id/rsvp', authMiddleware, (req, res, next) => peladaController.rsvp(req, res, next));
 router.patch('/:id/payment', authMiddleware, (req, res, next) => peladaController.togglePayment(req, res, next));
+router.patch('/:id/participants/:participantId/stats', authMiddleware, (req, res, next) => peladaController.updateStats(req, res, next));
+router.post('/:id/mvp-vote', authMiddleware, (req, res, next) => peladaController.voteMvp(req, res, next));
 router.delete('/:id', authMiddleware, (req, res, next) => peladaController.delete(req, res, next));
 
 export default router;

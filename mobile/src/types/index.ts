@@ -42,6 +42,13 @@ export interface Pelada {
     status: string;
     absenceReason: string | null;
     paid: boolean;
+    goals: number;
+    assists: number;
+    defenses: number;
+    votedForMvpId: string | null;
+    _count?: {
+      receivedVotes: number;
+    };
     user: {
       id: string;
       name: string;

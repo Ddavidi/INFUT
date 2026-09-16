@@ -35,3 +35,13 @@ export async function togglePayment(id: string, paid: boolean): Promise<any> {
   const response = await api.patch(`/peladas/${id}/payment`, { paid });
   return response.data;
 }
+
+export async function updateStats(peladaId: string, participantId: string, stats: { goals: number, assists: number, defenses: number }): Promise<any> {
+  const response = await api.patch(`/peladas/${peladaId}/participants/${participantId}/stats`, stats);
+  return response.data;
+}
+
+export async function voteMvp(peladaId: string, candidateParticipantId: string): Promise<any> {
+  const response = await api.post(`/peladas/${peladaId}/mvp-vote`, { candidateParticipantId });
+  return response.data;
+}

@@ -91,6 +91,36 @@ export class PeladaController {
       next(error);
     }
   }
+
+  async updateStats(req: Request, res: Response, next: NextFunction) {
+    try {
+      const organizerId = req.user!.userId; // Assumimos que quem bate é o organizador
+      const { id, participantId } = req.params;
+      const { goals, assists, defenses } = req.body;
+      
+      const result = await peladaService.updateStats(organizerId, id, participantId, { goals, assists, defenses });
+      res.status(200).json(result);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async voteMvp(req: Request, res: Response, next: NextFunction) {
+    try {
+      const userId = req.user!.userId;
+      const { id } = req.params;
+      const { candidateParticipantId } = req.body;
+
+      if (!candidateParticipantId) {
+        return res.status(400).json({ error: 'Você precisa enviar o candidato' });
+      }
+
+      const result = await peladaService.voteMvp(userId, id, candidateParticipantId);
+      res.status(200).json(result);
+    } catch (error) {
+      next(error);
+    }
+  }
 }
 
 

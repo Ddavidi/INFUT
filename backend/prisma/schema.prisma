@@ -59,11 +59,24 @@ model Participant {
   status        String   @default("CONFIRMED") // Para uso futura na US06 (RSVP)
   absenceReason String?  @map("absence_reason") // Motivo opcional
   paid          Boolean  @default(false) // Indica se o participante já pagou (US08)
+  
+  // Estatísticas do jogador na pelada (US10)
+  goals         Int      @default(0)
+  assists       Int      @default(0)
+  defenses      Int      @default(0)
+
+  // Votação do MVP (US10)
+  votedForMvpId String?  @map("voted_for_mvp_id")
+
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   user   User   @relation(fields: [userId], references: [id])
   pelada Pelada @relation(fields: [peladaId], references: [id])
+  
+  // Relações do MVP
+  votedForMvp   Participant?  @relation("MvpVotes", fields: [votedForMvpId], references: [id])
+  receivedVotes Participant[] @relation("MvpVotes")
 
   @@unique([userId, peladaId])
   @@map("participants")
