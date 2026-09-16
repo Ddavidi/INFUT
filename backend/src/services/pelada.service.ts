@@ -78,6 +78,17 @@ export class PeladaService {
             photoUrl: true,
           },
         },
+        participants: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                name: true,
+                photoUrl: true,
+              },
+            },
+          },
+        },
       },
     });
 
@@ -156,6 +167,40 @@ export class PeladaService {
       }
       throw e;
     }
+  }
+
+  async rsvp(userId: string, peladaId: string, status: string, reason?: string) {
+    const pelada = await prisma.pelada.findUnique({ where: { id: peladaId } });
+    if (!pelada) {
+      const error: any = new Error('Pelada não encontrada');
+      error.statusCode = 404;
+      throw error;
+    }
+
+    const participant = await prisma.participant.findUnique({
+      where: { userId_peladaId: { userId, peladaId } }
+    });
+
+    if (participant) {
+      await prisma.participant.update({
+        where: { id: participant.id },
+        data: {
+          status,
+          absenceReason: reason || null
+        }
+      });
+    } else {
+      await prisma.participant.create({
+        data: {
+          userId,
+          peladaId,
+          status,
+          absenceReason: reason || null
+        }
+      });
+    }
+
+    return { message: 'RSVP atualizado com sucesso' };
   }
 
   // Cria instancias futuras para peladas recorrentes

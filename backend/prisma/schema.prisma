@@ -53,11 +53,12 @@ model Pelada {
 }
 
 model Participant {
-  id        String   @id @default(uuid())
-  userId    String   @map("user_id")
-  peladaId  String   @map("pelada_id")
-  status    String   @default("CONFIRMED") // Para uso futuro na US06 (RSVP)
-  createdAt DateTime @default(now()) @map("created_at")
+  id            String   @id @default(uuid())
+  userId        String   @map("user_id")
+  peladaId      String   @map("pelada_id")
+  status        String   @default("CONFIRMED") // Para uso futura na US06 (RSVP)
+  absenceReason String?  @map("absence_reason") // Motivo opcional
+  createdAt     DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   user   User   @relation(fields: [userId], references: [id])

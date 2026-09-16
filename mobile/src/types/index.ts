@@ -37,6 +37,16 @@ export interface Pelada {
     name: string;
     photoUrl: string | null;
   };
+  participants?: {
+    id: string;
+    status: string;
+    absenceReason: string | null;
+    user: {
+      id: string;
+      name: string;
+      photoUrl: string | null;
+    };
+  }[];
 }
 
 export interface CreatePeladaInput {

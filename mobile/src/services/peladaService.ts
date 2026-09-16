@@ -25,3 +25,8 @@ export async function joinPelada(inviteCode: string): Promise<{ message: string,
   const response = await api.post('/peladas/join', { inviteCode });
   return response.data;
 }
+
+export async function rsvpPelada(id: string, status: string, reason?: string): Promise<any> {
+  const response = await api.put(`/peladas/${id}/rsvp`, { status, reason });
+  return response.data;
+}

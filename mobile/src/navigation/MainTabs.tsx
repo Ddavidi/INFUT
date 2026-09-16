@@ -1,7 +1,7 @@
 // Main Tabs Navigator
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { FeedScreen } from '../screens/home/FeedScreen';
+import { HomeStack } from './HomeStack';
 import { CreatePeladaScreen } from '../screens/pelada/CreatePeladaScreen';
 import { EditProfileScreen } from '../screens/profile/EditProfileScreen';
 import { colors } from '../constants/theme';
@@ -22,9 +22,9 @@ export function MainTabs() {
       }}
     >
       <Tab.Screen 
-        name="Feed" 
-        component={FeedScreen} 
-        options={{ tabBarIcon: () => <>{'\u26BD'}</> }} 
+        name="HomeStack" 
+        component={HomeStack} 
+        options={{ tabBarLabel: 'Feed', tabBarIcon: () => <>{'\u26BD'}</> }} 
       />
       <Tab.Screen 
         name="Nova Pelada" 

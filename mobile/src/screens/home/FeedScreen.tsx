@@ -22,7 +22,7 @@ function formatDate(dateStr: string): string {
   return day + '/' + month + ' as ' + hours + ':' + mins;
 }
 
-function PeladaCard({ pelada, isOrganizer }: { pelada: Pelada, isOrganizer: boolean }) {
+function PeladaCard({ pelada, isOrganizer, onPress }: { pelada: Pelada, isOrganizer: boolean, onPress: () => void }) {
   const sportEmojis: Record<string, string> = {
     'Futebol': '\u26BD', 'Futsal': '\uD83C\uDFDF\uFE0F', 'Volei': '\uD83C\uDFD0',
     'Basquete': '\uD83C\uDFC0', 'Handebol': '\uD83E\uDD3E', 'Beach Tennis': '\uD83C\uDFBE',
@@ -30,7 +30,7 @@ function PeladaCard({ pelada, isOrganizer }: { pelada: Pelada, isOrganizer: bool
   const emoji = sportEmojis[pelada.sport] || '\uD83C\uDFAF';
 
   return (
-    <TouchableOpacity style={styles.card} activeOpacity={0.7}>
+    <TouchableOpacity style={styles.card} activeOpacity={0.7} onPress={onPress}>
       <View style={styles.cardHeader}>
         <Text style={styles.cardEmoji}>{emoji}</Text>
         <View style={styles.cardHeaderText}>
@@ -157,7 +157,13 @@ export function FeedScreen({ navigation }: Props) {
       <FlatList
         data={peladas}
         keyExtractor={(item) => item.id}
-        renderItem={({ item }) => <PeladaCard pelada={item} isOrganizer={user?.id === item.organizerId} />}
+        renderItem={({ item }) => (
+          <PeladaCard 
+            pelada={item} 
+            isOrganizer={user?.id === item.organizerId} 
+            onPress={() => navigation.navigate('PeladaDetails', { peladaId: item.id })}
+          />
+        )}
         contentContainerStyle={styles.list}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />

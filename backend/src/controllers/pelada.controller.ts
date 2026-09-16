@@ -57,5 +57,23 @@ export class PeladaController {
       next(error);
     }
   }
+
+  async rsvp(req: Request, res: Response, next: NextFunction) {
+    try {
+      const userId = req.user!.userId;
+      const { id } = req.params;
+      const { status, reason } = req.body;
+      
+      if (!status || !['CONFIRMED', 'CANCELLED'].includes(status)) {
+        return res.status(400).json({ error: 'Status inválido. Deve ser CONFIRMED ou CANCELLED' });
+      }
+
+      const result = await peladaService.rsvp(userId, id, status, reason);
+      res.status(200).json(result);
+    } catch (error) {
+      next(error);
+    }
+  }
 }
+
 
