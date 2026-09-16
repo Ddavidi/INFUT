@@ -30,3 +30,8 @@ export async function rsvpPelada(id: string, status: string, reason?: string): P
   const response = await api.put(`/peladas/${id}/rsvp`, { status, reason });
   return response.data;
 }
+
+export async function togglePayment(id: string, paid: boolean): Promise<any> {
+  const response = await api.patch(`/peladas/${id}/payment`, { paid });
+  return response.data;
+}

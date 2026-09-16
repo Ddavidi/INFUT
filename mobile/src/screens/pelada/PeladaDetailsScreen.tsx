@@ -2,7 +2,7 @@ import React, { useState, useCallback, useContext } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Modal, TextInput } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useFocusEffect } from '@react-navigation/native';
-import { getPeladaById, rsvpPelada } from '../../services/peladaService';
+import { getPeladaById, rsvpPelada, togglePayment } from '../../services/peladaService';
 import { Pelada } from '../../types';
 import { AuthContext } from '../../contexts/AuthContext';
 import { colors, fonts, spacing, borderRadius } from '../../constants/theme';
@@ -47,6 +47,19 @@ export function PeladaDetailsScreen({ route, navigation }: Props) {
       loadPelada();
     } catch (error: any) {
       Alert.alert('Erro', error.response?.data?.error || 'Erro ao registrar presença');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handlePayment = async (paid: boolean) => {
+    setIsSubmitting(true);
+    try {
+      await togglePayment(peladaId, paid);
+      Alert.alert('Sucesso', paid ? 'Marcado como pago!' : 'Pagamento desmarcado.');
+      loadPelada();
+    } catch (error: any) {
+      Alert.alert('Erro', error.response?.data?.error || 'Erro ao atualizar pagamento');
     } finally {
       setIsSubmitting(false);
     }
@@ -104,6 +117,24 @@ export function PeladaDetailsScreen({ route, navigation }: Props) {
         </View>
       </View>
 
+      {currentUserParticipant?.status === 'CONFIRMED' && pelada.price != null && pelada.price > 0 && (
+        <View style={styles.paymentSection}>
+          <Text style={styles.sectionTitle}>Pagamento da Cota</Text>
+          <View style={styles.paymentRow}>
+            <Text style={styles.paymentText}>Total: R$ {pelada.price.toFixed(2)}</Text>
+            {currentUserParticipant.paid ? (
+              <TouchableOpacity style={styles.btnPaid} onPress={() => handlePayment(false)} disabled={isSubmitting}>
+                <Text style={styles.btnPaidText}>{'✅'} Já Paguei</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity style={styles.btnPay} onPress={() => handlePayment(true)} disabled={isSubmitting}>
+                <Text style={styles.btnPayText}>Marcar como Pago</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+      )}
+
       <View style={styles.participantsSection}>
         <Text style={styles.sectionTitle}>Confirmados</Text>
         {pelada.participants?.filter(p => p.status === 'CONFIRMED').map(p => (
@@ -111,7 +142,14 @@ export function PeladaDetailsScreen({ route, navigation }: Props) {
             <View style={styles.avatarPlaceholder}>
               <Text style={styles.avatarText}>{p.user.name.charAt(0).toUpperCase()}</Text>
             </View>
-            <Text style={styles.participantName}>{p.user.name}</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.participantName}>{p.user.name}</Text>
+            </View>
+            {pelada.price != null && pelada.price > 0 && p.paid && (
+              <View style={styles.paidBadge}>
+                <Text style={styles.paidBadgeText}>{'✅'} Pago</Text>
+              </View>
+            )}
           </View>
         ))}
         {(!pelada.participants || pelada.participants.filter(p => p.status === 'CONFIRMED').length === 0) && (
@@ -171,6 +209,16 @@ const styles = StyleSheet.create({
   avatarText: { color: colors.primary, fontWeight: '700', fontSize: fonts.sizes.md },
   participantName: { fontSize: fonts.sizes.md, color: colors.textPrimary, fontWeight: '500' },
   
+  paymentSection: { padding: spacing.lg, backgroundColor: colors.surfaceLight, marginHorizontal: spacing.md, borderRadius: borderRadius.lg, borderWidth: 1, borderColor: colors.borderLight, marginBottom: spacing.md },
+  paymentRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  paymentText: { fontSize: fonts.sizes.md, color: colors.textPrimary, fontWeight: '600' },
+  btnPaid: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.success, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: borderRadius.md },
+  btnPaidText: { color: colors.success, fontWeight: '700', fontSize: fonts.sizes.sm },
+  btnPay: { backgroundColor: colors.primary, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: borderRadius.md },
+  btnPayText: { color: '#FFF', fontWeight: '700', fontSize: fonts.sizes.sm },
+  paidBadge: { backgroundColor: colors.surfaceLight, paddingHorizontal: spacing.sm, paddingVertical: 2, borderRadius: borderRadius.sm, borderWidth: 1, borderColor: colors.success },
+  paidBadgeText: { color: colors.success, fontSize: fonts.sizes.xs, fontWeight: '700' },
+
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
   modalContent: { backgroundColor: colors.card, padding: spacing.lg, borderRadius: borderRadius.lg, width: '85%' },
   modalTitle: { fontSize: fonts.sizes.xl, fontWeight: '700', color: colors.textPrimary, marginBottom: spacing.xs },

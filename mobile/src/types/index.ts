@@ -41,6 +41,7 @@ export interface Pelada {
     id: string;
     status: string;
     absenceReason: string | null;
+    paid: boolean;
     user: {
       id: string;
       name: string;

@@ -58,6 +58,7 @@ model Participant {
   peladaId      String   @map("pelada_id")
   status        String   @default("CONFIRMED") // Para uso futura na US06 (RSVP)
   absenceReason String?  @map("absence_reason") // Motivo opcional
+  paid          Boolean  @default(false) // Indica se o participante já pagou (US08)
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 

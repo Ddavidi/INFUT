@@ -203,6 +203,25 @@ export class PeladaService {
     return { message: 'RSVP atualizado com sucesso' };
   }
 
+  async togglePayment(userId: string, peladaId: string, paid: boolean) {
+    const participant = await prisma.participant.findUnique({
+      where: { userId_peladaId: { userId, peladaId } }
+    });
+
+    if (!participant) {
+      const error: any = new Error('Você não é participante desta pelada');
+      error.statusCode = 404;
+      throw error;
+    }
+
+    await prisma.participant.update({
+      where: { id: participant.id },
+      data: { paid }
+    });
+
+    return { message: 'Status de pagamento atualizado com sucesso' };
+  }
+
   // Cria instancias futuras para peladas recorrentes
   private async createRecurringInstances(
     basePelada: any,

@@ -74,6 +74,24 @@ export class PeladaController {
       next(error);
     }
   }
+
+  async togglePayment(req: Request, res: Response, next: NextFunction) {
+    try {
+      const userId = req.user!.userId;
+      const { id } = req.params;
+      const { paid } = req.body;
+      
+      if (typeof paid !== 'boolean') {
+        return res.status(400).json({ error: 'O campo paid deve ser um booleano' });
+      }
+
+      const result = await peladaService.togglePayment(userId, id, paid);
+      res.status(200).json(result);
+    } catch (error) {
+      next(error);
+    }
+  }
 }
+
 
 
