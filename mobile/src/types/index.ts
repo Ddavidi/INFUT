@@ -46,6 +46,7 @@ export interface Pelada {
       id: string;
       name: string;
       photoUrl: string | null;
+      region: string | null;
     };
   }[];
 }

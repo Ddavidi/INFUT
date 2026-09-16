@@ -85,6 +85,7 @@ export class PeladaService {
                 id: true,
                 name: true,
                 photoUrl: true,
+                region: true,
               },
             },
           },

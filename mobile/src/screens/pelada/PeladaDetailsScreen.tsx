@@ -157,6 +157,13 @@ export function PeladaDetailsScreen({ route, navigation }: Props) {
         )}
       </View>
 
+      <TouchableOpacity 
+        style={styles.mapButton} 
+        onPress={() => navigation.navigate('PeladaMap', { peladaId: pelada.id })}
+      >
+        <Text style={styles.mapButtonText}>{'📍'} Ver Mapa de Jogadores</Text>
+      </TouchableOpacity>
+
       <Modal visible={modalVisible} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
@@ -218,6 +225,9 @@ const styles = StyleSheet.create({
   btnPayText: { color: '#FFF', fontWeight: '700', fontSize: fonts.sizes.sm },
   paidBadge: { backgroundColor: colors.surfaceLight, paddingHorizontal: spacing.sm, paddingVertical: 2, borderRadius: borderRadius.sm, borderWidth: 1, borderColor: colors.success },
   paidBadgeText: { color: colors.success, fontSize: fonts.sizes.xs, fontWeight: '700' },
+
+  mapButton: { backgroundColor: colors.darkTeal, margin: spacing.lg, padding: spacing.md, borderRadius: borderRadius.md, alignItems: 'center' },
+  mapButtonText: { color: colors.textInverse, fontWeight: '700', fontSize: fonts.sizes.md },
 
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
   modalContent: { backgroundColor: colors.card, padding: spacing.lg, borderRadius: borderRadius.lg, width: '85%' },

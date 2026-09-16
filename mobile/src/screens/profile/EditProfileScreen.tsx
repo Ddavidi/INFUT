@@ -6,6 +6,7 @@ import { updateProfile } from '../../services/userService';
 import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
 import { SPORTS, getPositionsForSport } from '../../constants/sports';
+import { REGIONS } from '../../constants/regions';
 import { colors, fonts, spacing, borderRadius } from '../../constants/theme';
 
 export function EditProfileScreen() {
@@ -14,6 +15,7 @@ export function EditProfileScreen() {
   const [name, setName] = useState('');
   const [selectedSport, setSelectedSport] = useState('');
   const [selectedPosition, setSelectedPosition] = useState('');
+  const [selectedRegion, setSelectedRegion] = useState('');
   const [loading, setLoading] = useState(false);
   const [positions, setPositions] = useState<string[]>([]);
 
@@ -22,6 +24,7 @@ export function EditProfileScreen() {
       setName(user.name || '');
       setSelectedSport(user.sport || '');
       setSelectedPosition(user.position || '');
+      setSelectedRegion(user.region || '');
     }
   }, [user]);
 
@@ -40,6 +43,7 @@ export function EditProfileScreen() {
         name: name.trim(),
         sport: selectedSport || undefined,
         position: selectedPosition || undefined,
+        region: selectedRegion || undefined,
       });
       await refreshUser();
       Alert.alert('Sucesso', 'Perfil atualizado com sucesso!');
@@ -104,7 +108,22 @@ export function EditProfileScreen() {
         </>
       )}
 
-      <Button title="Salvar Alterações" onPress={handleSave} loading={loading} style={{ marginTop: spacing.xl }} />
+      <Text style={styles.sectionLabel}>Sua Região (Belo Horizonte)</Text>
+      <View style={styles.positionsGrid}>
+        {REGIONS.map((reg) => (
+          <TouchableOpacity
+            key={reg.id}
+            style={[styles.positionChip, selectedRegion === reg.id && styles.chipSelected]}
+            onPress={() => setSelectedRegion(reg.id)}
+          >
+            <Text style={[styles.positionText, selectedRegion === reg.id && styles.chipTextSelected]}>
+              {reg.name}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      <Button title="Salvar Alterações" onPress={handleSave} loading={loading} style={{ marginTop: spacing.xl, marginBottom: spacing.xxl }} />
     </ScrollView>
   );
 }
