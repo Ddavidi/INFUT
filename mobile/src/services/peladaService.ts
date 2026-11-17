@@ -1,9 +1,24 @@
 // Pelada API calls
 import api from './api';
-import { Pelada, CreatePeladaInput } from '../types';
+import {
+  AttendanceStatus,
+  CreatePeladaInput,
+  MemberType,
+  PaymentStatus,
+  Pelada,
+  PeladaLifecycleStatus,
+} from '../types';
 
 export async function createPelada(data: CreatePeladaInput): Promise<Pelada> {
   const response = await api.post('/peladas', data);
+  return response.data;
+}
+
+export async function updatePelada(
+  id: string,
+  data: Partial<CreatePeladaInput>
+): Promise<Pelada> {
+  const response = await api.put(`/peladas/${id}`, data);
   return response.data;
 }
 
@@ -12,11 +27,140 @@ export async function listPeladas(): Promise<Pelada[]> {
   return response.data;
 }
 
+export async function explorePeladas(params?: {
+  sport?: string;
+  region?: string;
+  search?: string;
+}): Promise<Pelada[]> {
+  const response = await api.get('/peladas/explore', { params });
+  return response.data;
+}
+
 export async function getPeladaById(id: string): Promise<Pelada> {
   const response = await api.get(`/peladas/${id}`);
   return response.data;
 }
 
+export async function getPublicPeladaByCode(inviteCode: string): Promise<Pelada> {
+  const response = await api.get(`/peladas/public/${encodeURIComponent(inviteCode.trim())}`);
+  return response.data;
+}
+
 export async function deletePelada(id: string): Promise<void> {
   await api.delete(`/peladas/${id}`);
+}
+
+export async function joinPeladaByCode(inviteCode: string): Promise<Pelada> {
+  const response = await api.post('/peladas/join-code', { inviteCode });
+  return response.data;
+}
+
+export async function rsvpPelada(
+  peladaId: string,
+  data: { status: 'CONFIRMED' | 'DECLINED'; isGoalkeeper?: boolean; position?: string | null }
+): Promise<Pelada> {
+  const response = await api.post(`/peladas/${peladaId}/rsvp`, data);
+  return response.data;
+}
+
+export async function addGuestPlayer(
+  peladaId: string,
+  data: { guestName: string; isGoalkeeper?: boolean; position?: string | null }
+): Promise<Pelada> {
+  const response = await api.post(`/peladas/${peladaId}/guests`, data);
+  return response.data;
+}
+
+export async function removePlayerFromPelada(
+  peladaId: string,
+  playerId: string
+): Promise<Pelada> {
+  const response = await api.delete(`/peladas/${peladaId}/players/${playerId}`);
+  return response.data;
+}
+
+export async function updatePlayerRole(
+  peladaId: string,
+  playerId: string,
+  role: 'CO_ORGANIZER' | 'PLAYER'
+): Promise<Pelada> {
+  const response = await api.patch(`/peladas/${peladaId}/players/${playerId}/role`, { role });
+  return response.data;
+}
+
+export async function updatePlayerPayment(
+  peladaId: string,
+  playerId: string,
+  paymentStatus: PaymentStatus
+): Promise<Pelada> {
+  const response = await api.patch(`/peladas/${peladaId}/players/${playerId}/payment`, {
+    paymentStatus,
+  });
+  return response.data;
+}
+
+export async function updatePlayerCheckin(
+  peladaId: string,
+  playerId: string,
+  data: { attendanceStatus?: AttendanceStatus; memberType?: MemberType }
+): Promise<Pelada> {
+  const response = await api.patch(`/peladas/${peladaId}/players/${playerId}/checkin`, data);
+  return response.data;
+}
+
+export async function updatePlayerStats(
+  peladaId: string,
+  playerId: string,
+  data: { goals: number; assists: number }
+): Promise<Pelada> {
+  const response = await api.patch(`/peladas/${peladaId}/players/${playerId}/stats`, data);
+  return response.data;
+}
+
+export async function drawPeladaTeams(
+  peladaId: string,
+  data: { playersPerTeam?: number; balancedByPosition?: boolean }
+): Promise<Pelada> {
+  const response = await api.post(`/peladas/${peladaId}/draw-teams`, data);
+  return response.data;
+}
+
+export async function setManualPeladaTeams(
+  peladaId: string,
+  teams: { name: string; playerIds: string[] }[]
+): Promise<Pelada> {
+  const response = await api.put(`/peladas/${peladaId}/teams`, { teams });
+  return response.data;
+}
+
+export async function updatePeladaStatus(
+  peladaId: string,
+  status: PeladaLifecycleStatus
+): Promise<Pelada> {
+  const response = await api.patch(`/peladas/${peladaId}/status`, { status });
+  return response.data;
+}
+
+export async function recordPeladaMatch(
+  peladaId: string,
+  data: { teamAName: string; teamBName: string; scoreA: number; scoreB: number }
+): Promise<Pelada> {
+  const response = await api.post(`/peladas/${peladaId}/matches`, data);
+  return response.data;
+}
+
+export async function voteMvp(
+  peladaId: string,
+  targetPlayerId: string
+): Promise<Pelada> {
+  const response = await api.post(`/peladas/${peladaId}/vote-mvp`, { targetPlayerId });
+  return response.data;
+}
+
+export async function voteGoalkeeper(
+  peladaId: string,
+  targetPlayerId: string
+): Promise<Pelada> {
+  const response = await api.post(`/peladas/${peladaId}/vote-goalkeeper`, { targetPlayerId });
+  return response.data;
 }

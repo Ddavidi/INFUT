@@ -15,11 +15,30 @@ export class UserController {
     }
   }
 
+  async getRanking(_req: Request, res: Response, next: NextFunction) {
+    try {
+      const ranking = await userService.getRanking();
+      res.status(200).json(ranking);
+    } catch (error) {
+      next(error);
+    }
+  }
+
   async updateProfile(req: Request, res: Response, next: NextFunction) {
     try {
       const userId = req.user!.userId;
       const user = await userService.updateProfile(userId, req.body);
       res.status(200).json(user);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async deleteAccount(req: Request, res: Response, next: NextFunction) {
+    try {
+      const userId = req.user!.userId;
+      const result = await userService.deleteAccount(userId);
+      res.status(200).json(result);
     } catch (error) {
       next(error);
     }

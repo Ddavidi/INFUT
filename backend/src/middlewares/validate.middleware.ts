@@ -9,8 +9,9 @@ export function validate(schema: ZodSchema) {
       next();
     } catch (error) {
       if (error instanceof ZodError) {
-        const errors = error.errors.map((e) => ({
-          field: e.path.join('.'),
+        const issues = error.issues || (error as any).errors || [];
+        const errors = issues.map((e: any) => ({
+          field: Array.isArray(e.path) ? e.path.join('.') : String(e.path || ''),
           message: e.message,
         }));
         res.status(400).json({ error: 'Dados invalidos', details: errors });

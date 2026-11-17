@@ -1,11 +1,21 @@
-// Feed Screen - Pelada listing (Issue #26)
+// Feed Screen - Pelada listing and quick join by invite code
 import React, { useState, useCallback } from 'react';
-import { View, Text, FlatList, StyleSheet, TouchableOpacity, RefreshControl } from 'react-native';
+import {
+  View,
+  Text,
+  FlatList,
+  StyleSheet,
+  TouchableOpacity,
+  RefreshControl,
+  TextInput,
+  ActivityIndicator,
+} from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { listPeladas } from '../../services/peladaService';
+import { listPeladas, joinPeladaByCode } from '../../services/peladaService';
 import { Pelada } from '../../types';
-import { colors, fonts, spacing, borderRadius } from '../../constants/theme';
+import { colors, fonts, spacing, borderRadius, layout, shadows } from '../../constants/theme';
+import { showMessage } from '../../utils/alerts';
 
 type Props = {
   navigation: NativeStackNavigationProp<any>;
@@ -17,56 +27,120 @@ function formatDate(dateStr: string): string {
   const month = (date.getMonth() + 1).toString().padStart(2, '0');
   const hours = date.getHours().toString().padStart(2, '0');
   const mins = date.getMinutes().toString().padStart(2, '0');
-  return day + '/' + month + ' as ' + hours + ':' + mins;
+  return `${day}/${month} às ${hours}:${mins}`;
 }
 
-function PeladaCard({ pelada }: { pelada: Pelada }) {
+function getStatusBadge(pelada: Pelada): { label: string; color: string; bg: string } {
+  if (pelada.myRole === 'ORGANIZER') {
+    return { label: 'Organizador', color: colors.primary, bg: colors.primarySoft };
+  }
+  if (pelada.myRole === 'CO_ORGANIZER') {
+    return { label: 'Co-organizador', color: colors.info, bg: colors.infoSoft };
+  }
+  if (pelada.myStatus === 'CONFIRMED') {
+    return { label: 'Confirmado', color: colors.success, bg: colors.successSoft };
+  }
+  if (pelada.myStatus === 'WAITLIST') {
+    return { label: 'Lista de Espera', color: colors.warning, bg: colors.warningSoft };
+  }
+  if (pelada.myStatus === 'DECLINED') {
+    return { label: 'Baixa', color: colors.error, bg: colors.errorSoft };
+  }
+  return { label: 'Membro', color: colors.textSecondary, bg: colors.surfaceLight };
+}
+
+function PeladaCard({ pelada, onPress }: { pelada: Pelada; onPress: () => void }) {
   const sportEmojis: Record<string, string> = {
-    'Futebol': '\u26BD', 'Futsal': '\uD83C\uDFDF\uFE0F', 'Volei': '\uD83C\uDFD0',
-    'Basquete': '\uD83C\uDFC0', 'Handebol': '\uD83E\uDD3E', 'Beach Tennis': '\uD83C\uDFBE',
+    Futebol: '⚽',
+    Futsal: '🏟️',
+    'Vôlei': '🏐',
+    Volei: '🏐',
+    Basquete: '🏀',
+    Handebol: '🤾',
+    'Beach Tennis': '🎾',
+    'Tênis de Mesa': '🏓',
   };
-  const emoji = sportEmojis[pelada.sport] || '\uD83C\uDFAF';
+  const emoji = sportEmojis[pelada.sport] || '🎯';
+  const badge = getStatusBadge(pelada);
+  const spotsLabel = pelada.maxPlayers
+    ? `${pelada.confirmedFieldCount}/${pelada.maxPlayers} linha`
+    : `${pelada.confirmedCount} confirmados`;
 
   return (
-    <TouchableOpacity style={styles.card} activeOpacity={0.7}>
+    <TouchableOpacity
+      style={styles.card}
+      activeOpacity={0.8}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`Abrir pelada ${pelada.title}`}
+    >
+      {/* Zona 1: Identidade */}
       <View style={styles.cardHeader}>
-        <Text style={styles.cardEmoji}>{emoji}</Text>
-        <View style={styles.cardHeaderText}>
-          <Text style={styles.cardTitle}>{pelada.title}</Text>
-          <Text style={styles.cardSport}>{pelada.sport}</Text>
+        <View style={styles.sportSquircle}>
+          <Text style={styles.cardEmoji}>{emoji}</Text>
         </View>
-        {pelada.isRecurring && (
-          <View style={styles.recurringBadge}>
-            <Text style={styles.recurringText}>Recorrente</Text>
+        <View style={styles.cardHeaderText}>
+          <View style={styles.titleRow}>
+            <Text style={styles.cardTitle} numberOfLines={1}>
+              {pelada.title}
+            </Text>
           </View>
-        )}
+          <View style={styles.subBadgeRow}>
+            <Text style={styles.cardSport}>{pelada.sport}</Text>
+            <View style={styles.codeTag}>
+              <Text style={styles.codeTagText}>#{pelada.inviteCode}</Text>
+            </View>
+            {pelada.isRecurring && (
+              <View style={styles.recurringBadge}>
+                <Text style={styles.recurringText}>Semanal</Text>
+              </View>
+            )}
+          </View>
+        </View>
+        <View style={[styles.roleBadge, { backgroundColor: badge.bg }]}>
+          <Text style={[styles.roleBadgeText, { color: badge.color }]}>{badge.label}</Text>
+        </View>
       </View>
 
-      <View style={styles.cardBody}>
+      {/* Zona 2: Informacoes Internas (Raio Concentrico) */}
+      <View style={styles.cardInfoBlock}>
         <View style={styles.cardRow}>
-          <Text style={styles.cardIcon}>{'\uD83D\uDCC5'}</Text>
+          <Text style={styles.cardIcon}>📅</Text>
           <Text style={styles.cardInfo}>{formatDate(pelada.dateTime)}</Text>
         </View>
         <View style={styles.cardRow}>
-          <Text style={styles.cardIcon}>{'\uD83D\uDCCD'}</Text>
-          <Text style={styles.cardInfo}>{pelada.location}</Text>
+          <Text style={styles.cardIcon}>📍</Text>
+          <Text style={styles.cardInfo} numberOfLines={1}>
+            {pelada.location}
+          </Text>
         </View>
-        {pelada.price != null && pelada.price > 0 && (
-          <View style={styles.cardRow}>
-            <Text style={styles.cardIcon}>{'\uD83D\uDCB0'}</Text>
-            <Text style={styles.cardInfo}>R$ {pelada.price.toFixed(2)}</Text>
-          </View>
-        )}
-        {pelada.maxPlayers && (
-          <View style={styles.cardRow}>
-            <Text style={styles.cardIcon}>{'\uD83D\uDC65'}</Text>
-            <Text style={styles.cardInfo}>Max {pelada.maxPlayers} jogadores</Text>
-          </View>
-        )}
+        <View style={styles.cardRow}>
+          <Text style={styles.cardIcon}>👥</Text>
+          <Text style={styles.cardInfo}>
+            {spotsLabel}
+            {pelada.confirmedGoalkeepersCount > 0
+              ? ` • ${pelada.confirmedGoalkeepersCount} gol.`
+              : ''}
+            {pelada.waitlistCount > 0 ? ` • ${pelada.waitlistCount} espera` : ''}
+          </Text>
+        </View>
       </View>
 
+      {/* Zona 3: Rodape */}
       <View style={styles.cardFooter}>
-        <Text style={styles.organizerText}>Organizado por {pelada.organizer.name}</Text>
+        <Text style={styles.organizerText} numberOfLines={1}>
+          Por {pelada.organizer.name}
+        </Text>
+        <View style={styles.footerRight}>
+          <View style={styles.pricePill}>
+            <Text style={styles.priceText}>
+              {pelada.price != null && pelada.price > 0
+                ? `R$ ${pelada.price.toFixed(2)}`
+                : 'Gratuita'}
+            </Text>
+          </View>
+          <Text style={styles.openLink}>Abrir →</Text>
+        </View>
       </View>
     </TouchableOpacity>
   );
@@ -74,8 +148,10 @@ function PeladaCard({ pelada }: { pelada: Pelada }) {
 
 export function FeedScreen({ navigation }: Props) {
   const [peladas, setPeladas] = useState<Pelada[]>([]);
-  const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [inviteCode, setInviteCode] = useState('');
+  const [joining, setJoining] = useState(false);
 
   const loadPeladas = useCallback(async () => {
     try {
@@ -100,62 +176,410 @@ export function FeedScreen({ navigation }: Props) {
     loadPeladas();
   }, [loadPeladas]);
 
+  async function handleJoinByCode() {
+    const code = inviteCode.trim().toUpperCase();
+    if (code.length < 3) {
+      showMessage('Código inválido', 'Digite o código de convite da pelada (ex: QUINTA)');
+      return;
+    }
+
+    setJoining(true);
+    try {
+      const pelada = await joinPeladaByCode(code);
+      setInviteCode('');
+      await loadPeladas();
+      navigation.navigate('PeladaDetails', { peladaId: pelada.id });
+    } catch (error: any) {
+      const msg = error.response?.data?.error || 'Não foi possível entrar com este código';
+      showMessage('Erro', msg);
+    } finally {
+      setJoining(false);
+    }
+  }
+
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>INFUT</Text>
-        <Text style={styles.headerSubtitle}>Suas peladinhas</Text>
+      <View style={styles.headerWrapper}>
+        <View style={styles.headerTopRow}>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={styles.headerTitle}>INFUT</Text>
+            <Text style={styles.headerSubtitle}>Minhas peladas e convites</Text>
+          </View>
+          <View style={styles.countPill}>
+            <Text style={styles.countPillText}>{peladas.length} jogos</Text>
+          </View>
+        </View>
+
+        <View style={styles.joinCard}>
+          <Text style={styles.joinLabel}>ENTRAR COM CÓDIGO DE CONVITE</Text>
+          <View style={styles.joinBox}>
+            <TextInput
+              style={styles.joinInput}
+              placeholder="Código (ex: QUINTA)"
+              placeholderTextColor={colors.textMuted}
+              value={inviteCode}
+              onChangeText={setInviteCode}
+              autoCapitalize="characters"
+              autoCorrect={false}
+              accessibilityLabel="Código de convite da pelada"
+            />
+            <TouchableOpacity
+              style={[styles.joinButton, joining && { opacity: 0.6 }]}
+              onPress={handleJoinByCode}
+              disabled={joining}
+              accessibilityRole="button"
+              accessibilityLabel="Entrar com código de convite"
+            >
+              {joining ? (
+                <ActivityIndicator size="small" color={colors.textInverse} />
+              ) : (
+                <Text style={styles.joinButtonText}>Entrar</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
       </View>
 
-      <FlatList
-        data={peladas}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => <PeladaCard pelada={item} />}
-        contentContainerStyle={styles.list}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
-        }
-        ListEmptyComponent={
-          <View style={styles.empty}>
-            <Text style={styles.emptyEmoji}>{'\u26BD'}</Text>
-            <Text style={styles.emptyTitle}>Nenhuma peladinha ainda</Text>
-            <Text style={styles.emptySubtitle}>Crie sua primeira peladinha!</Text>
+      {loading && peladas.length === 0 ? (
+        <View style={styles.loadingContainer}>
+          <View style={styles.loadingCard}>
+            <ActivityIndicator size="large" color={colors.primary} />
+            <Text style={styles.loadingText}>Carregando suas peladas…</Text>
           </View>
-        }
-      />
+        </View>
+      ) : (
+        <FlatList
+          data={peladas}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => (
+            <PeladaCard
+              pelada={item}
+              onPress={() => navigation.navigate('PeladaDetails', { peladaId: item.id })}
+            />
+          )}
+          contentContainerStyle={styles.list}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
+          }
+          ListEmptyComponent={
+            <View style={styles.emptyCard}>
+              <Text style={styles.emptyEmoji}>⚽</Text>
+              <Text style={styles.emptyTitle}>Nenhuma peladinha ainda</Text>
+              <Text style={styles.emptySubtitle}>
+                Crie sua primeira pelada, explore jogos públicos na sua região ou digite um código de convite acima.
+              </Text>
+              <View style={styles.emptyActionsRow}>
+                <TouchableOpacity
+                  style={styles.emptyPrimaryBtn}
+                  onPress={() => navigation.navigate('Nova Pelada')}
+                  accessibilityRole="button"
+                  accessibilityLabel="Criar Nova Pelada"
+                >
+                  <Text style={styles.emptyPrimaryBtnText}>+ Criar Nova Pelada</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.emptySecondaryBtn}
+                  onPress={() => navigation.navigate('Explorar')}
+                  accessibilityRole="button"
+                  accessibilityLabel="Explorar Peladas Públicas"
+                >
+                  <Text style={styles.emptySecondaryBtnText}>Explorar Públicas</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          }
+        />
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
-  header: { paddingTop: 60, paddingHorizontal: spacing.lg, paddingBottom: spacing.md },
-  headerTitle: { fontSize: fonts.sizes.xxxl, fontWeight: '900', color: colors.primary, letterSpacing: 2 },
-  headerSubtitle: { fontSize: fonts.sizes.md, color: colors.textSecondary, marginTop: spacing.xs },
-  list: { paddingHorizontal: spacing.md, paddingBottom: 100 },
+  headerWrapper: {
+    width: '100%',
+    maxWidth: layout.maxWidth,
+    alignSelf: 'center',
+    paddingTop: 52,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.sm,
+  },
+  headerTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.md,
+    gap: spacing.sm,
+  },
+  headerTitle: {
+    fontSize: fonts.sizes.xxxl,
+    fontWeight: '900',
+    color: colors.primary,
+    letterSpacing: 3,
+  },
+  headerSubtitle: {
+    fontSize: fonts.sizes.sm,
+    color: colors.textSecondary,
+    marginTop: 2,
+  },
+  countPill: {
+    backgroundColor: colors.surfaceLight,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: borderRadius.full,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 6,
+  },
+  countPillText: {
+    color: colors.textSecondary,
+    fontSize: fonts.sizes.xs,
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
+  },
+  joinCard: {
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...shadows.card,
+  },
+  joinLabel: {
+    color: colors.textMuted,
+    fontSize: fonts.sizes.xs,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+    marginBottom: spacing.xs + 2,
+  },
+  joinBox: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  joinInput: {
+    flex: 1,
+    minWidth: 0,
+    backgroundColor: colors.surfaceLight,
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 11,
+    color: colors.textPrimary,
+    fontSize: fonts.sizes.md,
+    fontWeight: '700',
+  },
+  joinButton: {
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.md + 4,
+    justifyContent: 'center',
+    alignItems: 'center',
+    minWidth: 84,
+    minHeight: 46,
+  },
+  joinButtonText: {
+    color: colors.textInverse,
+    fontWeight: '800',
+    fontSize: fonts.sizes.sm,
+  },
+  loadingContainer: {
+    flex: 1,
+    width: '100%',
+    maxWidth: layout.maxWidth,
+    alignSelf: 'center',
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+  },
+  loadingCard: {
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.xl,
+    padding: spacing.xl,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+    gap: spacing.md,
+  },
+  loadingText: {
+    color: colors.textSecondary,
+    fontSize: fonts.sizes.sm,
+    fontWeight: '600',
+  },
+  list: {
+    width: '100%',
+    maxWidth: layout.maxWidth,
+    alignSelf: 'center',
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.sm,
+    paddingBottom: 100,
+  },
   card: {
     backgroundColor: colors.card,
     borderRadius: borderRadius.lg,
     padding: spacing.md,
     marginBottom: spacing.md,
     borderWidth: 1,
-    borderColor: colors.borderLight,
+    borderColor: colors.border,
+    ...shadows.card,
   },
-  cardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.md },
-  cardEmoji: { fontSize: 36, marginRight: spacing.md },
-  cardHeaderText: { flex: 1 },
-  cardTitle: { fontSize: fonts.sizes.lg, fontWeight: '700', color: colors.textPrimary },
-  cardSport: { fontSize: fonts.sizes.sm, color: colors.textSecondary, marginTop: 2 },
-  recurringBadge: { backgroundColor: colors.darkTeal, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, borderRadius: borderRadius.sm },
-  recurringText: { fontSize: fonts.sizes.xs, color: colors.primary, fontWeight: '600' },
-  cardBody: { marginBottom: spacing.md },
-  cardRow: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.xs },
-  cardIcon: { fontSize: 16, marginRight: spacing.sm, width: 24 },
-  cardInfo: { fontSize: fonts.sizes.sm, color: colors.textSecondary },
-  cardFooter: { borderTopWidth: 1, borderTopColor: colors.borderLight, paddingTop: spacing.sm },
-  organizerText: { fontSize: fonts.sizes.xs, color: colors.textMuted },
-  empty: { alignItems: 'center', paddingTop: 80 },
-  emptyEmoji: { fontSize: 64, marginBottom: spacing.md },
-  emptyTitle: { fontSize: fonts.sizes.xl, fontWeight: '700', color: colors.textPrimary },
-  emptySubtitle: { fontSize: fonts.sizes.md, color: colors.textSecondary, marginTop: spacing.xs },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: spacing.sm + 4,
+    gap: spacing.sm + 4,
+  },
+  sportSquircle: {
+    width: 46,
+    height: 46,
+    borderRadius: 14,
+    backgroundColor: colors.surfaceLight,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cardEmoji: { fontSize: 22 },
+  cardHeaderText: { flex: 1, minWidth: 0 },
+  titleRow: { flexDirection: 'row', alignItems: 'center' },
+  cardTitle: {
+    fontSize: fonts.sizes.lg,
+    fontWeight: '800',
+    color: colors.textPrimary,
+    flex: 1,
+  },
+  subBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 4,
+  },
+  cardSport: { fontSize: fonts.sizes.xs, color: colors.textSecondary, fontWeight: '600' },
+  codeTag: {
+    backgroundColor: colors.surfaceElevated,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  codeTagText: { fontSize: fonts.sizes.xs, color: colors.textSecondary, fontWeight: '800' },
+  recurringBadge: {
+    backgroundColor: colors.infoSoft,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  recurringText: { fontSize: fonts.sizes.xs, color: colors.info, fontWeight: '700' },
+  roleBadge: {
+    borderRadius: borderRadius.sm,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    flexShrink: 0,
+  },
+  roleBadgeText: { fontSize: fonts.sizes.xs, fontWeight: '800' },
+  cardInfoBlock: {
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.md,
+    padding: spacing.sm + 4,
+    gap: 6,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+    marginBottom: spacing.sm + 4,
+  },
+  cardRow: { flexDirection: 'row', alignItems: 'center' },
+  cardIcon: { fontSize: 14, marginRight: spacing.sm, width: 20 },
+  cardInfo: {
+    fontSize: fonts.sizes.sm,
+    lineHeight: 20,
+    color: colors.textSecondary,
+    flex: 1,
+    minWidth: 0,
+    fontVariant: ['tabular-nums'],
+  },
+  cardFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  organizerText: {
+    fontSize: fonts.sizes.xs,
+    color: colors.textMuted,
+    fontWeight: '600',
+    flex: 1,
+    minWidth: 0,
+  },
+  footerRight: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flexShrink: 0 },
+  pricePill: {
+    backgroundColor: colors.successSoft,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderRadius: borderRadius.sm,
+  },
+  priceText: {
+    fontSize: fonts.sizes.xs,
+    fontWeight: '800',
+    color: colors.success,
+    fontVariant: ['tabular-nums'],
+  },
+  openLink: {
+    fontSize: fonts.sizes.xs,
+    fontWeight: '800',
+    color: colors.primary,
+  },
+  emptyCard: {
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.xl,
+    padding: spacing.xl,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginTop: spacing.md,
+    ...shadows.card,
+  },
+  emptyEmoji: { fontSize: 52, marginBottom: spacing.md },
+  emptyTitle: { fontSize: fonts.sizes.xl, fontWeight: '800', color: colors.textPrimary, textAlign: 'center' },
+  emptySubtitle: {
+    fontSize: fonts.sizes.sm,
+    color: colors.textSecondary,
+    marginTop: spacing.xs,
+    textAlign: 'center',
+    lineHeight: 21,
+    marginBottom: spacing.lg,
+  },
+  emptyActionsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    justifyContent: 'center',
+    width: '100%',
+  },
+  emptyPrimaryBtn: {
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.md + 4,
+    paddingVertical: 12,
+    minHeight: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  emptyPrimaryBtnText: {
+    color: colors.textInverse,
+    fontWeight: '800',
+    fontSize: fonts.sizes.sm,
+  },
+  emptySecondaryBtn: {
+    backgroundColor: colors.primarySoft,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.md + 4,
+    paddingVertical: 12,
+    minHeight: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  emptySecondaryBtnText: {
+    color: colors.primary,
+    fontWeight: '800',
+    fontSize: fonts.sizes.sm,
+  },
 });

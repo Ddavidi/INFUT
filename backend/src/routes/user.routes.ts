@@ -9,6 +9,8 @@ const router = Router();
 const userController = new UserController();
 
 router.get('/me', authMiddleware, (req, res, next) => userController.getProfile(req, res, next));
+router.get('/ranking', authMiddleware, (req, res, next) => userController.getRanking(req, res, next));
 router.put('/me', authMiddleware, validate(updateProfileSchema), (req, res, next) => userController.updateProfile(req, res, next));
+router.delete('/me', authMiddleware, (req, res, next) => userController.deleteAccount(req, res, next));
 
 export default router;

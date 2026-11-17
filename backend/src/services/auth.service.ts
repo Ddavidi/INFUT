@@ -36,6 +36,7 @@ export class AuthService {
         sport: true,
         position: true,
         photoUrl: true,
+        region: true,
         createdAt: true,
       },
     });
@@ -78,6 +79,7 @@ export class AuthService {
         sport: user.sport,
         position: user.position,
         photoUrl: user.photoUrl,
+        region: user.region,
         createdAt: user.createdAt,
       },
       token,

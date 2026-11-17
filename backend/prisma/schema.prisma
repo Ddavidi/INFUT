@@ -1,5 +1,5 @@
 // Prisma Schema - INFUT
-// Issues #12 (User table), #18 (Profile fields), #22 (Pelada table)
+// Models: User, Pelada, PeladaPlayer
 
 generator client {
   provider = "prisma-client-js"
@@ -18,33 +18,72 @@ model User {
   sport        String?
   position     String?
   photoUrl     String?  @map("photo_url")
-  region       String?  // Para o mapa de localização (Sprint 3)
+  region       String?
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
   // Relações
-  organizedPeladas Pelada[] @relation("organizer")
+  organizedPeladas Pelada[]       @relation("organizer")
+  participations   PeladaPlayer[]
 
   @@map("users")
 }
 
 model Pelada {
-  id             String   @id @default(uuid())
-  title          String
-  sport          String
-  dateTime       DateTime @map("date_time")
-  location       String
-  locationAddress String?  @map("location_address")
-  price          Float?
-  isRecurring    Boolean  @default(false) @map("is_recurring")
-  recurrenceDay  String?  @map("recurrence_day") // 'monday', 'tuesday', etc.
-  maxPlayers     Int?     @map("max_players")
-  organizerId    String   @map("organizer_id")
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
+  id                String   @id @default(uuid())
+  title             String
+  sport             String
+  dateTime          DateTime @map("date_time")
+  location          String
+  locationAddress   String?  @map("location_address")
+  price             Float?
+  isRecurring       Boolean  @default(false) @map("is_recurring")
+  recurrenceDay     String?  @map("recurrence_day") // 'monday', 'tuesday', etc.
+  maxPlayers        Int?     @map("max_players")
+  inviteCode        String   @unique @default(cuid()) @map("invite_code")
+  isPublic          Boolean  @default(true) @map("is_public")
+  pixKey            String?  @map("pix_key")
+  goalkeepersExempt   Boolean  @default(true) @map("goalkeepers_exempt")
+  playersPerTeam      Int      @default(5) @map("players_per_team")
+  cancelDeadlineHours Int      @default(4) @map("cancel_deadline_hours")
+  status              String   @default("OPEN") // OPEN, IN_PROGRESS, FINISHED
+  teamsJson           String?  @map("teams_json")
+  matchesJson         String?  @map("matches_json")
+  organizerId         String   @map("organizer_id")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
 
   // Relações
-  organizer User @relation("organizer", fields: [organizerId], references: [id])
+  organizer User           @relation("organizer", fields: [organizerId], references: [id], onDelete: Cascade)
+  players   PeladaPlayer[]
 
   @@map("peladas")
+}
+
+model PeladaPlayer {
+  id            String   @id @default(uuid())
+  peladaId      String   @map("pelada_id")
+  userId        String?  @map("user_id")
+  guestName     String?  @map("guest_name")
+  role          String   @default("PLAYER") // ORGANIZER, CO_ORGANIZER, PLAYER
+  status        String   @default("CONFIRMED") // CONFIRMED, WAITLIST, DECLINED
+  isGoalkeeper  Boolean  @default(false) @map("is_goalkeeper")
+  position      String?
+  paymentStatus        String   @default("PENDING") @map("payment_status") // PENDING, WAITING_CONFIRMATION, PAID, EXEMPT
+  memberType           String   @default("DIARISTA") @map("member_type") // MENSALISTA, DIARISTA
+  attendanceStatus     String   @default("PENDING") @map("attendance_status") // PENDING, PRESENT, NO_SHOW
+  goals                Int      @default(0)
+  assists              Int      @default(0)
+  wins                 Int      @default(0)
+  votedMvpForId        String?  @map("voted_mvp_for_id")
+  votedGoalkeeperForId String?  @map("voted_goalkeeper_for_id")
+  joinedAt             DateTime @default(now()) @map("joined_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  // Relações
+  pelada Pelada @relation(fields: [peladaId], references: [id], onDelete: Cascade)
+  user   User?  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([peladaId, userId])
+  @@map("pelada_players")
 }

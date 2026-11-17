@@ -27,7 +27,10 @@ export function Button({ title, onPress, variant = 'primary', loading, disabled,
       ]}
       onPress={onPress}
       disabled={isDisabled}
-      activeOpacity={0.8}
+      activeOpacity={0.82}
+      accessibilityRole="button"
+      accessibilityLabel={title}
+      accessibilityState={{ disabled: !!isDisabled, busy: !!loading }}
     >
       {loading ? (
         <ActivityIndicator color={variant === 'primary' ? colors.textInverse : colors.primary} />
@@ -49,23 +52,25 @@ export function Button({ title, onPress, variant = 'primary', loading, disabled,
 
 const styles = StyleSheet.create({
   base: {
-    paddingVertical: spacing.md,
+    paddingVertical: 13,
     paddingHorizontal: spacing.lg,
     borderRadius: borderRadius.md,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 52,
+    minHeight: 50,
   },
   primary: {
     backgroundColor: colors.primary,
   },
   outline: {
-    backgroundColor: 'transparent',
+    backgroundColor: colors.primarySoft,
     borderWidth: 1.5,
     borderColor: colors.primary,
   },
   ghost: {
     backgroundColor: 'transparent',
+    minHeight: 42,
+    paddingVertical: spacing.sm,
   },
   disabled: {
     opacity: 0.5,
@@ -73,6 +78,7 @@ const styles = StyleSheet.create({
   text: {
     fontSize: fonts.sizes.md,
     fontWeight: '700',
+    letterSpacing: 0.3,
   },
   textPrimary: {
     color: colors.textInverse,
@@ -82,5 +88,6 @@ const styles = StyleSheet.create({
   },
   textGhost: {
     color: colors.primary,
+    fontSize: fonts.sizes.sm,
   },
 });

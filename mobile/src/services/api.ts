@@ -1,10 +1,12 @@
 // Axios instance with JWT interceptor
 import axios from 'axios';
+import { Platform } from 'react-native';
 import { getToken } from '../utils/storage';
 
-// Use your machine's local IP for physical device testing
-// For emulator, use 10.0.2.2 (Android) or localhost (iOS)
-const API_URL = 'http://10.0.2.2:3333/api';
+// Use EXPO_PUBLIC_API_URL for physical device testing (e.g. http://192.168.x.x:3333/api)
+// For emulator/web, defaults to 10.0.2.2 (Android) or localhost (Web/iOS)
+const DEFAULT_HOST = Platform.OS === 'android' ? '10.0.2.2' : 'localhost';
+export const API_URL = process.env.EXPO_PUBLIC_API_URL || `http://${DEFAULT_HOST}:3333/api`;
 
 const api = axios.create({
   baseURL: API_URL,

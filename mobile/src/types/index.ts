@@ -1,5 +1,32 @@
 // Type definitions for INFUT
 
+export interface UserStats {
+  totalGames: number;
+  totalGoals: number;
+  totalAssists: number;
+  totalWins: number;
+  organizedCount: number;
+  mvpVotes: number;
+  goalkeeperVotes: number;
+  noShows: number;
+  attendanceRate: number;
+}
+
+export interface RankingPlayer {
+  id: string;
+  name: string;
+  sport: string | null;
+  position: string | null;
+  region: string | null;
+  totalGames: number;
+  totalGoals: number;
+  totalAssists: number;
+  totalWins: number;
+  mvpVotes: number;
+  goalkeeperVotes: number;
+  attendanceRate: number;
+}
+
 export interface User {
   id: string;
   name: string;
@@ -10,11 +37,87 @@ export interface User {
   region: string | null;
   createdAt: string;
   updatedAt?: string;
+  stats?: UserStats;
 }
 
 export interface AuthResponse {
   user: User;
   token: string;
+}
+
+export type PlayerRole = 'ORGANIZER' | 'CO_ORGANIZER' | 'PLAYER';
+export type PlayerStatus = 'CONFIRMED' | 'WAITLIST' | 'DECLINED';
+export type PaymentStatus = 'PENDING' | 'WAITING_CONFIRMATION' | 'PAID' | 'EXEMPT';
+export type MemberType = 'MENSALISTA' | 'DIARISTA';
+export type AttendanceStatus = 'PENDING' | 'PRESENT' | 'NO_SHOW';
+export type PeladaLifecycleStatus = 'OPEN' | 'IN_PROGRESS' | 'FINISHED';
+
+export interface PeladaPlayer {
+  id: string;
+  peladaId: string;
+  userId: string | null;
+  guestName: string | null;
+  displayName: string;
+  role: PlayerRole;
+  status: PlayerStatus;
+  isGoalkeeper: boolean;
+  position: string | null;
+  paymentStatus: PaymentStatus;
+  memberType: MemberType;
+  attendanceStatus: AttendanceStatus;
+  goals: number;
+  assists: number;
+  wins: number;
+  votedMvpForId: string | null;
+  votedGoalkeeperForId: string | null;
+  joinedAt: string;
+  user?: {
+    id: string;
+    name: string;
+    email: string;
+    sport: string | null;
+    position: string | null;
+    photoUrl: string | null;
+    region: string | null;
+  } | null;
+}
+
+export interface DrawnTeamPlayer {
+  id: string;
+  name: string;
+  position: string | null;
+  isGoalkeeper: boolean;
+}
+
+export interface DrawnTeam {
+  name: string;
+  players: DrawnTeamPlayer[];
+}
+
+export interface MatchRecord {
+  id: string;
+  teamAName: string;
+  teamBName: string;
+  scoreA: number;
+  scoreB: number;
+  winner: string;
+  finishedAt: string;
+}
+
+export interface FinancialSummary {
+  unitPrice: number;
+  totalExpected: number;
+  totalPaid: number;
+  paidCount: number;
+  waitingCount: number;
+  pendingCount: number;
+  exemptCount: number;
+}
+
+export interface MvpRankEntry {
+  playerId: string;
+  displayName: string;
+  votes: number;
 }
 
 export interface Pelada {
@@ -28,14 +131,36 @@ export interface Pelada {
   isRecurring: boolean;
   recurrenceDay: string | null;
   maxPlayers: number | null;
+  inviteCode: string;
+  isPublic: boolean;
+  pixKey: string | null;
+  goalkeepersExempt: boolean;
+  playersPerTeam: number;
+  cancelDeadlineHours: number;
+  status: PeladaLifecycleStatus;
   organizerId: string;
   createdAt: string;
   updatedAt: string;
   organizer: {
     id: string;
     name: string;
+    email?: string;
     photoUrl: string | null;
+    region?: string | null;
   };
+  players: PeladaPlayer[];
+  teams: DrawnTeam[];
+  matches: MatchRecord[];
+  confirmedCount: number;
+  confirmedFieldCount: number;
+  confirmedGoalkeepersCount: number;
+  waitlistCount: number;
+  myRole: PlayerRole | null;
+  myStatus: PlayerStatus | null;
+  myPlayer: PeladaPlayer | null;
+  financialSummary: FinancialSummary;
+  mvpRanking: MvpRankEntry[];
+  goalkeeperRanking: MvpRankEntry[];
 }
 
 export interface CreatePeladaInput {
@@ -48,6 +173,11 @@ export interface CreatePeladaInput {
   isRecurring?: boolean;
   recurrenceDay?: string | null;
   maxPlayers?: number | null;
+  isPublic?: boolean;
+  pixKey?: string | null;
+  goalkeepersExempt?: boolean;
+  playersPerTeam?: number;
+  cancelDeadlineHours?: number;
 }
 
 export interface UpdateProfileInput {
