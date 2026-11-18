@@ -119,7 +119,7 @@ export async function updatePlayerStats(
 
 export async function drawPeladaTeams(
   peladaId: string,
-  data: { playersPerTeam?: number; balancedByPosition?: boolean }
+  data: { playersPerTeam?: number; balancedByPosition?: boolean; teamNames?: string[] }
 ): Promise<Pelada> {
   const response = await api.post(`/peladas/${peladaId}/draw-teams`, data);
   return response.data;

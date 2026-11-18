@@ -20,8 +20,9 @@ import {
   voteMvp,
 } from '../../services/peladaService';
 import { Pelada, PeladaPlayer } from '../../types';
-import { colors, fonts, spacing, borderRadius, layout, shadows } from '../../constants/theme';
+import { colors, fonts, spacing, borderRadius, shadows } from '../../constants/theme';
 import { showConfirm, showMessage } from '../../utils/alerts';
+import { useResponsive } from '../../hooks/useResponsive';
 
 type Props = NativeStackScreenProps<AppStackParamList, 'PostGame'>;
 
@@ -29,6 +30,7 @@ const HIT_SLOP = { top: 4, bottom: 4, left: 4, right: 4 };
 
 export function PostGameScreen({ navigation, route }: Props) {
   const { peladaId } = route.params;
+  const { isDesktop, containerMaxWidth, pagePadding, topSpace } = useResponsive();
 
   const [pelada, setPelada] = useState<Pelada | null>(null);
   const [loading, setLoading] = useState(true);
@@ -128,27 +130,291 @@ export function PostGameScreen({ navigation, route }: Props) {
   );
   const canVote = pelada.myStatus === 'CONFIRMED';
 
+  const votingColumn = (
+    <>
+      {/* 1. MVP Leaderboard (if any votes) */}
+      {pelada.mvpRanking.length > 0 && (
+        <View style={styles.sectionCard}>
+          <Text style={styles.sectionTitle}>🏆 Ranking MVP da Pelada</Text>
+          {pelada.mvpRanking.map((entry, idx) => (
+            <View key={entry.playerId} style={styles.rankRow}>
+              <Text style={styles.rankName}>
+                {idx === 0 ? '👑 ' : `${idx + 1}º `}
+                {entry.displayName}
+              </Text>
+              <Text style={styles.rankVotes}>{entry.votes} voto(s)</Text>
+            </View>
+          ))}
+        </View>
+      )}
+
+      {pelada.goalkeeperRanking.length > 0 && (
+        <View style={styles.sectionCard}>
+          <Text style={styles.sectionTitle}>🧤 Ranking Goleiro Paredão</Text>
+          {pelada.goalkeeperRanking.map((entry, idx) => (
+            <View key={entry.playerId} style={styles.rankRow}>
+              <Text style={styles.rankName}>
+                {idx === 0 ? '🧤 ' : `${idx + 1}º `}
+                {entry.displayName}
+              </Text>
+              <Text style={styles.rankVotes}>{entry.votes} voto(s)</Text>
+            </View>
+          ))}
+        </View>
+      )}
+
+      {/* 2. Open MVP Voting */}
+      <View style={styles.sectionCard}>
+        <Text style={styles.sectionTitle}>⭐ Votação de MVP da Pelada</Text>
+        <Text style={styles.helperText}>
+          {canVote
+            ? 'Votação aberta para todos os participantes! Escolha o melhor jogador em campo:'
+            : 'Apenas participantes confirmados desta pelada podem registrar voto no MVP.'}
+        </Text>
+
+        {eligibleForVoting.length === 0 ? (
+          <Text style={[styles.emptyText, { marginTop: spacing.sm }]}>
+            Nenhum jogador elegível para votação.
+          </Text>
+        ) : (
+          eligibleForVoting.map((player) => {
+            const isMyMvpVote = pelada.myPlayer?.votedMvpForId === player.id;
+            const isMyGkVote = pelada.myPlayer?.votedGoalkeeperForId === player.id;
+            return (
+              <View key={player.id} style={styles.voteRow}>
+                <View style={{ flex: 1, minWidth: 140 }}>
+                  <Text style={styles.playerName} numberOfLines={1}>
+                    {player.displayName} {player.isGoalkeeper ? '🧤' : ''}
+                  </Text>
+                  <Text style={styles.statsLabel}>
+                    ⚽ {player.goals} gols • 👟 {player.assists} assist. • 🏆 {player.wins} vit.
+                  </Text>
+                </View>
+
+                {canVote && (
+                  <View style={styles.voteActions}>
+                    <TouchableOpacity
+                      style={[styles.voteBtn, isMyMvpVote && styles.voteBtnActive]}
+                      disabled={actionLoading}
+                      hitSlop={HIT_SLOP}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Votar em ${player.displayName} como MVP`}
+                      accessibilityState={{ selected: isMyMvpVote }}
+                      onPress={() =>
+                        runAction(
+                          () => voteMvp(pelada.id, player.id),
+                          `Voto de MVP registrado em ${player.displayName}!`
+                        )
+                      }
+                    >
+                      <Text
+                        style={[
+                          styles.voteBtnText,
+                          isMyMvpVote && { color: colors.textInverse },
+                        ]}
+                      >
+                        {isMyMvpVote ? '★ MVP' : 'Votar MVP'}
+                      </Text>
+                    </TouchableOpacity>
+
+                    {player.isGoalkeeper && (
+                      <TouchableOpacity
+                        style={[
+                          styles.voteBtn,
+                          { borderColor: colors.info },
+                          isMyGkVote && { backgroundColor: colors.info },
+                        ]}
+                        disabled={actionLoading}
+                        hitSlop={HIT_SLOP}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Votar em ${player.displayName} como Goleiro Paredão`}
+                        accessibilityState={{ selected: isMyGkVote }}
+                        onPress={() =>
+                          runAction(
+                            () => voteGoalkeeper(pelada.id, player.id),
+                            `Voto de Paredão registrado em ${player.displayName}!`
+                          )
+                        }
+                      >
+                        <Text
+                          style={[
+                            styles.voteBtnText,
+                            { color: colors.info },
+                            isMyGkVote && { color: colors.textInverse },
+                          ]}
+                        >
+                          {isMyGkVote ? '🧤 Paredão' : '🧤'}
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                )}
+              </View>
+            );
+          })
+        )}
+      </View>
+    </>
+  );
+
+  const statsAndManageColumn = (
+    <>
+      {/* 3. Match History & Pelada Statistics */}
+      <View style={styles.sectionCard}>
+        <Text style={styles.sectionTitle}>📊 Estatísticas da Pelada</Text>
+
+        {pelada.matches.length > 0 && (
+          <View style={styles.matchesSummaryBox}>
+            <Text style={styles.subLabel}>Placares registrados:</Text>
+            {pelada.matches.map((m) => (
+              <View key={m.id} style={styles.matchHistoryRow}>
+                <Text style={styles.matchScoreText}>
+                  {m.teamAName} {m.scoreA} x {m.scoreB} {m.teamBName}
+                </Text>
+                <View style={styles.winnerPill}>
+                  <Text style={styles.matchWinnerText}>
+                    {m.winner === 'EMPATE' ? 'Empate' : `🏆 ${m.winner}`}
+                  </Text>
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
+
+        <Text style={[styles.subLabel, { marginTop: pelada.matches.length > 0 ? spacing.md : 0 }]}>
+          Desempenho dos atletas:
+        </Text>
+        {sortedStats.length === 0 ? (
+          <Text style={styles.emptyText}>Nenhuma estatística registrada.</Text>
+        ) : (
+          sortedStats.map((player, idx) => (
+            <View key={player.id} style={styles.statLineRow}>
+              <Text style={styles.statRankNum}>{idx + 1}º</Text>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={styles.playerName} numberOfLines={1}>
+                  {player.displayName}
+                  {player.attendanceStatus === 'NO_SHOW' ? ' (Não foi)' : ''}
+                </Text>
+                <Text style={styles.statsLabel}>
+                  ⚽ {player.goals} gols • 👟 {player.assists} assist. • 🏆 {player.wins} vit.
+                </Text>
+              </View>
+            </View>
+          ))
+        )}
+      </View>
+
+      {/* 4. Organizer Only: Who Did Not Attend */}
+      {canManage && (
+        <View style={styles.sectionCard}>
+          <Text style={styles.sectionTitle}>📋 Quem Não Foi (Faltas)</Text>
+          <Text style={styles.helperText}>
+            Marque apenas quem confirmou vaga e não compareceu à pelada:
+          </Text>
+
+          {allConfirmed.length === 0 ? (
+            <Text style={[styles.emptyText, { marginTop: spacing.sm }]}>
+              Nenhum jogador confirmado nesta lista.
+            </Text>
+          ) : (
+            allConfirmed.map((player) => {
+              const isNoShow = player.attendanceStatus === 'NO_SHOW';
+              return (
+                <View key={player.id} style={styles.absenceRow}>
+                  <View style={{ flex: 1, minWidth: 140 }}>
+                    <Text style={styles.playerName} numberOfLines={1}>
+                      {player.displayName}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.absenceSub,
+                        { color: isNoShow ? colors.error : colors.success },
+                      ]}
+                    >
+                      {isNoShow ? 'Marcado como falta ❌' : 'Compareceu ✅'}
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    style={[styles.absenceBtn, isNoShow && styles.absenceBtnActive]}
+                    disabled={actionLoading}
+                    hitSlop={HIT_SLOP}
+                    accessibilityRole="button"
+                    accessibilityLabel={
+                      isNoShow
+                        ? `Desmarcar falta de ${player.displayName}`
+                        : `Marcar que ${player.displayName} não foi`
+                    }
+                    onPress={() =>
+                      runAction(() =>
+                        updatePlayerCheckin(pelada.id, player.id, {
+                          attendanceStatus: isNoShow ? 'PRESENT' : 'NO_SHOW',
+                        })
+                      )
+                    }
+                  >
+                    <Text
+                      style={[
+                        styles.absenceBtnText,
+                        isNoShow && { color: colors.error },
+                      ]}
+                    >
+                      {isNoShow ? 'Desmarcar falta' : 'Marcar falta'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              );
+            })
+          )}
+        </View>
+      )}
+
+      {/* 5. Reopen Live Pelada (Organizer / Co-org) */}
+      {canManage && (
+        <TouchableOpacity
+          style={styles.reopenBtn}
+          disabled={actionLoading}
+          onPress={handleReopenLive}
+          accessibilityRole="button"
+          accessibilityLabel="Reabrir pelada ao vivo"
+        >
+          <Text style={styles.reopenBtnText}>↩️ Reabrir Pelada ao Vivo</Text>
+        </TouchableOpacity>
+      )}
+    </>
+  );
+
   return (
     <View style={styles.container}>
-      <View style={styles.topBar}>
-        <TouchableOpacity
-          onPress={() => navigation.goBack()}
-          style={styles.backBtn}
-          accessibilityRole="button"
-          accessibilityLabel="Voltar para detalhes da pelada"
+      <View style={styles.topBarWrapper}>
+        <View
+          style={[
+            styles.topBar,
+            {
+              maxWidth: containerMaxWidth,
+              paddingHorizontal: pagePadding,
+              paddingTop: topSpace,
+            },
+          ]}
         >
-          <Text style={styles.backBtnText}>← Voltar</Text>
-        </TouchableOpacity>
-        <Text style={styles.topTitle} numberOfLines={1}>
-          {pelada.title}
-        </Text>
-        <View style={styles.finishedPill}>
-          <Text style={styles.finishedPillText}>🏁 FINALIZADA</Text>
+          <TouchableOpacity
+            onPress={() => navigation.goBack()}
+            style={styles.backBtn}
+            accessibilityRole="button"
+            accessibilityLabel="Voltar para detalhes da pelada"
+          >
+            <Text style={styles.backBtnText}>← Voltar</Text>
+          </TouchableOpacity>
+          <Text style={styles.topTitle} numberOfLines={1}>
+            {pelada.title}
+          </Text>
+          <View style={styles.finishedPill}>
+            <Text style={styles.finishedPillText}>🏁 FINALIZADA</Text>
+          </View>
         </View>
       </View>
 
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { paddingHorizontal: pagePadding }]}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -160,250 +426,17 @@ export function PostGameScreen({ navigation, route }: Props) {
           />
         }
       >
-        <View style={styles.pageContainer}>
-          {/* 1. MVP Leaderboard (if any votes) */}
-          {pelada.mvpRanking.length > 0 && (
-            <View style={styles.sectionCard}>
-              <Text style={styles.sectionTitle}>🏆 Ranking MVP da Pelada</Text>
-              {pelada.mvpRanking.map((entry, idx) => (
-                <View key={entry.playerId} style={styles.rankRow}>
-                  <Text style={styles.rankName}>
-                    {idx === 0 ? '👑 ' : `${idx + 1}º `}
-                    {entry.displayName}
-                  </Text>
-                  <Text style={styles.rankVotes}>{entry.votes} voto(s)</Text>
-                </View>
-              ))}
+        <View style={[styles.pageContainer, { maxWidth: containerMaxWidth }]}>
+          {isDesktop ? (
+            <View style={styles.desktopColumns}>
+              <View style={styles.desktopLeftCol}>{votingColumn}</View>
+              <View style={styles.desktopRightCol}>{statsAndManageColumn}</View>
             </View>
-          )}
-
-          {pelada.goalkeeperRanking.length > 0 && (
-            <View style={styles.sectionCard}>
-              <Text style={styles.sectionTitle}>🧤 Ranking Goleiro Paredão</Text>
-              {pelada.goalkeeperRanking.map((entry, idx) => (
-                <View key={entry.playerId} style={styles.rankRow}>
-                  <Text style={styles.rankName}>
-                    {idx === 0 ? '🧤 ' : `${idx + 1}º `}
-                    {entry.displayName}
-                  </Text>
-                  <Text style={styles.rankVotes}>{entry.votes} voto(s)</Text>
-                </View>
-              ))}
-            </View>
-          )}
-
-          {/* 2. Open MVP Voting */}
-          <View style={styles.sectionCard}>
-            <Text style={styles.sectionTitle}>⭐ Votação de MVP da Pelada</Text>
-            <Text style={styles.helperText}>
-              {canVote
-                ? 'Votação aberta para todos os participantes! Escolha o melhor jogador em campo:'
-                : 'Apenas participantes confirmados desta pelada podem registrar voto no MVP.'}
-            </Text>
-
-            {eligibleForVoting.length === 0 ? (
-              <Text style={[styles.emptyText, { marginTop: spacing.sm }]}>
-                Nenhum jogador elegível para votação.
-              </Text>
-            ) : (
-              eligibleForVoting.map((player) => {
-                const isMyMvpVote = pelada.myPlayer?.votedMvpForId === player.id;
-                const isMyGkVote = pelada.myPlayer?.votedGoalkeeperForId === player.id;
-                return (
-                  <View key={player.id} style={styles.voteRow}>
-                    <View style={{ flex: 1, minWidth: 0 }}>
-                      <Text style={styles.playerName} numberOfLines={1}>
-                        {player.displayName} {player.isGoalkeeper ? '🧤' : ''}
-                      </Text>
-                      <Text style={styles.statsLabel}>
-                        ⚽ {player.goals} gols • 👟 {player.assists} assist. • 🏆 {player.wins} vit.
-                      </Text>
-                    </View>
-
-                    {canVote && (
-                      <View style={styles.voteActions}>
-                        <TouchableOpacity
-                          style={[styles.voteBtn, isMyMvpVote && styles.voteBtnActive]}
-                          disabled={actionLoading}
-                          hitSlop={HIT_SLOP}
-                          accessibilityRole="button"
-                          accessibilityLabel={`Votar em ${player.displayName} como MVP`}
-                          accessibilityState={{ selected: isMyMvpVote }}
-                          onPress={() =>
-                            runAction(
-                              () => voteMvp(pelada.id, player.id),
-                              `Voto de MVP registrado em ${player.displayName}!`
-                            )
-                          }
-                        >
-                          <Text
-                            style={[
-                              styles.voteBtnText,
-                              isMyMvpVote && { color: colors.textInverse },
-                            ]}
-                          >
-                            {isMyMvpVote ? '★ MVP' : 'Votar MVP'}
-                          </Text>
-                        </TouchableOpacity>
-
-                        {player.isGoalkeeper && (
-                          <TouchableOpacity
-                            style={[
-                              styles.voteBtn,
-                              { borderColor: colors.info },
-                              isMyGkVote && { backgroundColor: colors.info },
-                            ]}
-                            disabled={actionLoading}
-                            hitSlop={HIT_SLOP}
-                            accessibilityRole="button"
-                            accessibilityLabel={`Votar em ${player.displayName} como Goleiro Paredão`}
-                            accessibilityState={{ selected: isMyGkVote }}
-                            onPress={() =>
-                              runAction(
-                                () => voteGoalkeeper(pelada.id, player.id),
-                                `Voto de Paredão registrado em ${player.displayName}!`
-                              )
-                            }
-                          >
-                            <Text
-                              style={[
-                                styles.voteBtnText,
-                                { color: colors.info },
-                                isMyGkVote && { color: colors.textInverse },
-                              ]}
-                            >
-                              {isMyGkVote ? '🧤 Paredão' : '🧤'}
-                            </Text>
-                          </TouchableOpacity>
-                        )}
-                      </View>
-                    )}
-                  </View>
-                );
-              })
-            )}
-          </View>
-
-          {/* 3. Match History & Pelada Statistics */}
-          <View style={styles.sectionCard}>
-            <Text style={styles.sectionTitle}>📊 Estatísticas da Pelada</Text>
-
-            {pelada.matches.length > 0 && (
-              <View style={styles.matchesSummaryBox}>
-                <Text style={styles.subLabel}>Placares registrados:</Text>
-                {pelada.matches.map((m) => (
-                  <View key={m.id} style={styles.matchHistoryRow}>
-                    <Text style={styles.matchScoreText}>
-                      {m.teamAName} {m.scoreA} x {m.scoreB} {m.teamBName}
-                    </Text>
-                    <View style={styles.winnerPill}>
-                      <Text style={styles.matchWinnerText}>
-                        {m.winner === 'EMPATE' ? 'Empate' : `🏆 ${m.winner}`}
-                      </Text>
-                    </View>
-                  </View>
-                ))}
-              </View>
-            )}
-
-            <Text style={[styles.subLabel, { marginTop: pelada.matches.length > 0 ? spacing.md : 0 }]}>
-              Desempenho dos atletas:
-            </Text>
-            {sortedStats.length === 0 ? (
-              <Text style={styles.emptyText}>Nenhuma estatística registrada.</Text>
-            ) : (
-              sortedStats.map((player, idx) => (
-                <View key={player.id} style={styles.statLineRow}>
-                  <Text style={styles.statRankNum}>{idx + 1}º</Text>
-                  <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text style={styles.playerName} numberOfLines={1}>
-                      {player.displayName}
-                      {player.attendanceStatus === 'NO_SHOW' ? ' (Não foi)' : ''}
-                    </Text>
-                    <Text style={styles.statsLabel}>
-                      ⚽ {player.goals} gols • 👟 {player.assists} assist. • 🏆 {player.wins} vit.
-                    </Text>
-                  </View>
-                </View>
-              ))
-            )}
-          </View>
-
-          {/* 4. Organizer Only: Who Did Not Attend */}
-          {canManage && (
-            <View style={styles.sectionCard}>
-              <Text style={styles.sectionTitle}>📋 Quem Não Foi (Faltas)</Text>
-              <Text style={styles.helperText}>
-                Marque apenas quem confirmou vaga e não compareceu à pelada:
-              </Text>
-
-              {allConfirmed.length === 0 ? (
-                <Text style={[styles.emptyText, { marginTop: spacing.sm }]}>
-                  Nenhum jogador confirmado nesta lista.
-                </Text>
-              ) : (
-                allConfirmed.map((player) => {
-                  const isNoShow = player.attendanceStatus === 'NO_SHOW';
-                  return (
-                    <View key={player.id} style={styles.absenceRow}>
-                      <View style={{ flex: 1, minWidth: 0 }}>
-                        <Text style={styles.playerName} numberOfLines={1}>
-                          {player.displayName}
-                        </Text>
-                        <Text
-                          style={[
-                            styles.absenceSub,
-                            { color: isNoShow ? colors.error : colors.success },
-                          ]}
-                        >
-                          {isNoShow ? 'Marcado como falta ❌' : 'Compareceu ✅'}
-                        </Text>
-                      </View>
-                      <TouchableOpacity
-                        style={[styles.absenceBtn, isNoShow && styles.absenceBtnActive]}
-                        disabled={actionLoading}
-                        hitSlop={HIT_SLOP}
-                        accessibilityRole="button"
-                        accessibilityLabel={
-                          isNoShow
-                            ? `Desmarcar falta de ${player.displayName}`
-                            : `Marcar que ${player.displayName} não foi`
-                        }
-                        onPress={() =>
-                          runAction(() =>
-                            updatePlayerCheckin(pelada.id, player.id, {
-                              attendanceStatus: isNoShow ? 'PRESENT' : 'NO_SHOW',
-                            })
-                          )
-                        }
-                      >
-                        <Text
-                          style={[
-                            styles.absenceBtnText,
-                            isNoShow && { color: colors.error },
-                          ]}
-                        >
-                          {isNoShow ? 'Desmarcar falta' : 'Marcar falta'}
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-                  );
-                })
-              )}
-            </View>
-          )}
-
-          {/* 5. Reopen Live Pelada (Organizer / Co-org) */}
-          {canManage && (
-            <TouchableOpacity
-              style={styles.reopenBtn}
-              disabled={actionLoading}
-              onPress={handleReopenLive}
-              accessibilityRole="button"
-              accessibilityLabel="Reabrir pelada ao vivo"
-            >
-              <Text style={styles.reopenBtnText}>↩️ Reabrir Pelada ao Vivo</Text>
-            </TouchableOpacity>
+          ) : (
+            <>
+              {votingColumn}
+              {statsAndManageColumn}
+            </>
           )}
         </View>
       </ScrollView>
@@ -447,16 +480,19 @@ const styles = StyleSheet.create({
     minHeight: 44,
     justifyContent: 'center',
   },
-  topBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.xl,
-    paddingBottom: spacing.md,
+  topBarWrapper: {
     backgroundColor: colors.surface,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
+  },
+  topBar: {
+    width: '100%',
+    alignSelf: 'center',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingBottom: spacing.md,
     gap: spacing.sm,
   },
   backBtn: {
@@ -468,6 +504,7 @@ const styles = StyleSheet.create({
   backBtnText: { color: colors.primary, fontSize: fonts.sizes.md, fontWeight: '700' },
   topTitle: {
     flex: 1,
+    minWidth: 120,
     color: colors.textPrimary,
     fontSize: fonts.sizes.md,
     fontWeight: '800',
@@ -487,14 +524,25 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   scrollContent: {
-    paddingHorizontal: spacing.md,
     paddingTop: spacing.md,
     paddingBottom: spacing.xxl,
   },
   pageContainer: {
     width: '100%',
-    maxWidth: layout.maxWidth,
     alignSelf: 'center',
+  },
+  desktopColumns: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.lg,
+  },
+  desktopLeftCol: {
+    flex: 1,
+    minWidth: 0,
+  },
+  desktopRightCol: {
+    flex: 1,
+    minWidth: 0,
   },
   sectionCard: {
     backgroundColor: colors.card,
@@ -548,6 +596,7 @@ const styles = StyleSheet.create({
   },
   voteRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: spacing.sm + 4,
@@ -634,6 +683,7 @@ const styles = StyleSheet.create({
   },
   absenceRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: spacing.sm + 2,

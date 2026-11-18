@@ -12,7 +12,8 @@ import {
 import { useFocusEffect } from '@react-navigation/native';
 import { getRanking } from '../../services/userService';
 import { RankingPlayer } from '../../types';
-import { colors, fonts, spacing, borderRadius, layout, shadows } from '../../constants/theme';
+import { colors, fonts, spacing, borderRadius, shadows } from '../../constants/theme';
+import { useResponsive } from '../../hooks/useResponsive';
 
 type RankingCategory = 'goals' | 'wins' | 'assists' | 'mvp';
 
@@ -24,6 +25,7 @@ const CATEGORIES: { key: RankingCategory; label: string; emoji: string }[] = [
 ];
 
 export function RankingScreen() {
+  const { isDesktop, numColumns, containerMaxWidth, pagePadding, topSpace } = useResponsive();
   const [players, setPlayers] = useState<RankingPlayer[]>([]);
   const [category, setCategory] = useState<RankingCategory>('goals');
   const [loading, setLoading] = useState(true);
@@ -81,7 +83,16 @@ export function RankingScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.headerWrapper}>
+      <View
+        style={[
+          styles.headerWrapper,
+          {
+            maxWidth: containerMaxWidth,
+            paddingHorizontal: pagePadding,
+            paddingTop: topSpace,
+          },
+        ]}
+      >
         <Text style={styles.headerTitle}>Ranking INFUT</Text>
         <Text style={styles.headerSubtitle}>Destaques da temporada e assiduidade</Text>
 
@@ -107,7 +118,12 @@ export function RankingScreen() {
       </View>
 
       {loading && players.length === 0 ? (
-        <View style={styles.loadingContainer}>
+        <View
+          style={[
+            styles.loadingContainer,
+            { maxWidth: containerMaxWidth, paddingHorizontal: pagePadding },
+          ]}
+        >
           <View style={styles.loadingCard}>
             <ActivityIndicator size="large" color={colors.primary} />
             <Text style={styles.loadingText}>Calculando estatísticas e ranking…</Text>
@@ -115,9 +131,19 @@ export function RankingScreen() {
         </View>
       ) : (
         <FlatList
+          key={`ranking-${numColumns}`}
           data={sortedPlayers}
+          numColumns={numColumns}
+          columnWrapperStyle={numColumns > 1 ? styles.gridRow : undefined}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.list}
+          contentContainerStyle={[
+            styles.list,
+            {
+              maxWidth: containerMaxWidth,
+              paddingHorizontal: pagePadding,
+              paddingBottom: isDesktop ? spacing.xxl : 100,
+            },
+          ]}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -134,7 +160,13 @@ export function RankingScreen() {
             const isTop3 = index < 3;
 
             return (
-              <View style={[styles.card, isLeader && styles.leaderCard]}>
+              <View
+                style={[
+                  styles.card,
+                  isLeader && styles.leaderCard,
+                  numColumns > 1 && styles.cardGrid,
+                ]}
+              >
                 <View style={[styles.rankBadge, isTop3 && styles.rankBadgeTop]}>
                   <Text style={styles.rankPos}>{medal}</Text>
                 </View>
@@ -183,10 +215,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   headerWrapper: {
     width: '100%',
-    maxWidth: layout.maxWidth,
     alignSelf: 'center',
-    paddingTop: 52,
-    paddingHorizontal: spacing.lg,
     paddingBottom: spacing.sm,
   },
   headerTitle: { fontSize: fonts.sizes.xxl, fontWeight: '900', color: colors.textPrimary },
@@ -226,9 +255,7 @@ const styles = StyleSheet.create({
   loadingContainer: {
     flex: 1,
     width: '100%',
-    maxWidth: layout.maxWidth,
     alignSelf: 'center',
-    paddingHorizontal: spacing.lg,
     paddingTop: spacing.lg,
   },
   loadingCard: {
@@ -247,14 +274,16 @@ const styles = StyleSheet.create({
   },
   list: {
     width: '100%',
-    maxWidth: layout.maxWidth,
     alignSelf: 'center',
-    paddingHorizontal: spacing.lg,
     paddingTop: spacing.sm,
-    paddingBottom: 100,
+  },
+  gridRow: {
+    gap: spacing.md,
+    alignItems: 'stretch',
   },
   card: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
     backgroundColor: colors.card,
     borderRadius: borderRadius.lg,
@@ -264,6 +293,10 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     gap: spacing.md,
     ...shadows.card,
+  },
+  cardGrid: {
+    flex: 1,
+    maxWidth: '49%',
   },
   leaderCard: {
     borderColor: colors.primary,

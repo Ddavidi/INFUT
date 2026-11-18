@@ -16,6 +16,8 @@ export const createPeladaSchema = z.object({
   goalkeepersExempt: z.boolean().optional().default(true),
   playersPerTeam: z.number().int().min(1).max(20).optional().default(5),
   cancelDeadlineHours: z.number().int().min(0).max(72).optional().default(4),
+  durationHours: z.number().min(0.5).max(12).optional().default(2),
+  whatsappGroupUrl: z.string().optional().nullable(),
 });
 
 export const updatePeladaSchema = createPeladaSchema.partial();
@@ -72,6 +74,7 @@ export const recordMatchSchema = z.object({
 export const drawTeamsSchema = z.object({
   playersPerTeam: z.number().int().min(2).max(15).optional(),
   balancedByPosition: z.boolean().optional().default(true),
+  teamNames: z.array(z.string().min(1).max(60)).min(2).max(10).optional(),
 });
 
 export const updatePeladaStatusSchema = z.object({

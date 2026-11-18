@@ -324,6 +324,8 @@ export class PeladaService {
         goalkeepersExempt: data.goalkeepersExempt ?? true,
         playersPerTeam: data.playersPerTeam ?? 5,
         cancelDeadlineHours: data.cancelDeadlineHours ?? 4,
+        durationHours: data.durationHours ?? 2,
+        whatsappGroupUrl: data.whatsappGroupUrl?.trim() || null,
         organizerId,
         players: {
           create: {
@@ -438,7 +440,6 @@ export class PeladaService {
     const formatted = this.formatPelada(pelada);
     return {
       ...formatted,
-      pixKey: null,
       organizer: {
         ...formatted.organizer,
         email: undefined,
@@ -773,6 +774,10 @@ export class PeladaService {
       throw this.createHttpError('Participante nao encontrado nesta pelada', 404);
     }
 
+    if (data.memberType === 'MENSALISTA' && !record.userId) {
+      throw this.createHttpError('Convidados avulsos nao podem ser definidos como mensalistas', 400);
+    }
+
     await prisma.peladaPlayer.update({
       where: { id: playerRecordId },
       data: {
@@ -907,27 +912,33 @@ export class PeladaService {
 
     const perTeam = input.playersPerTeam || pelada.playersPerTeam || 5;
     const baseCount = fieldPlayers.length > 0 ? fieldPlayers.length : formattedPlayers.length;
-    const numTeams = Math.max(2, Math.ceil(baseCount / perTeam));
+    const customNames = input.teamNames?.map((n) => n.trim()).filter(Boolean);
+    const hasCustomNames = Boolean(customNames && customNames.length >= 2);
+    const numTeams = hasCustomNames
+      ? customNames!.length
+      : Math.max(2, Math.ceil(baseCount / perTeam));
 
     const teams: DrawnTeam[] = Array.from({ length: numTeams }, (_, i) => ({
-      name: `Time ${i + 1}`,
+      name: hasCustomNames ? customNames![i] || `Time ${i + 1}` : `Time ${i + 1}`,
       players: [],
     }));
 
-    // Distribute goalkeepers first (1 per team)
-    goalkeepers.forEach((gk, idx) => {
-      teams[idx % numTeams].players.push(gk);
+    // Distribute goalkeepers first (max 1 per team)
+    const maxGoalkeepers = numTeams;
+    goalkeepers.slice(0, maxGoalkeepers).forEach((gk, idx) => {
+      teams[idx].players.push(gk);
     });
 
-    // Distribute field players
+    // Distribute field players (max `perTeam` line players per team -> max `perTeam + 1` total with GK)
+    const maxFieldSlots = numTeams * perTeam;
     if (input.balancedByPosition ?? true) {
       const buckets: DrawnTeamPlayer[][] = [[], [], [], []];
       for (const player of fieldPlayers) {
         buckets[getPositionBucket(player.position)].push(player);
       }
-      const ordered = buckets.flatMap((bucket) => shuffleArray(bucket));
+      const ordered = buckets.flatMap((bucket) => shuffleArray(bucket)).slice(0, maxFieldSlots);
 
-      // Snake draft distribution across teams
+      // Snake draft distribution across teams respecting perTeam limit
       ordered.forEach((player, idx) => {
         const cycle = Math.floor(idx / numTeams);
         const posInCycle = idx % numTeams;
@@ -935,7 +946,7 @@ export class PeladaService {
         teams[teamIdx].players.push(player);
       });
     } else {
-      const randomPlayers = shuffleArray(fieldPlayers);
+      const randomPlayers = shuffleArray(fieldPlayers).slice(0, maxFieldSlots);
       randomPlayers.forEach((player, idx) => {
         teams[idx % numTeams].players.push(player);
       });
@@ -1056,6 +1067,8 @@ export class PeladaService {
           goalkeepersExempt: basePelada.goalkeepersExempt,
           playersPerTeam: basePelada.playersPerTeam,
           cancelDeadlineHours: basePelada.cancelDeadlineHours,
+          durationHours: basePelada.durationHours ?? 2,
+          whatsappGroupUrl: basePelada.whatsappGroupUrl || null,
           organizerId: basePelada.organizerId,
           players: {
             create: {

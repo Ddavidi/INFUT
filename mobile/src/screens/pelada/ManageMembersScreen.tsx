@@ -21,8 +21,9 @@ import {
   updatePlayerRole,
 } from '../../services/peladaService';
 import { Pelada, PeladaPlayer } from '../../types';
-import { colors, fonts, spacing, borderRadius, layout, shadows } from '../../constants/theme';
+import { colors, fonts, spacing, borderRadius, shadows } from '../../constants/theme';
 import { showConfirm, showMessage } from '../../utils/alerts';
+import { useResponsive } from '../../hooks/useResponsive';
 
 type Props = NativeStackScreenProps<AppStackParamList, 'ManageMembers'>;
 
@@ -30,6 +31,7 @@ const HIT_SLOP = { top: 4, bottom: 4, left: 4, right: 4 };
 
 export function ManageMembersScreen({ navigation, route }: Props) {
   const { peladaId } = route.params;
+  const { isDesktop, containerMaxWidth, pagePadding, topSpace } = useResponsive();
 
   const [pelada, setPelada] = useState<Pelada | null>(null);
   const [loading, setLoading] = useState(true);
@@ -175,32 +177,40 @@ export function ManageMembersScreen({ navigation, route }: Props) {
         </View>
 
         <View style={styles.actionsWrap}>
-          <TouchableOpacity
-            style={[
-              styles.actionChip,
-              isMensalista ? styles.mensalistaChip : styles.avulsoChip,
-            ]}
-            disabled={actionLoading}
-            hitSlop={HIT_SLOP}
-            accessibilityRole="button"
-            accessibilityLabel={`Alternar ${player.displayName} entre Mensalista e Avulso`}
-            onPress={() =>
-              runAction(() =>
-                updatePlayerCheckin(pelada!.id, player.id, {
-                  memberType: isMensalista ? 'DIARISTA' : 'MENSALISTA',
-                })
-              )
-            }
-          >
-            <Text
+          {player.userId ? (
+            <TouchableOpacity
               style={[
-                styles.actionChipText,
-                { color: isMensalista ? colors.info : colors.textSecondary },
+                styles.actionChip,
+                isMensalista ? styles.mensalistaChip : styles.avulsoChip,
               ]}
+              disabled={actionLoading}
+              hitSlop={HIT_SLOP}
+              accessibilityRole="button"
+              accessibilityLabel={`Alternar ${player.displayName} entre Mensalista e Avulso`}
+              onPress={() =>
+                runAction(() =>
+                  updatePlayerCheckin(pelada!.id, player.id, {
+                    memberType: isMensalista ? 'DIARISTA' : 'MENSALISTA',
+                  })
+                )
+              }
             >
-              {isMensalista ? '★ Mensalista' : 'Avulso'}
-            </Text>
-          </TouchableOpacity>
+              <Text
+                style={[
+                  styles.actionChipText,
+                  { color: isMensalista ? colors.info : colors.textSecondary },
+                ]}
+              >
+                {isMensalista ? '★ Mensalista' : 'Avulso'}
+              </Text>
+            </TouchableOpacity>
+          ) : (
+            <View style={[styles.actionChip, styles.avulsoChip]}>
+              <Text style={[styles.actionChipText, { color: colors.textMuted }]}>
+                Convidado (Avulso)
+              </Text>
+            </View>
+          )}
 
           {isOrganizer && player.userId && player.role !== 'ORGANIZER' && (
             <TouchableOpacity
@@ -255,27 +265,161 @@ export function ManageMembersScreen({ navigation, route }: Props) {
     );
   }
 
+  const leftColumnCards = (
+    <>
+      <View style={styles.infoBanner}>
+        <Text style={styles.infoBannerTitle}>Gestão do Grupo — {pelada.title}</Text>
+        <Text style={styles.infoBannerText}>
+          Defina quem é <Text style={styles.boldAccent}>Mensalista</Text> ou{' '}
+          <Text style={styles.boldAccent}>Avulso</Text>, gerencie{' '}
+          <Text style={styles.boldAccent}>Co-organizadores</Text>, adicione convidados ou remova
+          participantes.
+        </Text>
+      </View>
+
+      {/* Add Guest Card */}
+      <View style={styles.sectionCard}>
+        <Text style={styles.sectionTitle}>Adicionar Convidado Avulso</Text>
+        <View style={styles.guestForm}>
+          <TextInput
+            style={styles.guestInput}
+            placeholder="Nome do amigo (ex: Carlos)"
+            placeholderTextColor={colors.textMuted}
+            value={guestName}
+            onChangeText={setGuestName}
+            accessibilityLabel="Nome do convidado avulso"
+          />
+          <TouchableOpacity
+            style={[styles.gkToggle, guestGoalkeeper && styles.gkToggleActive]}
+            onPress={() => setGuestGoalkeeper((v) => !v)}
+            accessibilityRole="button"
+            accessibilityLabel="Marcar convidado como goleiro"
+            accessibilityState={{ selected: guestGoalkeeper }}
+          >
+            <Text
+              style={[
+                styles.gkToggleText,
+                guestGoalkeeper && { color: colors.primary },
+              ]}
+            >
+              🧤 Gol
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.addGuestBtn}
+            onPress={handleAddGuest}
+            disabled={actionLoading}
+            accessibilityRole="button"
+            accessibilityLabel="Adicionar convidado"
+          >
+            <Text style={styles.addGuestBtnText}>+ Add</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* Goalkeepers */}
+      <View style={styles.sectionCard}>
+        <View style={styles.sectionHeaderRow}>
+          <Text style={styles.sectionTitleNoMargin}>🧤 Goleiros Confirmados</Text>
+          <View style={styles.countTag}>
+            <Text style={styles.countTagText}>{confirmedGoalkeepers.length}</Text>
+          </View>
+        </View>
+        {confirmedGoalkeepers.length === 0 ? (
+          <Text style={styles.emptyText}>Nenhum goleiro confirmado.</Text>
+        ) : (
+          confirmedGoalkeepers.map((p, i) => renderMemberCard(p, i))
+        )}
+      </View>
+    </>
+  );
+
+  const rightColumnCards = (
+    <>
+      {/* Line Players */}
+      <View style={styles.sectionCard}>
+        <View style={styles.sectionHeaderRow}>
+          <Text style={styles.sectionTitleNoMargin}>⚽ Jogadores de Linha</Text>
+          <View style={styles.countTag}>
+            <Text style={styles.countTagText}>
+              {confirmedLine.length}
+              {pelada.maxPlayers ? `/${pelada.maxPlayers}` : ''}
+            </Text>
+          </View>
+        </View>
+        {confirmedLine.length === 0 ? (
+          <Text style={styles.emptyText}>Nenhum jogador de linha confirmado.</Text>
+        ) : (
+          confirmedLine.map((p, i) => renderMemberCard(p, i))
+        )}
+      </View>
+
+      {/* Waitlist */}
+      {waitlist.length > 0 && (
+        <View style={styles.sectionCard}>
+          <View style={styles.sectionHeaderRow}>
+            <Text style={[styles.sectionTitleNoMargin, { color: colors.warning }]}>
+              ⏳ Lista de Espera
+            </Text>
+            <View style={[styles.countTag, { backgroundColor: colors.warningSoft }]}>
+              <Text style={[styles.countTagText, { color: colors.warning }]}>
+                {waitlist.length}
+              </Text>
+            </View>
+          </View>
+          {waitlist.map((p, i) => renderMemberCard(p, i))}
+        </View>
+      )}
+
+      {/* Declined */}
+      {declined.length > 0 && (
+        <View style={styles.sectionCard}>
+          <View style={styles.sectionHeaderRow}>
+            <Text style={[styles.sectionTitleNoMargin, { color: colors.textMuted }]}>
+              Não vão
+            </Text>
+            <View style={styles.countTag}>
+              <Text style={styles.countTagText}>{declined.length}</Text>
+            </View>
+          </View>
+          {declined.map((p, i) => renderMemberCard(p, i))}
+        </View>
+      )}
+    </>
+  );
+
   return (
     <View style={styles.container}>
-      <View style={styles.topBar}>
-        <TouchableOpacity
-          onPress={() => navigation.goBack()}
-          style={styles.backBtn}
-          accessibilityRole="button"
-          accessibilityLabel="Voltar aos detalhes da pelada"
+      <View style={styles.topBarWrapper}>
+        <View
+          style={[
+            styles.topBar,
+            {
+              maxWidth: containerMaxWidth,
+              paddingHorizontal: pagePadding,
+              paddingTop: topSpace,
+            },
+          ]}
         >
-          <Text style={styles.backBtnText}>← Voltar</Text>
-        </TouchableOpacity>
-        <Text style={styles.topTitle} numberOfLines={1}>
-          Configurar Membros
-        </Text>
-        <View style={styles.codePill}>
-          <Text style={styles.codePillText}>#{pelada.inviteCode}</Text>
+          <TouchableOpacity
+            onPress={() => navigation.goBack()}
+            style={styles.backBtn}
+            accessibilityRole="button"
+            accessibilityLabel="Voltar aos detalhes da pelada"
+          >
+            <Text style={styles.backBtnText}>← Voltar</Text>
+          </TouchableOpacity>
+          <Text style={styles.topTitle} numberOfLines={1}>
+            Configurar Membros
+          </Text>
+          <View style={styles.codePill}>
+            <Text style={styles.codePillText}>#{pelada.inviteCode}</Text>
+          </View>
         </View>
       </View>
 
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { paddingHorizontal: pagePadding }]}
         keyboardShouldPersistTaps="handled"
         refreshControl={
           <RefreshControl
@@ -288,120 +432,17 @@ export function ManageMembersScreen({ navigation, route }: Props) {
           />
         }
       >
-        <View style={styles.pageContainer}>
-          <View style={styles.infoBanner}>
-            <Text style={styles.infoBannerTitle}>Gestão do Grupo — {pelada.title}</Text>
-            <Text style={styles.infoBannerText}>
-              Defina quem é <Text style={styles.boldAccent}>Mensalista</Text> ou{' '}
-              <Text style={styles.boldAccent}>Avulso</Text>, gerencie{' '}
-              <Text style={styles.boldAccent}>Co-organizadores</Text>, adicione convidados ou remova
-              participantes.
-            </Text>
-          </View>
-
-          {/* Add Guest Card */}
-          <View style={styles.sectionCard}>
-            <Text style={styles.sectionTitle}>Adicionar Convidado Avulso</Text>
-            <View style={styles.guestForm}>
-              <TextInput
-                style={styles.guestInput}
-                placeholder="Nome do amigo (ex: Carlos)"
-                placeholderTextColor={colors.textMuted}
-                value={guestName}
-                onChangeText={setGuestName}
-                accessibilityLabel="Nome do convidado avulso"
-              />
-              <TouchableOpacity
-                style={[styles.gkToggle, guestGoalkeeper && styles.gkToggleActive]}
-                onPress={() => setGuestGoalkeeper((v) => !v)}
-                accessibilityRole="button"
-                accessibilityLabel="Marcar convidado como goleiro"
-                accessibilityState={{ selected: guestGoalkeeper }}
-              >
-                <Text
-                  style={[
-                    styles.gkToggleText,
-                    guestGoalkeeper && { color: colors.primary },
-                  ]}
-                >
-                  🧤 Gol
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.addGuestBtn}
-                onPress={handleAddGuest}
-                disabled={actionLoading}
-                accessibilityRole="button"
-                accessibilityLabel="Adicionar convidado"
-              >
-                <Text style={styles.addGuestBtnText}>+ Add</Text>
-              </TouchableOpacity>
+        <View style={[styles.pageContainer, { maxWidth: containerMaxWidth }]}>
+          {isDesktop ? (
+            <View style={styles.desktopColumns}>
+              <View style={styles.desktopLeftCol}>{leftColumnCards}</View>
+              <View style={styles.desktopRightCol}>{rightColumnCards}</View>
             </View>
-          </View>
-
-          {/* Goalkeepers */}
-          <View style={styles.sectionCard}>
-            <View style={styles.sectionHeaderRow}>
-              <Text style={styles.sectionTitleNoMargin}>🧤 Goleiros Confirmados</Text>
-              <View style={styles.countTag}>
-                <Text style={styles.countTagText}>{confirmedGoalkeepers.length}</Text>
-              </View>
-            </View>
-            {confirmedGoalkeepers.length === 0 ? (
-              <Text style={styles.emptyText}>Nenhum goleiro confirmado.</Text>
-            ) : (
-              confirmedGoalkeepers.map((p, i) => renderMemberCard(p, i))
-            )}
-          </View>
-
-          {/* Line Players */}
-          <View style={styles.sectionCard}>
-            <View style={styles.sectionHeaderRow}>
-              <Text style={styles.sectionTitleNoMargin}>⚽ Jogadores de Linha</Text>
-              <View style={styles.countTag}>
-                <Text style={styles.countTagText}>
-                  {confirmedLine.length}
-                  {pelada.maxPlayers ? `/${pelada.maxPlayers}` : ''}
-                </Text>
-              </View>
-            </View>
-            {confirmedLine.length === 0 ? (
-              <Text style={styles.emptyText}>Nenhum jogador de linha confirmado.</Text>
-            ) : (
-              confirmedLine.map((p, i) => renderMemberCard(p, i))
-            )}
-          </View>
-
-          {/* Waitlist */}
-          {waitlist.length > 0 && (
-            <View style={styles.sectionCard}>
-              <View style={styles.sectionHeaderRow}>
-                <Text style={[styles.sectionTitleNoMargin, { color: colors.warning }]}>
-                  ⏳ Lista de Espera
-                </Text>
-                <View style={[styles.countTag, { backgroundColor: colors.warningSoft }]}>
-                  <Text style={[styles.countTagText, { color: colors.warning }]}>
-                    {waitlist.length}
-                  </Text>
-                </View>
-              </View>
-              {waitlist.map((p, i) => renderMemberCard(p, i))}
-            </View>
-          )}
-
-          {/* Declined */}
-          {declined.length > 0 && (
-            <View style={styles.sectionCard}>
-              <View style={styles.sectionHeaderRow}>
-                <Text style={[styles.sectionTitleNoMargin, { color: colors.textMuted }]}>
-                  Não vão
-                </Text>
-                <View style={styles.countTag}>
-                  <Text style={styles.countTagText}>{declined.length}</Text>
-                </View>
-              </View>
-              {declined.map((p, i) => renderMemberCard(p, i))}
-            </View>
+          ) : (
+            <>
+              {leftColumnCards}
+              {rightColumnCards}
+            </>
           )}
         </View>
       </ScrollView>
@@ -451,16 +492,19 @@ const styles = StyleSheet.create({
     minHeight: 44,
     justifyContent: 'center',
   },
-  topBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.xl,
-    paddingBottom: spacing.md,
+  topBarWrapper: {
     backgroundColor: colors.surface,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
+  },
+  topBar: {
+    width: '100%',
+    alignSelf: 'center',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingBottom: spacing.md,
     gap: spacing.sm,
   },
   backBtn: {
@@ -472,6 +516,7 @@ const styles = StyleSheet.create({
   backBtnText: { color: colors.primary, fontSize: fonts.sizes.md, fontWeight: '700' },
   topTitle: {
     flex: 1,
+    minWidth: 120,
     color: colors.textPrimary,
     fontSize: fonts.sizes.md,
     fontWeight: '800',
@@ -492,14 +537,25 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   scrollContent: {
-    paddingHorizontal: spacing.md,
     paddingTop: spacing.md,
     paddingBottom: spacing.xxl,
   },
   pageContainer: {
     width: '100%',
-    maxWidth: layout.maxWidth,
     alignSelf: 'center',
+  },
+  desktopColumns: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.lg,
+  },
+  desktopLeftCol: {
+    flex: 1,
+    minWidth: 0,
+  },
+  desktopRightCol: {
+    flex: 1.15,
+    minWidth: 0,
   },
   infoBanner: {
     backgroundColor: colors.surfaceLight,

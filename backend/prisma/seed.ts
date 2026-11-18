@@ -4,82 +4,59 @@ import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
+const SEED_USERS = [
+  { name: 'David Nunes', email: 'david@test.com', sport: 'Futebol', position: 'Meio-campista', region: 'Centro - Belo Horizonte' },
+  { name: 'Joao Silva', email: 'joao@test.com', sport: 'Futebol', position: 'Goleiro', region: 'Pampulha - Belo Horizonte' },
+  { name: 'Maria Santos', email: 'maria@test.com', sport: 'Vôlei', position: 'Levantador(a)', region: 'Savassi - Belo Horizonte' },
+  { name: 'Pedro Costa', email: 'pedro@test.com', sport: 'Futebol', position: 'Atacante', region: 'Centro - Belo Horizonte' },
+  { name: 'Lucas Ferreira', email: 'lucas@test.com', sport: 'Futebol', position: 'Zagueiro', region: 'Funcionários - Belo Horizonte' },
+  { name: 'Rafael Oliveira', email: 'rafael@test.com', sport: 'Futebol', position: 'Lateral', region: 'Lourdes - Belo Horizonte' },
+  { name: 'Gabriel Souza', email: 'gabriel@test.com', sport: 'Futebol', position: 'Volante', region: 'Floresta - Belo Horizonte' },
+  { name: 'Matheus Almeida', email: 'matheus@test.com', sport: 'Futebol', position: 'Atacante', region: 'Barreiro - Belo Horizonte' },
+  { name: 'Bruno Lima', email: 'bruno@test.com', sport: 'Futebol', position: 'Goleiro', region: 'Santa Tereza - Belo Horizonte' },
+  { name: 'Felipe Rocha', email: 'felipe@test.com', sport: 'Futebol', position: 'Meio-campista', region: 'Buritis - Belo Horizonte' },
+  { name: 'Gustavo Mendes', email: 'gustavo@test.com', sport: 'Futebol', position: 'Zagueiro', region: 'Castelo - Belo Horizonte' },
+  { name: 'Rodrigo Ribeiro', email: 'rodrigo@test.com', sport: 'Futebol', position: 'Lateral', region: 'Serra - Belo Horizonte' },
+  { name: 'Thiago Martins', email: 'thiago@test.com', sport: 'Futebol', position: 'Volante', region: 'Sion - Belo Horizonte' },
+  { name: 'Leonardo Carvalho', email: 'leonardo@test.com', sport: 'Futebol', position: 'Atacante', region: 'Gutierrez - Belo Horizonte' },
+  { name: 'Daniel Barbosa', email: 'daniel@test.com', sport: 'Futebol', position: 'Meio-campista', region: 'Prado - Belo Horizonte' },
+  { name: 'Marcelo Cardoso', email: 'marcelo@test.com', sport: 'Futebol', position: 'Goleiro', region: 'Cidade Nova - Belo Horizonte' },
+  { name: 'Andre Teixeira', email: 'andre@test.com', sport: 'Futebol', position: 'Zagueiro', region: 'Carlos Prates - Belo Horizonte' },
+  { name: 'Caio Gomes', email: 'caio@test.com', sport: 'Futebol', position: 'Lateral', region: 'Santo Agostinho - Belo Horizonte' },
+  { name: 'Diego Moreira', email: 'diego@test.com', sport: 'Futebol', position: 'Atacante', region: 'Anchieta - Belo Horizonte' },
+  { name: 'Vitor Araujo', email: 'vitor@test.com', sport: 'Futebol', position: 'Volante', region: 'Coração Eucarístico - Belo Horizonte' },
+  { name: 'Eduardo Vieira', email: 'eduardo@test.com', sport: 'Futebol', position: 'Meio-campista', region: 'Padre Eustáquio - Belo Horizonte' },
+  { name: 'Henrique Dias', email: 'henrique@test.com', sport: 'Futebol', position: 'Zagueiro', region: 'Ouro Preto - Belo Horizonte' },
+];
+
 async function main() {
   console.log('Seeding database...');
 
   const passwordHash = await bcrypt.hash('123456', 10);
 
-  const user1 = await prisma.user.upsert({
-    where: { email: 'david@test.com' },
-    update: {
-      name: 'David Nunes',
-      sport: 'Futebol',
-      position: 'Meio-campista',
-      region: 'Centro - Belo Horizonte',
-    },
-    create: {
-      name: 'David Nunes',
-      email: 'david@test.com',
-      passwordHash,
-      sport: 'Futebol',
-      position: 'Meio-campista',
-      region: 'Centro - Belo Horizonte',
-    },
-  });
+  const users = [];
+  for (const u of SEED_USERS) {
+    const created = await prisma.user.upsert({
+      where: { email: u.email },
+      update: {
+        name: u.name,
+        sport: u.sport,
+        position: u.position,
+        region: u.region,
+      },
+      create: {
+        name: u.name,
+        email: u.email,
+        passwordHash,
+        sport: u.sport,
+        position: u.position,
+        region: u.region,
+      },
+    });
+    users.push(created);
+  }
 
-  const user2 = await prisma.user.upsert({
-    where: { email: 'joao@test.com' },
-    update: {
-      name: 'Joao Silva',
-      sport: 'Futebol',
-      position: 'Goleiro',
-      region: 'Pampulha - Belo Horizonte',
-    },
-    create: {
-      name: 'Joao Silva',
-      email: 'joao@test.com',
-      passwordHash,
-      sport: 'Futebol',
-      position: 'Goleiro',
-      region: 'Pampulha - Belo Horizonte',
-    },
-  });
-
-  const user3 = await prisma.user.upsert({
-    where: { email: 'maria@test.com' },
-    update: {
-      name: 'Maria Santos',
-      sport: 'Vôlei',
-      position: 'Levantador(a)',
-      region: 'Savassi - Belo Horizonte',
-    },
-    create: {
-      name: 'Maria Santos',
-      email: 'maria@test.com',
-      passwordHash,
-      sport: 'Vôlei',
-      position: 'Levantador(a)',
-      region: 'Savassi - Belo Horizonte',
-    },
-  });
-
-  const user4 = await prisma.user.upsert({
-    where: { email: 'pedro@test.com' },
-    update: {
-      name: 'Pedro Costa',
-      sport: 'Futebol',
-      position: 'Atacante',
-      region: 'Centro - Belo Horizonte',
-    },
-    create: {
-      name: 'Pedro Costa',
-      email: 'pedro@test.com',
-      passwordHash,
-      sport: 'Futebol',
-      position: 'Atacante',
-      region: 'Centro - Belo Horizonte',
-    },
-  });
+  const [user1, user2, user3, user4] = users;
 
   // Limpar peladas antigas de seed para manter idempotencia
   await prisma.pelada.deleteMany({
@@ -96,17 +73,50 @@ async function main() {
   nextThursday.setDate(nextThursday.getDate() + ((4 - nextThursday.getDay() + 7) % 7 || 7));
   nextThursday.setHours(20, 0, 0, 0);
 
+  const quintaPlayers = users.map((u, idx) => {
+    const isGk = u.position === 'Goleiro';
+    const role = idx === 0 ? 'ORGANIZER' : idx === 1 ? 'CO_ORGANIZER' : 'PLAYER';
+    const status = idx >= 20 ? 'WAITLIST' : 'CONFIRMED';
+    const memberType = idx < 12 ? 'MENSALISTA' : 'DIARISTA';
+    let paymentStatus: string;
+    if (isGk) {
+      paymentStatus = 'EXEMPT';
+    } else if (idx % 4 === 0 || idx === 0) {
+      paymentStatus = 'PAID';
+    } else if (idx % 4 === 2) {
+      paymentStatus = 'WAITING_CONFIRMATION';
+    } else {
+      paymentStatus = 'PENDING';
+    }
+
+    return {
+      userId: u.id,
+      role,
+      status,
+      isGoalkeeper: isGk,
+      position: u.position,
+      paymentStatus,
+      memberType,
+      attendanceStatus: status === 'CONFIRMED' ? 'PRESENT' : 'PENDING',
+      goals: idx % 5 === 0 ? 2 : idx % 3 === 0 ? 1 : 0,
+      assists: idx % 4 === 0 ? 1 : 0,
+      wins: idx % 2 === 0 ? 1 : 0,
+    };
+  });
+
   const quintaPelada = await prisma.pelada.create({
     data: {
       title: 'Peladinha da Quinta',
       sport: 'Futebol',
       dateTime: nextThursday,
+      durationHours: 2,
+      whatsappGroupUrl: 'https://chat.whatsapp.com/InfutQuinta123',
       location: 'Quadra do SESI',
       locationAddress: 'Av. do Contorno, 1234 - Centro, Belo Horizonte',
       price: 15.0,
       isRecurring: true,
       recurrenceDay: 'thursday',
-      maxPlayers: 14,
+      maxPlayers: 17,
       inviteCode: 'QUINTA',
       isPublic: true,
       pixKey: 'david@test.com',
@@ -115,112 +125,34 @@ async function main() {
       cancelDeadlineHours: 4,
       organizerId: user1.id,
       players: {
-        create: [
-          {
-            userId: user1.id,
-            role: 'ORGANIZER',
-            status: 'CONFIRMED',
-            isGoalkeeper: false,
-            position: 'Meio-campista',
-            paymentStatus: 'PAID',
-            memberType: 'MENSALISTA',
-            attendanceStatus: 'PRESENT',
-            goals: 2,
-            assists: 1,
-            wins: 1,
-          },
-          {
-            userId: user2.id,
-            role: 'CO_ORGANIZER',
-            status: 'CONFIRMED',
-            isGoalkeeper: true,
-            position: 'Goleiro',
-            paymentStatus: 'EXEMPT',
-            memberType: 'MENSALISTA',
-            attendanceStatus: 'PRESENT',
-            goals: 0,
-            assists: 0,
-            wins: 0,
-          },
-          {
-            userId: user4.id,
-            role: 'PLAYER',
-            status: 'CONFIRMED',
-            isGoalkeeper: false,
-            position: 'Atacante',
-            paymentStatus: 'WAITING_CONFIRMATION',
-            memberType: 'DIARISTA',
-            attendanceStatus: 'PRESENT',
-            goals: 3,
-            assists: 0,
-            wins: 1,
-          },
-          {
-            guestName: 'Lucas (Convidado)',
-            role: 'PLAYER',
-            status: 'CONFIRMED',
-            isGoalkeeper: false,
-            position: 'Zagueiro',
-            paymentStatus: 'PENDING',
-            memberType: 'DIARISTA',
-            attendanceStatus: 'PRESENT',
-            goals: 0,
-            assists: 1,
-            wins: 0,
-          },
-          {
-            guestName: 'Rafael (Convidado)',
-            role: 'PLAYER',
-            status: 'CONFIRMED',
-            isGoalkeeper: false,
-            position: 'Lateral',
-            paymentStatus: 'PAID',
-            memberType: 'DIARISTA',
-            attendanceStatus: 'PRESENT',
-            goals: 1,
-            assists: 2,
-            wins: 1,
-          },
-        ],
+        create: quintaPlayers,
       },
     },
     include: { players: { include: { user: true } } },
   });
 
-  // Sortear times iniciais para a Peladinha da Quinta
-  const quintaTeams = [
-    {
-      name: 'Time 1',
-      players: quintaPelada.players
-        .filter((_, idx) => idx % 2 === 0)
-        .map((p) => ({
-          id: p.id,
-          name: p.user?.name || p.guestName || 'Convidado',
-          position: p.position,
-          isGoalkeeper: p.isGoalkeeper,
-        })),
-    },
-    {
-      name: 'Time 2',
-      players: quintaPelada.players
-        .filter((_, idx) => idx % 2 === 1)
-        .map((p) => ({
-          id: p.id,
-          name: p.user?.name || p.guestName || 'Convidado',
-          position: p.position,
-          isGoalkeeper: p.isGoalkeeper,
-        })),
-    },
-  ];
+  const confirmedQuinta = quintaPelada.players.filter((p) => p.status === 'CONFIRMED');
+  const teamNames = ['Time Amarelo', 'Time Azul', 'Time Vermelho'];
+  const quintaTeams = teamNames.map((name, teamIdx) => ({
+    name,
+    players: confirmedQuinta
+      .filter((_, idx) => idx % 3 === teamIdx)
+      .map((p) => ({
+        id: p.id,
+        name: p.user?.name || p.guestName || 'Convidado',
+        position: p.position,
+        isGoalkeeper: p.isGoalkeeper,
+      })),
+  }));
 
   const quintaMatches = [
     {
       id: '1',
-      teamAName: 'Time 1',
-      teamBName: 'Time 2',
+      teamAName: 'Time Amarelo',
+      teamBName: 'Time Azul',
       scoreA: 3,
       scoreB: 1,
-      winner: 'Time 1',
+      winner: 'Time Amarelo',
       finishedAt: new Date().toISOString(),
     },
   ];
@@ -256,6 +188,7 @@ async function main() {
       title: 'Vôlei de Sábado',
       sport: 'Vôlei',
       dateTime: nextSaturday,
+      durationHours: 2,
       location: 'Arena Savassi',
       locationAddress: 'Rua Pernambuco, 800 - Savassi, Belo Horizonte',
       price: null,
@@ -298,6 +231,7 @@ async function main() {
       title: 'Futsal da Pampulha',
       sport: 'Futsal',
       dateTime: nextTuesday,
+      durationHours: 1.5,
       location: 'Ginásio Pampulha',
       locationAddress: 'Av. Antônio Carlos, 4500 - Pampulha, Belo Horizonte',
       price: 20.0,
@@ -334,7 +268,8 @@ async function main() {
   });
 
   console.log('Seed concluido!');
-  console.log('Usuarios criados:', user1.email, user2.email, user3.email, user4.email);
+  console.log(`Usuarios criados: ${users.length} contas (senha padrao: 123456)`);
+  console.log('Peladinha da Quinta jogadores:', quintaPelada.players.length);
   console.log('Codigos de peladas:', 'QUINTA', 'VOLEI1', 'FUTSAL');
 }
 

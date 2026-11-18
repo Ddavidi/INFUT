@@ -24,24 +24,16 @@ import {
   updatePlayerPayment,
 } from '../../services/peladaService';
 import { PaymentStatus, Pelada, PeladaPlayer } from '../../types';
-import { colors, fonts, spacing, borderRadius, layout, shadows } from '../../constants/theme';
+import { colors, fonts, spacing, borderRadius, shadows } from '../../constants/theme';
 import { showConfirm, showMessage } from '../../utils/alerts';
+import { formatPeladaSchedule } from '../../utils/dateTime';
+import { useResponsive } from '../../hooks/useResponsive';
 
 type Props = NativeStackScreenProps<AppStackParamList, 'PeladaDetails'>;
 
 type DetailTab = 'attendance' | 'finance';
 
 const HIT_SLOP = { top: 4, bottom: 4, left: 4, right: 4 };
-
-function formatDateFull(dateStr: string): string {
-  const date = new Date(dateStr);
-  const day = date.getDate().toString().padStart(2, '0');
-  const month = (date.getMonth() + 1).toString().padStart(2, '0');
-  const year = date.getFullYear();
-  const hours = date.getHours().toString().padStart(2, '0');
-  const mins = date.getMinutes().toString().padStart(2, '0');
-  return `${day}/${month}/${year} as ${hours}:${mins}`;
-}
 
 function getPaymentLabel(status: PaymentStatus): { text: string; color: string; bg: string } {
   switch (status) {
@@ -58,6 +50,7 @@ function getPaymentLabel(status: PaymentStatus): { text: string; color: string; 
 
 export function PeladaDetailsScreen({ navigation, route }: Props) {
   const { peladaId } = route.params;
+  const { isDesktop, containerMaxWidth, pagePadding, topSpace } = useResponsive();
 
   const [pelada, setPelada] = useState<Pelada | null>(null);
   const [loading, setLoading] = useState(true);
@@ -107,11 +100,14 @@ export function PeladaDetailsScreen({ navigation, route }: Props) {
   async function handleShareInvite() {
     if (!pelada) return;
     const priceInfo = pelada.price && pelada.price > 0 ? `R$ ${pelada.price.toFixed(2)}` : 'Gratuita';
+    const whatsappLine = pelada.whatsappGroupUrl
+      ? `\n💬 Grupo WhatsApp: ${pelada.whatsappGroupUrl}`
+      : '';
     const message =
       `⚽ *${pelada.title}* (${pelada.sport})\n` +
-      `📅 ${formatDateFull(pelada.dateTime)}\n` +
+      `📅 ${formatPeladaSchedule(pelada.dateTime, pelada.durationHours)}\n` +
       `📍 ${pelada.location}${pelada.locationAddress ? ` - ${pelada.locationAddress}` : ''}\n` +
-      `💰 ${priceInfo}\n\n` +
+      `💰 ${priceInfo}${whatsappLine}\n\n` +
       `Entre no app INFUT e digite o codigo: *${pelada.inviteCode}*`;
 
     if (Platform.OS === 'web') {
@@ -163,6 +159,19 @@ export function PeladaDetailsScreen({ navigation, route }: Props) {
       await Linking.openURL(url);
     } catch {
       showMessage('Mapa', 'Nao foi possivel abrir o Google Maps neste dispositivo.');
+    }
+  }
+
+  async function handleOpenWhatsAppGroup() {
+    if (!pelada?.whatsappGroupUrl) return;
+    let url = pelada.whatsappGroupUrl.trim();
+    if (!/^https?:\/\//i.test(url)) {
+      url = `https://${url}`;
+    }
+    try {
+      await Linking.openURL(url);
+    } catch {
+      showMessage('WhatsApp', 'Não foi possível abrir o link do grupo do WhatsApp.');
     }
   }
 
@@ -250,15 +259,396 @@ export function PeladaDetailsScreen({ navigation, route }: Props) {
       : 100;
 
   const peladaStatus = pelada.status || 'OPEN';
+  const showPaymentStatusOnList = Boolean(pelada.price && pelada.price > 0);
+  const effectiveTab: DetailTab = canManage ? activeTab : 'attendance';
 
-  function renderPlayerRow(player: PeladaPlayer, index: number) {
-    return <PlayerRow key={player.id} index={index + 1} player={player} />;
+  function renderPlayerRow(player: PeladaPlayer, index: number, showPayment = false) {
+    return (
+      <PlayerRow
+        key={player.id}
+        index={index + 1}
+        player={player}
+        showPayment={showPayment}
+      />
+    );
   }
+
+  const headerCardContent = (
+    <View style={styles.headerCard}>
+      <View style={styles.heroTagsRow}>
+        <View style={styles.sportTag}>
+          <Text style={styles.sportTagText}>{pelada.sport}</Text>
+        </View>
+        {pelada.isRecurring && (
+          <View style={styles.infoTag}>
+            <Text style={styles.infoTagText}>Recorrente</Text>
+          </View>
+        )}
+        <View style={styles.neutralTag}>
+          <Text style={styles.neutralTagText}>
+            Desist. até {pelada.cancelDeadlineHours}h antes
+          </Text>
+        </View>
+      </View>
+
+      <Text style={styles.title}>{pelada.title}</Text>
+      <Text style={styles.organizerLine}>Organizado por {pelada.organizer.name}</Text>
+
+      <View style={styles.heroMetaBox}>
+        <Text style={styles.metaText}>
+          📅 {formatPeladaSchedule(pelada.dateTime, pelada.durationHours)}
+        </Text>
+        <Text style={styles.metaText}>📍 {pelada.location}</Text>
+        {pelada.locationAddress ? (
+          <Text style={styles.metaSubText}>{pelada.locationAddress}</Text>
+        ) : null}
+        <Text style={styles.metaText}>
+          💰{' '}
+          {pelada.price && pelada.price > 0
+            ? `R$ ${pelada.price.toFixed(2)}`
+            : 'Gratuita'}
+          {pelada.goalkeepersExempt ? ' (Goleiros isentos)' : ''}
+        </Text>
+      </View>
+
+      <View style={styles.headerActionRow}>
+        <TouchableOpacity
+          style={[styles.shareBtn, { flex: 1 }]}
+          onPress={handleShareInvite}
+          accessibilityRole="button"
+          accessibilityLabel="Compartilhar convite no WhatsApp"
+        >
+          <Text style={styles.shareBtnText}>📲 Convite WhatsApp</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.mapsBtn}
+          onPress={handleOpenMaps}
+          accessibilityRole="button"
+          accessibilityLabel="Abrir endereço no Google Maps"
+        >
+          <Text style={styles.mapsBtnText}>🗺️ Abrir Maps</Text>
+        </TouchableOpacity>
+      </View>
+
+      {pelada.whatsappGroupUrl ? (
+        <TouchableOpacity
+          style={styles.whatsappGroupBtn}
+          onPress={handleOpenWhatsAppGroup}
+          accessibilityRole="button"
+          accessibilityLabel="Entrar no grupo do WhatsApp da pelada"
+        >
+          <Text style={styles.whatsappGroupBtnText}>💬 Entrar no Grupo do WhatsApp</Text>
+        </TouchableOpacity>
+      ) : null}
+    </View>
+  );
+
+  const lifecycleCardContent = (
+    <View style={styles.lifecycleCard}>
+      <View style={styles.lifecycleHeader}>
+        <Text style={styles.lifecycleTitle}>
+          {peladaStatus === 'OPEN'
+            ? '📋 Lista de presença aberta'
+            : peladaStatus === 'IN_PROGRESS'
+            ? '🔴 Pelada em andamento'
+            : '🏁 Pelada finalizada'}
+        </Text>
+        <Text style={styles.lifecycleSubtitle}>
+          {peladaStatus === 'OPEN'
+            ? canManage
+              ? 'Quando os jogadores chegarem, inicie a pelada para montar os times, rodar o cronômetro e registrar gols.'
+              : 'Aguarde o organizador iniciar a pelada no dia do jogo.'
+            : peladaStatus === 'IN_PROGRESS'
+            ? 'Entre na pelada ao vivo para acompanhar times, cronômetro, placar e gols em tempo real.'
+            : 'Pelada encerrada! Confira as estatísticas finais e vote no MVP da pelada.'}
+        </Text>
+      </View>
+
+      {peladaStatus === 'OPEN' && canManage && (
+        <TouchableOpacity
+          style={styles.lifecycleActionBtn}
+          disabled={actionLoading}
+          onPress={handleStartPelada}
+          accessibilityRole="button"
+          accessibilityLabel="Iniciar pelada"
+        >
+          <Text style={styles.lifecycleActionBtnText}>▶️ Iniciar Pelada</Text>
+        </TouchableOpacity>
+      )}
+
+      {peladaStatus === 'IN_PROGRESS' && (
+        <TouchableOpacity
+          style={[styles.lifecycleActionBtn, { backgroundColor: colors.error }]}
+          onPress={() => navigation.navigate('LivePelada', { peladaId: pelada.id })}
+          accessibilityRole="button"
+          accessibilityLabel="Entrar na pelada ao vivo"
+        >
+          <Text style={styles.lifecycleActionBtnText}>⚽ Entrar na Pelada ao Vivo</Text>
+        </TouchableOpacity>
+      )}
+
+      {peladaStatus === 'FINISHED' && (
+        <TouchableOpacity
+          style={[styles.lifecycleActionBtn, { backgroundColor: colors.success }]}
+          onPress={() => navigation.navigate('PostGame', { peladaId: pelada.id })}
+          accessibilityRole="button"
+          accessibilityLabel="Ver estatísticas e votar no MVP"
+        >
+          <Text style={styles.lifecycleActionBtnText}>🏆 Ver Estatísticas e Votar no MVP</Text>
+        </TouchableOpacity>
+      )}
+    </View>
+  );
+
+  const tabsBarContent = canManage ? (
+    <View style={styles.tabBar}>
+      <TouchableOpacity
+        style={[styles.tabItem, effectiveTab === 'attendance' && styles.tabItemActive]}
+        onPress={() => setActiveTab('attendance')}
+        accessibilityRole="tab"
+        accessibilityLabel={`Presença (${pelada.confirmedCount})`}
+        accessibilityState={{ selected: effectiveTab === 'attendance' }}
+      >
+        <Text style={[styles.tabText, effectiveTab === 'attendance' && styles.tabTextActive]}>
+          Presença ({pelada.confirmedCount})
+        </Text>
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={[styles.tabItem, effectiveTab === 'finance' && styles.tabItemActive]}
+        onPress={() => setActiveTab('finance')}
+        accessibilityRole="tab"
+        accessibilityLabel="Financeiro"
+        accessibilityState={{ selected: effectiveTab === 'finance' }}
+      >
+        <Text style={[styles.tabText, effectiveTab === 'finance' && styles.tabTextActive]}>
+          Financeiro (Caixa)
+        </Text>
+      </TouchableOpacity>
+    </View>
+  ) : null;
+
+  const pixCardContent =
+    pelada.pixKey || (pelada.price && pelada.price > 0) ? (
+      <View style={styles.sectionCard}>
+        <View style={styles.sectionHeaderRow}>
+          <Text style={styles.sectionTitleNoMargin}>🔑 Chave Pix da Pelada</Text>
+          {pelada.myPlayer && pelada.myStatus === 'CONFIRMED' && (
+            <View
+              style={[
+                styles.paymentPill,
+                { backgroundColor: getPaymentLabel(pelada.myPlayer.paymentStatus).bg },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.paymentStatusText,
+                  { color: getPaymentLabel(pelada.myPlayer.paymentStatus).color },
+                ]}
+              >
+                Você: {getPaymentLabel(pelada.myPlayer.paymentStatus).text}
+              </Text>
+            </View>
+          )}
+        </View>
+
+        {pelada.pixKey ? (
+          <>
+            <Text style={styles.pixKeyText} selectable>
+              {pelada.pixKey}
+            </Text>
+            <View style={[styles.rsvpRow, { marginTop: spacing.sm + 4 }]}>
+              <TouchableOpacity
+                style={[styles.rsvpBtn, styles.secondaryActionBtn]}
+                onPress={handleCopyPix}
+              >
+                <Text style={styles.secondaryActionText}>Copiar Chave Pix</Text>
+              </TouchableOpacity>
+              {pelada.myPlayer &&
+                pelada.myStatus === 'CONFIRMED' &&
+                pelada.myPlayer.paymentStatus === 'PENDING' && (
+                  <TouchableOpacity
+                    style={[styles.rsvpBtn, { backgroundColor: colors.primary }]}
+                    disabled={actionLoading}
+                    onPress={() =>
+                      runAction(
+                        () =>
+                          updatePlayerPayment(
+                            pelada.id,
+                            pelada.myPlayer!.id,
+                            'WAITING_CONFIRMATION'
+                          ),
+                        'Pagamento informado! Aguardando baixa do organizador.'
+                      )
+                    }
+                  >
+                    <Text style={styles.rsvpBtnDarkText}>Já Paguei via Pix</Text>
+                  </TouchableOpacity>
+                )}
+            </View>
+          </>
+        ) : (
+          <Text style={styles.emptyListText}>
+            Chave Pix ainda não cadastrada pelo organizador.
+          </Text>
+        )}
+      </View>
+    ) : null;
+
+  const rsvpCardContent = (
+    <View style={styles.sectionCard}>
+      <Text style={styles.sectionTitle}>Sua Presença</Text>
+      <Text style={styles.myStatusText}>
+        Status atual:{' '}
+        <Text style={{ color: colors.primary, fontWeight: '800' }}>
+          {pelada.myStatus === 'CONFIRMED'
+            ? pelada.myPlayer?.isGoalkeeper
+              ? 'Confirmado (Goleiro) 🧤'
+              : 'Confirmado (Linha) ✅'
+            : pelada.myStatus === 'WAITLIST'
+            ? 'Na Lista de Espera ⏳'
+            : pelada.myStatus === 'DECLINED'
+            ? 'Não vou ❌'
+            : 'Ainda não respondeu'}
+        </Text>
+      </Text>
+
+      {peladaStatus === 'OPEN' ? (
+        <>
+          <Text style={styles.deadlineNotice}>
+            ⏰ Cancelamento sem falta até {pelada.cancelDeadlineHours}h antes do jogo
+          </Text>
+
+          <View style={styles.rsvpRow}>
+            <TouchableOpacity
+              style={[styles.rsvpBtn, { backgroundColor: colors.primary }]}
+              disabled={actionLoading}
+              onPress={() =>
+                runAction(() =>
+                  rsvpPelada(pelada.id, { status: 'CONFIRMED', isGoalkeeper: false })
+                )
+              }
+            >
+              <Text style={styles.rsvpBtnDarkText}>Confirmar Linha</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.rsvpBtn, styles.goalkeeperRsvpBtn]}
+              disabled={actionLoading}
+              onPress={() =>
+                runAction(() =>
+                  rsvpPelada(pelada.id, { status: 'CONFIRMED', isGoalkeeper: true })
+                )
+              }
+            >
+              <Text style={styles.goalkeeperRsvpText}>Sou Goleiro 🧤</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.rsvpBtn, styles.declineBtn]}
+              disabled={actionLoading}
+              onPress={() =>
+                runAction(() => rsvpPelada(pelada.id, { status: 'DECLINED' }))
+              }
+            >
+              <Text style={styles.declineBtnText}>Não vou</Text>
+            </TouchableOpacity>
+          </View>
+        </>
+      ) : (
+        <Text style={styles.deadlineNotice}>
+          Lista de confirmações fechada pois a pelada já foi{' '}
+          {peladaStatus === 'IN_PROGRESS' ? 'iniciada.' : 'finalizada.'}
+        </Text>
+      )}
+    </View>
+  );
+
+  const rostersContent = (
+    <>
+      {/* Goalkeepers */}
+      <View style={styles.sectionCard}>
+        <View style={styles.sectionHeaderRow}>
+          <Text style={styles.sectionTitleNoMargin}>🧤 Goleiros</Text>
+          <View style={styles.countTag}>
+            <Text style={styles.countTagText}>{confirmedGoalkeepers.length}</Text>
+          </View>
+        </View>
+        {confirmedGoalkeepers.length === 0 ? (
+          <Text style={styles.emptyListText}>Nenhum goleiro confirmado ainda.</Text>
+        ) : (
+          confirmedGoalkeepers.map((player, index) =>
+            renderPlayerRow(player, index, showPaymentStatusOnList)
+          )
+        )}
+      </View>
+
+      {/* Confirmed Line Players */}
+      <View style={styles.sectionCard}>
+        <View style={styles.sectionHeaderRow}>
+          <Text style={styles.sectionTitleNoMargin}>⚽ Confirmados na Linha</Text>
+          <View style={styles.countTag}>
+            <Text style={styles.countTagText}>
+              {confirmedLine.length}
+              {pelada.maxPlayers ? `/${pelada.maxPlayers}` : ''}
+            </Text>
+          </View>
+        </View>
+        {confirmedLine.length === 0 ? (
+          <Text style={styles.emptyListText}>Nenhum jogador de linha confirmado.</Text>
+        ) : (
+          confirmedLine.map((player, index) =>
+            renderPlayerRow(player, index, showPaymentStatusOnList)
+          )
+        )}
+      </View>
+
+      {/* Waitlist */}
+      {waitlist.length > 0 && (
+        <View style={styles.sectionCard}>
+          <View style={styles.sectionHeaderRow}>
+            <Text style={[styles.sectionTitleNoMargin, { color: colors.warning }]}>
+              Lista de Espera (Suplentes)
+            </Text>
+            <View style={[styles.countTag, { backgroundColor: colors.warningSoft }]}>
+              <Text style={[styles.countTagText, { color: colors.warning }]}>
+                {waitlist.length}
+              </Text>
+            </View>
+          </View>
+          {waitlist.map((player, index) => renderPlayerRow(player, index))}
+        </View>
+      )}
+
+      {/* Declined */}
+      {declined.length > 0 && (
+        <View style={styles.sectionCard}>
+          <View style={styles.sectionHeaderRow}>
+            <Text style={[styles.sectionTitleNoMargin, { color: colors.textMuted }]}>
+              Não vão
+            </Text>
+            <View style={styles.countTag}>
+              <Text style={styles.countTagText}>{declined.length}</Text>
+            </View>
+          </View>
+          {declined.map((player, index) => renderPlayerRow(player, index))}
+        </View>
+      )}
+    </>
+  );
 
   return (
     <View style={styles.container}>
       {/* Top Bar */}
-      <View style={styles.topBar}>
+      <View
+        style={[
+          styles.topBar,
+          {
+            maxWidth: containerMaxWidth,
+            paddingHorizontal: pagePadding,
+            paddingTop: topSpace,
+          },
+        ]}
+      >
         <TouchableOpacity
           onPress={() => navigation.goBack()}
           style={styles.backBtn}
@@ -295,7 +685,7 @@ export function PeladaDetailsScreen({ navigation, route }: Props) {
       </View>
 
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { paddingHorizontal: pagePadding }]}
         keyboardShouldPersistTaps="handled"
         refreshControl={
           <RefreshControl
@@ -308,285 +698,41 @@ export function PeladaDetailsScreen({ navigation, route }: Props) {
           />
         }
       >
-        <View style={styles.pageContainer}>
-          {/* Hero Summary Card */}
-          <View style={styles.headerCard}>
-            <View style={styles.heroTagsRow}>
-              <View style={styles.sportTag}>
-                <Text style={styles.sportTagText}>{pelada.sport}</Text>
-              </View>
-              {pelada.isRecurring && (
-                <View style={styles.infoTag}>
-                  <Text style={styles.infoTagText}>Recorrente</Text>
+        <View style={[styles.pageContainer, { maxWidth: containerMaxWidth }]}>
+          {effectiveTab === 'attendance' ? (
+            isDesktop ? (
+              <View style={styles.desktopColumns}>
+                <View style={styles.desktopLeftCol}>
+                  {headerCardContent}
+                  {lifecycleCardContent}
+                  {tabsBarContent}
+                  {rsvpCardContent}
+                  {pixCardContent}
                 </View>
-              )}
-              <View style={styles.neutralTag}>
-                <Text style={styles.neutralTagText}>
-                  Desist. até {pelada.cancelDeadlineHours}h antes
-                </Text>
-              </View>
-            </View>
-
-            <Text style={styles.title}>{pelada.title}</Text>
-            <Text style={styles.organizerLine}>Organizado por {pelada.organizer.name}</Text>
-
-            <View style={styles.heroMetaBox}>
-              <Text style={styles.metaText}>📅 {formatDateFull(pelada.dateTime).replace(' as ', ' às ')}</Text>
-              <Text style={styles.metaText}>📍 {pelada.location}</Text>
-              {pelada.locationAddress ? (
-                <Text style={styles.metaSubText}>{pelada.locationAddress}</Text>
-              ) : null}
-              <Text style={styles.metaText}>
-                💰{' '}
-                {pelada.price && pelada.price > 0
-                  ? `R$ ${pelada.price.toFixed(2)}`
-                  : 'Gratuita'}
-                {pelada.goalkeepersExempt ? ' (Goleiros isentos)' : ''}
-              </Text>
-            </View>
-
-            <View style={styles.headerActionRow}>
-              <TouchableOpacity
-                style={[styles.shareBtn, { flex: 1 }]}
-                onPress={handleShareInvite}
-                accessibilityRole="button"
-                accessibilityLabel="Compartilhar convite no WhatsApp"
-              >
-                <Text style={styles.shareBtnText}>📲 Convite WhatsApp</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.mapsBtn}
-                onPress={handleOpenMaps}
-                accessibilityRole="button"
-                accessibilityLabel="Abrir endereço no Google Maps"
-              >
-                <Text style={styles.mapsBtnText}>🗺️ Abrir Maps</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {/* Lifecycle Status & Flow Card */}
-          <View style={styles.lifecycleCard}>
-            <View style={styles.lifecycleHeader}>
-              <Text style={styles.lifecycleTitle}>
-                {peladaStatus === 'OPEN'
-                  ? '📋 Lista de presença aberta'
-                  : peladaStatus === 'IN_PROGRESS'
-                  ? '🔴 Pelada em andamento'
-                  : '🏁 Pelada finalizada'}
-              </Text>
-              <Text style={styles.lifecycleSubtitle}>
-                {peladaStatus === 'OPEN'
-                  ? canManage
-                    ? 'Quando os jogadores chegarem, inicie a pelada para montar os times, rodar o cronômetro e registrar gols.'
-                    : 'Aguarde o organizador iniciar a pelada no dia do jogo.'
-                  : peladaStatus === 'IN_PROGRESS'
-                  ? 'Entre na pelada ao vivo para acompanhar times, cronômetro, placar e gols em tempo real.'
-                  : 'Pelada encerrada! Confira as estatísticas finais e vote no MVP da pelada.'}
-              </Text>
-            </View>
-
-            {peladaStatus === 'OPEN' && canManage && (
-              <TouchableOpacity
-                style={styles.lifecycleActionBtn}
-                disabled={actionLoading}
-                onPress={handleStartPelada}
-                accessibilityRole="button"
-                accessibilityLabel="Iniciar pelada"
-              >
-                <Text style={styles.lifecycleActionBtnText}>▶️ Iniciar Pelada</Text>
-              </TouchableOpacity>
-            )}
-
-            {peladaStatus === 'IN_PROGRESS' && (
-              <TouchableOpacity
-                style={[styles.lifecycleActionBtn, { backgroundColor: colors.error }]}
-                onPress={() => navigation.navigate('LivePelada', { peladaId: pelada.id })}
-                accessibilityRole="button"
-                accessibilityLabel="Entrar na pelada ao vivo"
-              >
-                <Text style={styles.lifecycleActionBtnText}>⚽ Entrar na Pelada ao Vivo</Text>
-              </TouchableOpacity>
-            )}
-
-            {peladaStatus === 'FINISHED' && (
-              <TouchableOpacity
-                style={[styles.lifecycleActionBtn, { backgroundColor: colors.success }]}
-                onPress={() => navigation.navigate('PostGame', { peladaId: pelada.id })}
-                accessibilityRole="button"
-                accessibilityLabel="Ver estatísticas e votar no MVP"
-              >
-                <Text style={styles.lifecycleActionBtnText}>🏆 Ver Estatísticas e Votar no MVP</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-
-          {/* Segmented Tabs */}
-          <View style={styles.tabBar}>
-            <TouchableOpacity
-              style={[styles.tabItem, activeTab === 'attendance' && styles.tabItemActive]}
-              onPress={() => setActiveTab('attendance')}
-              accessibilityRole="tab"
-              accessibilityLabel={`Presença (${pelada.confirmedCount})`}
-              accessibilityState={{ selected: activeTab === 'attendance' }}
-            >
-              <Text style={[styles.tabText, activeTab === 'attendance' && styles.tabTextActive]}>
-                Presença ({pelada.confirmedCount})
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.tabItem, activeTab === 'finance' && styles.tabItemActive]}
-              onPress={() => setActiveTab('finance')}
-              accessibilityRole="tab"
-              accessibilityLabel="Financeiro"
-              accessibilityState={{ selected: activeTab === 'finance' }}
-            >
-              <Text style={[styles.tabText, activeTab === 'finance' && styles.tabTextActive]}>
-                Financeiro
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* TAB 1: PRESENCA (RSVP & LISTA LIMPA) */}
-          {activeTab === 'attendance' && (
-            <View>
-              {/* My RSVP Box */}
-              <View style={styles.sectionCard}>
-                <Text style={styles.sectionTitle}>Sua Presença</Text>
-                <Text style={styles.myStatusText}>
-                  Status atual:{' '}
-                  <Text style={{ color: colors.primary, fontWeight: '800' }}>
-                    {pelada.myStatus === 'CONFIRMED'
-                      ? pelada.myPlayer?.isGoalkeeper
-                        ? 'Confirmado (Goleiro) 🧤'
-                        : 'Confirmado (Linha) ✅'
-                      : pelada.myStatus === 'WAITLIST'
-                      ? 'Na Lista de Espera ⏳'
-                      : pelada.myStatus === 'DECLINED'
-                      ? 'Não vou ❌'
-                      : 'Ainda não respondeu'}
-                  </Text>
-                </Text>
-
-                {peladaStatus === 'OPEN' ? (
-                  <>
-                    <Text style={styles.deadlineNotice}>
-                      ⏰ Cancelamento sem falta até {pelada.cancelDeadlineHours}h antes do jogo
-                    </Text>
-
-                    <View style={styles.rsvpRow}>
-                      <TouchableOpacity
-                        style={[styles.rsvpBtn, { backgroundColor: colors.primary }]}
-                        disabled={actionLoading}
-                        onPress={() =>
-                          runAction(() =>
-                            rsvpPelada(pelada.id, { status: 'CONFIRMED', isGoalkeeper: false })
-                          )
-                        }
-                      >
-                        <Text style={styles.rsvpBtnDarkText}>Confirmar Linha</Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        style={[styles.rsvpBtn, styles.goalkeeperRsvpBtn]}
-                        disabled={actionLoading}
-                        onPress={() =>
-                          runAction(() =>
-                            rsvpPelada(pelada.id, { status: 'CONFIRMED', isGoalkeeper: true })
-                          )
-                        }
-                      >
-                        <Text style={styles.goalkeeperRsvpText}>Sou Goleiro 🧤</Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        style={[styles.rsvpBtn, styles.declineBtn]}
-                        disabled={actionLoading}
-                        onPress={() =>
-                          runAction(() => rsvpPelada(pelada.id, { status: 'DECLINED' }))
-                        }
-                      >
-                        <Text style={styles.declineBtnText}>Não vou</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </>
-                ) : (
-                  <Text style={styles.deadlineNotice}>
-                    Lista de confirmações fechada pois a pelada já foi{' '}
-                    {peladaStatus === 'IN_PROGRESS' ? 'iniciada.' : 'finalizada.'}
-                  </Text>
-                )}
-              </View>
-
-              {/* Goalkeepers */}
-              <View style={styles.sectionCard}>
-                <View style={styles.sectionHeaderRow}>
-                  <Text style={styles.sectionTitleNoMargin}>🧤 Goleiros</Text>
-                  <View style={styles.countTag}>
-                    <Text style={styles.countTagText}>{confirmedGoalkeepers.length}</Text>
-                  </View>
+                <View style={styles.desktopRightCol}>
+                  {rostersContent}
                 </View>
-                {confirmedGoalkeepers.length === 0 ? (
-                  <Text style={styles.emptyListText}>Nenhum goleiro confirmado ainda.</Text>
-                ) : (
-                  confirmedGoalkeepers.map((player, index) => renderPlayerRow(player, index))
-                )}
               </View>
-
-              {/* Confirmed Line Players */}
-              <View style={styles.sectionCard}>
-                <View style={styles.sectionHeaderRow}>
-                  <Text style={styles.sectionTitleNoMargin}>⚽ Confirmados na Linha</Text>
-                  <View style={styles.countTag}>
-                    <Text style={styles.countTagText}>
-                      {confirmedLine.length}
-                      {pelada.maxPlayers ? `/${pelada.maxPlayers}` : ''}
-                    </Text>
-                  </View>
-                </View>
-                {confirmedLine.length === 0 ? (
-                  <Text style={styles.emptyListText}>Nenhum jogador de linha confirmado.</Text>
-                ) : (
-                  confirmedLine.map((player, index) => renderPlayerRow(player, index))
-                )}
-              </View>
-
-              {/* Waitlist */}
-              {waitlist.length > 0 && (
-                <View style={styles.sectionCard}>
-                  <View style={styles.sectionHeaderRow}>
-                    <Text style={[styles.sectionTitleNoMargin, { color: colors.warning }]}>
-                      Lista de Espera (Suplentes)
-                    </Text>
-                    <View style={[styles.countTag, { backgroundColor: colors.warningSoft }]}>
-                      <Text style={[styles.countTagText, { color: colors.warning }]}>
-                        {waitlist.length}
-                      </Text>
-                    </View>
-                  </View>
-                  {waitlist.map((player, index) => renderPlayerRow(player, index))}
-                </View>
-              )}
-
-              {/* Declined */}
-              {declined.length > 0 && (
-                <View style={styles.sectionCard}>
-                  <View style={styles.sectionHeaderRow}>
-                    <Text style={[styles.sectionTitleNoMargin, { color: colors.textMuted }]}>
-                      Não vão
-                    </Text>
-                    <View style={styles.countTag}>
-                      <Text style={styles.countTagText}>{declined.length}</Text>
-                    </View>
-                  </View>
-                  {declined.map((player, index) => renderPlayerRow(player, index))}
-                </View>
-              )}
-            </View>
+            ) : (
+              <>
+                {headerCardContent}
+                {lifecycleCardContent}
+                {tabsBarContent}
+                {pixCardContent}
+                {rsvpCardContent}
+                {rostersContent}
+              </>
+            )
+          ) : (
+            <>
+              {headerCardContent}
+              {lifecycleCardContent}
+              {tabsBarContent}
+            </>
           )}
 
-          {/* TAB 2: FINANCEIRO (CAIXA & PIX) */}
-          {activeTab === 'finance' && (
+          {/* TAB 2: FINANCEIRO (EXCLUSIVO PARA ORGANIZADORES) */}
+          {canManage && effectiveTab === 'finance' && (
             <View>
               <View style={styles.sectionCard}>
                 <View style={styles.sectionHeaderRow}>
@@ -761,9 +907,11 @@ export function PeladaDetailsScreen({ navigation, route }: Props) {
 function PlayerRow({
   index,
   player,
+  showPayment = false,
 }: {
   index: number;
   player: PeladaPlayer;
+  showPayment?: boolean;
 }) {
   const roleTag =
     player.role === 'ORGANIZER'
@@ -775,6 +923,7 @@ function PlayerRow({
       : null;
 
   const initial = (player.displayName || 'J').charAt(0).toUpperCase();
+  const paymentBadge = showPayment ? getPaymentLabel(player.paymentStatus) : null;
 
   return (
     <View style={styles.playerRow}>
@@ -792,6 +941,13 @@ function PlayerRow({
             {` • ${player.memberType === 'MENSALISTA' ? 'Mensalista' : 'Avulso'}`}
           </Text>
         </View>
+        {paymentBadge ? (
+          <View style={[styles.paymentPill, { backgroundColor: paymentBadge.bg, flexShrink: 0 }]}>
+            <Text style={[styles.paymentStatusText, { color: paymentBadge.color }]}>
+              {paymentBadge.text}
+            </Text>
+          </View>
+        ) : null}
       </View>
     </View>
   );
@@ -834,18 +990,17 @@ const styles = StyleSheet.create({
   },
   topBar: {
     width: '100%',
-    maxWidth: layout.maxWidth,
     alignSelf: 'center',
-    paddingTop: 50,
-    paddingHorizontal: spacing.lg,
     paddingBottom: spacing.sm,
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'space-between',
     alignItems: 'center',
+    gap: spacing.xs,
   },
   backBtn: { minHeight: 44, justifyContent: 'center', paddingRight: spacing.md },
   backBtnText: { color: colors.primary, fontSize: fonts.sizes.md, fontWeight: '800' },
-  topBarRight: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  topBarRight: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: spacing.xs },
   editTopBtn: {
     backgroundColor: colors.surfaceLight,
     borderWidth: 1,
@@ -875,11 +1030,23 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   codePillText: { color: colors.primary, fontWeight: '900', fontSize: fonts.sizes.xs },
-  scrollContent: { padding: spacing.lg, paddingBottom: 80 },
+  scrollContent: { paddingVertical: spacing.md, paddingBottom: 80 },
   pageContainer: {
     width: '100%',
-    maxWidth: layout.maxWidth,
     alignSelf: 'center',
+  },
+  desktopColumns: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.lg,
+  },
+  desktopLeftCol: {
+    flex: 1,
+    minWidth: 0,
+  },
+  desktopRightCol: {
+    flex: 1.2,
+    minWidth: 0,
   },
   headerCard: {
     backgroundColor: colors.card,
@@ -964,6 +1131,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   mapsBtnText: { color: colors.textPrimary, fontWeight: '700', fontSize: fonts.sizes.xs },
+  whatsappGroupBtn: {
+    marginTop: spacing.sm,
+    backgroundColor: colors.successSoft,
+    borderWidth: 1,
+    borderColor: colors.success,
+    borderRadius: borderRadius.md,
+    minHeight: 44,
+    paddingVertical: 11,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  whatsappGroupBtnText: { color: colors.success, fontWeight: '800', fontSize: fonts.sizes.xs },
   tabBar: {
     flexDirection: 'row',
     backgroundColor: colors.surface,
@@ -1118,6 +1297,7 @@ const styles = StyleSheet.create({
   },
   playerLeft: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
     gap: spacing.sm + 2,
   },

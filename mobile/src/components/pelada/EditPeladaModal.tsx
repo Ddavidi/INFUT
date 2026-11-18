@@ -15,6 +15,11 @@ import { updatePelada } from '../../services/peladaService';
 import { Pelada } from '../../types';
 import { colors, fonts, spacing, borderRadius, layout, shadows } from '../../constants/theme';
 import { showMessage } from '../../utils/alerts';
+import {
+  DURATION_PRESETS,
+  calculateEndTimeText,
+  parseDurationHours,
+} from '../../utils/dateTime';
 
 interface EditPeladaModalProps {
   visible: boolean;
@@ -27,8 +32,10 @@ export function EditPeladaModal({ visible, pelada, onClose, onSaved }: EditPelad
   const [title, setTitle] = useState('');
   const [date, setDate] = useState('');
   const [time, setTime] = useState('');
+  const [durationHours, setDurationHours] = useState('2');
   const [location, setLocation] = useState('');
   const [locationAddress, setLocationAddress] = useState('');
+  const [whatsappGroupUrl, setWhatsappGroupUrl] = useState('');
   const [price, setPrice] = useState('');
   const [maxPlayers, setMaxPlayers] = useState('');
   const [playersPerTeam, setPlayersPerTeam] = useState('5');
@@ -53,8 +60,10 @@ export function EditPeladaModal({ visible, pelada, onClose, onSaved }: EditPelad
           .toString()
           .padStart(2, '0')}`
       );
+      setDurationHours(String(pelada.durationHours ?? 2));
       setLocation(pelada.location || '');
       setLocationAddress(pelada.locationAddress || '');
+      setWhatsappGroupUrl(pelada.whatsappGroupUrl || '');
       setPrice(pelada.price != null ? String(pelada.price) : '');
       setMaxPlayers(pelada.maxPlayers != null ? String(pelada.maxPlayers) : '');
       setPlayersPerTeam(String(pelada.playersPerTeam || 5));
@@ -87,14 +96,17 @@ export function EditPeladaModal({ visible, pelada, onClose, onSaved }: EditPelad
     }
 
     const parsedPrice = price.trim() ? parseFloat(price.replace(',', '.')) : null;
+    const parsedDuration = parseDurationHours(durationHours);
 
     setSaving(true);
     try {
       const updated = await updatePelada(pelada.id, {
         title: title.trim(),
         dateTime: dateTime.toISOString(),
+        durationHours: parsedDuration,
         location: location.trim(),
         locationAddress: locationAddress.trim() || null,
+        whatsappGroupUrl: whatsappGroupUrl.trim() || null,
         price: parsedPrice !== null && !isNaN(parsedPrice) ? parsedPrice : null,
         maxPlayers: maxPlayers.trim() ? parseInt(maxPlayers, 10) : null,
         playersPerTeam: playersPerTeam.trim() ? parseInt(playersPerTeam, 10) : 5,
@@ -137,9 +149,43 @@ export function EditPeladaModal({ visible, pelada, onClose, onSaved }: EditPelad
                 <Input label="Data (DD/MM/AAAA)" value={date} onChangeText={setDate} keyboardType="numeric" />
               </View>
               <View style={styles.half}>
-                <Input label="Hora (HH:MM)" value={time} onChangeText={setTime} keyboardType="numeric" />
+                <Input label="Horário de Início (HH:MM)" value={time} onChangeText={setTime} keyboardType="numeric" />
               </View>
             </View>
+
+            <View style={styles.row}>
+              <View style={styles.half}>
+                <Input label="Duração (horas)" value={durationHours} onChangeText={setDurationHours} keyboardType="decimal-pad" />
+              </View>
+            </View>
+
+            <View style={styles.presetRow}>
+              {DURATION_PRESETS.map((h) => {
+                const selected = parseDurationHours(durationHours) === h;
+                return (
+                  <TouchableOpacity
+                    key={h}
+                    style={[styles.presetChip, selected && styles.presetChipActive]}
+                    onPress={() => setDurationHours(String(h))}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Duração de ${h} horas`}
+                    accessibilityState={{ selected }}
+                  >
+                    <Text style={[styles.presetText, selected && { color: colors.primary }]}>
+                      {String(h).replace('.', ',')}h
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            {calculateEndTimeText(time, durationHours) ? (
+              <View style={styles.endTimeBanner}>
+                <Text style={styles.endTimeBannerText}>
+                  ⏱️ Término calculado automaticamente: {calculateEndTimeText(time, durationHours)}
+                </Text>
+              </View>
+            ) : null}
 
             <Input label="Local *" value={location} onChangeText={setLocation} />
             <Input label="Endereço" value={locationAddress} onChangeText={setLocationAddress} />
@@ -163,6 +209,13 @@ export function EditPeladaModal({ visible, pelada, onClose, onSaved }: EditPelad
             </View>
 
             <Input label="Chave Pix" value={pixKey} onChangeText={setPixKey} autoCapitalize="none" />
+            <Input
+              label="Link do Grupo no WhatsApp"
+              placeholder="https://chat.whatsapp.com/..."
+              value={whatsappGroupUrl}
+              onChangeText={setWhatsappGroupUrl}
+              autoCapitalize="none"
+            />
 
             <View style={styles.switchRow}>
               <Text style={styles.switchLabel}>Pelada pública (Explorar)</Text>
@@ -248,4 +301,41 @@ const styles = StyleSheet.create({
     minHeight: 52,
   },
   switchLabel: { color: colors.textPrimary, fontSize: fonts.sizes.sm, fontWeight: '600', flex: 1, paddingRight: spacing.sm },
+  presetRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs + 2,
+    marginBottom: spacing.sm,
+  },
+  presetChip: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceLight,
+    borderRadius: borderRadius.full,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 6,
+  },
+  presetChipActive: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primarySoft,
+  },
+  presetText: {
+    color: colors.textSecondary,
+    fontSize: fonts.sizes.xs,
+    fontWeight: '700',
+  },
+  endTimeBanner: {
+    backgroundColor: colors.primarySoft,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    marginBottom: spacing.sm + 2,
+  },
+  endTimeBannerText: {
+    color: colors.primary,
+    fontSize: fonts.sizes.xs,
+    fontWeight: '700',
+  },
 });

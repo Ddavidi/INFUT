@@ -7,28 +7,60 @@ import { ExploreScreen } from '../screens/home/ExploreScreen';
 import { RankingScreen } from '../screens/home/RankingScreen';
 import { CreatePeladaScreen } from '../screens/pelada/CreatePeladaScreen';
 import { EditProfileScreen } from '../screens/profile/EditProfileScreen';
-import { colors, fonts } from '../constants/theme';
+import { colors, fonts, borderRadius, spacing } from '../constants/theme';
+import { useResponsive } from '../hooks/useResponsive';
 
 const Tab = createBottomTabNavigator();
 
 export function MainTabs() {
+  const { isDesktop } = useResponsive();
+
   return (
     <Tab.Navigator
       screenOptions={{
         headerShown: false,
-        tabBarStyle: {
-          backgroundColor: colors.surface,
-          borderTopColor: colors.borderLight,
-          borderTopWidth: 1,
-          height: 66,
-          paddingTop: 6,
-          paddingBottom: 10,
-        },
-        tabBarLabelStyle: {
-          fontSize: 11,
-          fontWeight: '700',
-          letterSpacing: 0.2,
-        },
+        tabBarPosition: isDesktop ? 'left' : 'bottom',
+        tabBarLabelPosition: isDesktop ? 'beside-icon' : 'below-icon',
+        tabBarStyle: isDesktop
+          ? {
+              width: 220,
+              backgroundColor: colors.surface,
+              borderRightColor: colors.borderLight,
+              borderRightWidth: 1,
+              borderTopWidth: 0,
+              paddingTop: spacing.xl,
+              paddingBottom: spacing.lg,
+              paddingHorizontal: spacing.sm,
+            }
+          : {
+              backgroundColor: colors.surface,
+              borderTopColor: colors.borderLight,
+              borderTopWidth: 1,
+              height: 66,
+              paddingTop: 6,
+              paddingBottom: 10,
+            },
+        tabBarItemStyle: isDesktop
+          ? {
+              borderRadius: borderRadius.md,
+              marginBottom: spacing.xs + 2,
+              paddingHorizontal: spacing.sm,
+              minHeight: 48,
+              justifyContent: 'flex-start',
+            }
+          : undefined,
+        tabBarLabelStyle: isDesktop
+          ? {
+              fontSize: fonts.sizes.sm,
+              fontWeight: '700',
+              marginLeft: spacing.sm,
+            }
+          : {
+              fontSize: 11,
+              fontWeight: '700',
+              letterSpacing: 0.2,
+            },
+        tabBarActiveBackgroundColor: isDesktop ? colors.primarySoft : undefined,
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.textMuted,
       }}

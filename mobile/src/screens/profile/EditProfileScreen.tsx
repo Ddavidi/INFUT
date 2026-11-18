@@ -15,11 +15,13 @@ import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
 import { LegalModal } from '../../components/ui/LegalModal';
 import { SPORTS, getPositionsForSport } from '../../constants/sports';
-import { colors, fonts, spacing, borderRadius, layout, shadows } from '../../constants/theme';
+import { colors, fonts, spacing, borderRadius, shadows } from '../../constants/theme';
 import { showConfirm, showMessage } from '../../utils/alerts';
+import { useResponsive } from '../../hooks/useResponsive';
 
 export function EditProfileScreen() {
   const { user, refreshUser, signOut } = useAuth();
+  const { isDesktop, containerMaxWidth, pagePadding, topSpace } = useResponsive();
 
   const [name, setName] = useState('');
   const [region, setRegion] = useState('');
@@ -124,151 +126,178 @@ export function EditProfileScreen() {
     attendanceRate: 100,
   };
 
+  const identityAndStats = (
+    <>
+      {/* Cabecalho de Identidade */}
+      <View style={styles.profileHeaderCard}>
+        <View style={styles.avatarRing}>
+          <View style={styles.avatar}>
+            <Text style={styles.avatarText}>{(name || user.name).charAt(0).toUpperCase()}</Text>
+          </View>
+        </View>
+        <Text style={styles.displayName}>{name || user.name}</Text>
+        <Text style={styles.email}>{user.email}</Text>
+        {selectedSport ? (
+          <View style={styles.sportTagPill}>
+            <Text style={styles.sportTagText}>
+              {selectedSport}
+              {selectedPosition ? ` • ${selectedPosition}` : ''}
+            </Text>
+          </View>
+        ) : null}
+      </View>
+
+      {/* Athlete Stats */}
+      <View style={styles.statsCard}>
+        <View style={styles.statsHeaderRow}>
+          <Text style={styles.statsTitle}>ESTATÍSTICAS DE ATLETA</Text>
+          <View style={styles.attendancePill}>
+            <Text style={styles.attendanceBadge}>Assiduidade {stats.attendanceRate}%</Text>
+          </View>
+        </View>
+        <View style={styles.statsGrid}>
+          <View style={styles.statBox}>
+            <Text style={styles.statValue}>{stats.totalGames}</Text>
+            <Text style={styles.statLabel}>Jogos</Text>
+          </View>
+          <View style={styles.statBox}>
+            <Text style={styles.statValue}>{stats.totalWins}</Text>
+            <Text style={styles.statLabel}>Vitórias</Text>
+          </View>
+          <View style={styles.statBox}>
+            <Text style={styles.statValue}>{stats.totalGoals}</Text>
+            <Text style={styles.statLabel}>Gols</Text>
+          </View>
+          <View style={styles.statBox}>
+            <Text style={styles.statValue}>{stats.totalAssists}</Text>
+            <Text style={styles.statLabel}>Assist.</Text>
+          </View>
+          <View style={styles.statBox}>
+            <Text style={[styles.statValue, { color: colors.primary }]}>{stats.mvpVotes}</Text>
+            <Text style={styles.statLabel}>MVP</Text>
+          </View>
+        </View>
+      </View>
+    </>
+  );
+
+  const formAndActions = (
+    <>
+      {/* Cartao de Dados do Perfil */}
+      <View style={styles.formCard}>
+        <Text style={styles.cardSectionHeading}>DADOS E PREFERÊNCIAS</Text>
+        <Input label="Nome" placeholder="Seu nome" value={name} onChangeText={setName} />
+        <Input
+          label="Região / Bairro"
+          placeholder="Ex: Savassi - Belo Horizonte"
+          value={region}
+          onChangeText={setRegion}
+        />
+
+        <Text style={styles.sectionLabel}>Esporte Favorito</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.horizontalScroll}>
+          {SPORTS.map((s) => (
+            <TouchableOpacity
+              key={s.sport}
+              style={[styles.chip, selectedSport === s.sport && styles.chipSelected]}
+              onPress={() => {
+                setSelectedSport(s.sport);
+                setSelectedPosition('');
+              }}
+              accessibilityRole="button"
+              accessibilityLabel={s.sport}
+              accessibilityState={{ selected: selectedSport === s.sport }}
+            >
+              <Text style={styles.chipEmoji}>{s.emoji}</Text>
+              <Text style={[styles.chipText, selectedSport === s.sport && styles.chipTextSelected]}>
+                {s.sport}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+
+        {positions.length > 0 && (
+          <>
+            <Text style={styles.sectionLabel}>Posição Preferida</Text>
+            <View style={styles.positionsGrid}>
+              {positions.map((pos) => (
+                <TouchableOpacity
+                  key={pos}
+                  style={[styles.positionChip, selectedPosition === pos && styles.chipSelected]}
+                  onPress={() => setSelectedPosition(pos)}
+                  accessibilityRole="button"
+                  accessibilityLabel={pos}
+                  accessibilityState={{ selected: selectedPosition === pos }}
+                >
+                  <Text style={[styles.positionText, selectedPosition === pos && styles.chipTextSelected]}>
+                    {pos}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </>
+        )}
+
+        <Button
+          title="Salvar Alterações"
+          onPress={handleSave}
+          loading={loading}
+          style={{ marginTop: spacing.lg }}
+        />
+      </View>
+
+      <Button
+        title="Sair da Conta"
+        onPress={handleLogout}
+        variant="outline"
+        style={{ marginTop: spacing.sm }}
+      />
+
+      <Button
+        title="Termos de Uso e Privacidade"
+        onPress={() => setShowLegal(true)}
+        variant="ghost"
+        style={{ marginTop: spacing.xs }}
+      />
+
+      <TouchableOpacity
+        style={styles.deleteAccountBtn}
+        onPress={handleDeleteAccount}
+        accessibilityRole="button"
+        accessibilityLabel="Excluir Minha Conta e Dados (LGPD)"
+      >
+        <Text style={styles.deleteAccountText}>Excluir Minha Conta e Dados (LGPD)</Text>
+      </TouchableOpacity>
+    </>
+  );
+
   return (
     <ScrollView
       style={styles.container}
-      contentContainerStyle={styles.content}
+      contentContainerStyle={[
+        styles.content,
+        {
+          paddingHorizontal: pagePadding,
+          paddingTop: topSpace,
+          paddingBottom: isDesktop ? spacing.xxl : 100,
+        },
+      ]}
       keyboardShouldPersistTaps="handled"
     >
-      <View style={styles.pageContainer}>
+      <View style={[styles.pageContainer, { maxWidth: containerMaxWidth }]}>
         <Text style={styles.title}>Seu Perfil</Text>
 
-        {/* Cabecalho de Identidade */}
-        <View style={styles.profileHeaderCard}>
-          <View style={styles.avatarRing}>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>{(name || user.name).charAt(0).toUpperCase()}</Text>
-            </View>
+        {isDesktop ? (
+          <View style={styles.desktopColumns}>
+            <View style={styles.desktopLeftCol}>{identityAndStats}</View>
+            <View style={styles.desktopRightCol}>{formAndActions}</View>
           </View>
-          <Text style={styles.displayName}>{name || user.name}</Text>
-          <Text style={styles.email}>{user.email}</Text>
-          {selectedSport ? (
-            <View style={styles.sportTagPill}>
-              <Text style={styles.sportTagText}>
-                {selectedSport}
-                {selectedPosition ? ` • ${selectedPosition}` : ''}
-              </Text>
-            </View>
-          ) : null}
-        </View>
-
-        {/* Athlete Stats */}
-        <View style={styles.statsCard}>
-          <View style={styles.statsHeaderRow}>
-            <Text style={styles.statsTitle}>ESTATÍSTICAS DE ATLETA</Text>
-            <View style={styles.attendancePill}>
-              <Text style={styles.attendanceBadge}>Assiduidade {stats.attendanceRate}%</Text>
-            </View>
-          </View>
-          <View style={styles.statsGrid}>
-            <View style={styles.statBox}>
-              <Text style={styles.statValue}>{stats.totalGames}</Text>
-              <Text style={styles.statLabel}>Jogos</Text>
-            </View>
-            <View style={styles.statBox}>
-              <Text style={styles.statValue}>{stats.totalWins}</Text>
-              <Text style={styles.statLabel}>Vitórias</Text>
-            </View>
-            <View style={styles.statBox}>
-              <Text style={styles.statValue}>{stats.totalGoals}</Text>
-              <Text style={styles.statLabel}>Gols</Text>
-            </View>
-            <View style={styles.statBox}>
-              <Text style={styles.statValue}>{stats.totalAssists}</Text>
-              <Text style={styles.statLabel}>Assist.</Text>
-            </View>
-            <View style={styles.statBox}>
-              <Text style={[styles.statValue, { color: colors.primary }]}>{stats.mvpVotes}</Text>
-              <Text style={styles.statLabel}>MVP</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Cartao de Dados do Perfil */}
-        <View style={styles.formCard}>
-          <Text style={styles.cardSectionHeading}>DADOS E PREFERÊNCIAS</Text>
-          <Input label="Nome" placeholder="Seu nome" value={name} onChangeText={setName} />
-          <Input
-            label="Região / Bairro"
-            placeholder="Ex: Savassi - Belo Horizonte"
-            value={region}
-            onChangeText={setRegion}
-          />
-
-          <Text style={styles.sectionLabel}>Esporte Favorito</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.horizontalScroll}>
-            {SPORTS.map((s) => (
-              <TouchableOpacity
-                key={s.sport}
-                style={[styles.chip, selectedSport === s.sport && styles.chipSelected]}
-                onPress={() => {
-                  setSelectedSport(s.sport);
-                  setSelectedPosition('');
-                }}
-                accessibilityRole="button"
-                accessibilityLabel={s.sport}
-                accessibilityState={{ selected: selectedSport === s.sport }}
-              >
-                <Text style={styles.chipEmoji}>{s.emoji}</Text>
-                <Text style={[styles.chipText, selectedSport === s.sport && styles.chipTextSelected]}>
-                  {s.sport}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-
-          {positions.length > 0 && (
-            <>
-              <Text style={styles.sectionLabel}>Posição Preferida</Text>
-              <View style={styles.positionsGrid}>
-                {positions.map((pos) => (
-                  <TouchableOpacity
-                    key={pos}
-                    style={[styles.positionChip, selectedPosition === pos && styles.chipSelected]}
-                    onPress={() => setSelectedPosition(pos)}
-                    accessibilityRole="button"
-                    accessibilityLabel={pos}
-                    accessibilityState={{ selected: selectedPosition === pos }}
-                  >
-                    <Text style={[styles.positionText, selectedPosition === pos && styles.chipTextSelected]}>
-                      {pos}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </>
-          )}
-
-          <Button
-            title="Salvar Alterações"
-            onPress={handleSave}
-            loading={loading}
-            style={{ marginTop: spacing.lg }}
-          />
-        </View>
-
-        <Button
-          title="Sair da Conta"
-          onPress={handleLogout}
-          variant="outline"
-          style={{ marginTop: spacing.sm }}
-        />
-
-        <Button
-          title="Termos de Uso e Privacidade"
-          onPress={() => setShowLegal(true)}
-          variant="ghost"
-          style={{ marginTop: spacing.xs }}
-        />
-
-        <TouchableOpacity
-          style={styles.deleteAccountBtn}
-          onPress={handleDeleteAccount}
-          accessibilityRole="button"
-          accessibilityLabel="Excluir Minha Conta e Dados (LGPD)"
-        >
-          <Text style={styles.deleteAccountText}>Excluir Minha Conta e Dados (LGPD)</Text>
-        </TouchableOpacity>
+        ) : (
+          <>
+            {identityAndStats}
+            {formAndActions}
+          </>
+        )}
       </View>
       <LegalModal visible={showLegal} onClose={() => setShowLegal(false)} />
     </ScrollView>
@@ -289,11 +318,23 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   container: { flex: 1, backgroundColor: colors.background },
-  content: { padding: spacing.lg, paddingTop: 52, paddingBottom: 100 },
+  content: {},
   pageContainer: {
     width: '100%',
-    maxWidth: layout.maxWidth,
     alignSelf: 'center',
+  },
+  desktopColumns: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.lg,
+  },
+  desktopLeftCol: {
+    flex: 1,
+    minWidth: 0,
+  },
+  desktopRightCol: {
+    flex: 1.25,
+    minWidth: 0,
   },
   title: { fontSize: fonts.sizes.xxl, fontWeight: '900', color: colors.textPrimary, marginBottom: spacing.md },
   profileHeaderCard: {

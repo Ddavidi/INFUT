@@ -47,7 +47,7 @@ INFUT/
 | Tabela | Descrição | Principais Dados Guardados |
 | :--- | :--- | :--- |
 | **`users`** | Cadastro e perfil dos atletas | `id`, `name`, `email`, `password_hash`, `sport`, `position`, `region`, `photo_url` |
-| **`peladas`** | Eventos esportivos | `title`, `sport`, `date_time`, `location`, `price`, `max_players`, `invite_code`, `is_public`, `pix_key`, `goalkeepers_exempt`, `players_per_team`, `cancel_deadline_hours`, `teams_json`, `matches_json` |
+| **`peladas`** | Eventos esportivos | `title`, `sport`, `date_time`, `duration_hours`, `whatsapp_group_url`, `location`, `price`, `max_players`, `invite_code`, `is_public`, `pix_key`, `goalkeepers_exempt`, `players_per_team`, `cancel_deadline_hours`, `status`, `teams_json`, `matches_json` |
 | **`pelada_players`** | Participação, times, financeiro e stats | `role`, `status`, `is_goalkeeper`, `member_type` (`MENSALISTA`/`DIARISTA`), `attendance_status` (`PENDING`/`PRESENT`/`NO_SHOW`), `payment_status`, `goals`, `assists`, `wins`, `voted_mvp_for_id`, `voted_goalkeeper_for_id` |
 
 ### 2.3. Como Visualizar e Resetar o Banco
@@ -167,26 +167,27 @@ O celular precisa estar **na mesma rede Wi-Fi** que o computador e apontar para 
 
 ## 4. Contas e Dados Prontos para Teste (Seed)
 
-Ao rodar `npm run prisma:seed`, o banco já é populado com 4 usuários e 3 peladas prontas para você testar todas as permissões e fluxos imediatamente:
+Ao rodar `npm run prisma:seed`, o banco já é populado com **22 usuários** (contas reais de teste) e **3 peladas** prontas para testar todas as permissões, sorteios e fluxos imediatamente:
 
-### Usuários Pré-cadastrados (Senha padrão: `123456`)
+### Principais Usuários Pré-cadastrados (Senha padrão para todas as 22 contas: `123456`)
 
 | E-mail | Nome | Posição / Região | Papel na "Peladinha da Quinta" (`QUINTA`) |
 | :--- | :--- | :--- | :--- |
 | `david@test.com` | David Nunes | Meio-campista • Centro - BH | **Organizador Principal** (Pago ✅) |
 | `joao@test.com` | Joao Silva | Goleiro • Pampulha - BH | **Co-organizador** e Goleiro (Isento 🛡️) |
-| `pedro@test.com` | Pedro Costa | Atacante • Centro - BH | **Jogador** (Aguardando conf. Pix 🟡) |
-| `maria@test.com` | Maria Santos | Levantadora • Savassi - BH | Organizadora do *Vôlei de Sábado* |
+| `pedro@test.com` | Pedro Costa | Atacante • Centro - BH | **Jogador** (Pago ✅) |
+| `maria@test.com` | Maria Santos | Levantador(a) • Savassi - BH | **Jogadora** na Quinta e Organizadora do *Vôlei de Sábado* |
+| `lucas@test.com` ... `henrique@test.com` | 18 atletas adicionais | Goleiros, Zagueiros, Laterais, Volantes, Meias e Atacantes | **16 Confirmados + 2 na Lista de Espera** (totalizando **22 pessoas no grupo**) |
 
 ### Códigos de Convite Pré-criados
 
 | Código | Pelada | Esporte | Valor | Status / Recursos |
 | :--- | :--- | :--- | :--- | :--- |
-| **`QUINTA`** | Peladinha da Quinta | Futebol | R$ 15,00 | Chave Pix ativa, 5 confirmados, times sorteados, gols e voto de Craque |
-| **`VOLEI1`** | Vôlei de Sábado | Vôlei | Gratuita | Pública na aba Explorar |
-| **`FUTSAL`** | Futsal da Pampulha | Futsal | R$ 20,00 | Recorrente semanal, chave Pix ativa |
+| **`QUINTA`** | Peladinha da Quinta | Futebol | R$ 15,00 | Duração 2h, Link do WhatsApp, Chave Pix ativa, **22 participantes no grupo** (20 confirmados + 2 suplentes), 3 times por cores (`Time Amarelo`, `Time Azul`, `Time Vermelho`), gols e voto de Craque |
+| **`VOLEI1`** | Vôlei de Sábado | Vôlei | Gratuita | Duração 2h, pública na aba Explorar |
+| **`FUTSAL`** | Futsal da Pampulha | Futsal | R$ 20,00 | Duração 1,5h, recorrente semanal, chave Pix ativa |
 
-> 💡 **Dica de Teste Rápido:** Entre com `david@test.com` (`123456`) para testar a visão de **Organizador** (sortear times, dar baixa em pagamentos, promover co-organizador, adicionar convidados). Depois clique em *Perfil > Sair da Conta* e entre com `pedro@test.com` para testar a visão de **Jogador** (votar no craque, confirmar/cancelar presença, informar Pix).
+> 💡 **Dica de Teste Rápido:** Entre com `david@test.com` (`123456`) para testar a visão de **Organizador** (gerenciar mensalistas, aba Financeiro/Caixa, sortear times por cores, dar baixa em pagamentos, promover co-organizador, adicionar convidados). Depois clique em *Perfil > Sair da Conta* e entre com `pedro@test.com` ou `lucas@test.com` para testar a visão de **Jogador** (ver chave Pix e quem já pagou, votar no craque, confirmar/cancelar presença, entrar no grupo do WhatsApp).
 
 ---
 
@@ -203,16 +204,27 @@ Este quadro acompanha onde cada parte do INFUT está hospedada hoje e o que falt
 
 ---
 
-## 6. Checklist para Publicação (Play Store & Web)
+## 6. Checklist e Opções para Publicação (Web Pública & Play Store)
 
-### 6.1. Publicação na Web
-1. Gerar o build estático da versão Web:
+### 6.1. Opções para Publicar o App Web com Link Público na Internet
+
+Como o INFUT Web (`mobile/`) consome a API REST (`backend/`), existem **3 caminhos práticos** para colocar o link público no ar:
+
+| Estratégia | Onde roda cada parte | Custo | Quando escolher |
+| :--- | :--- | :--- | :--- |
+| **Opção 1: Produção Gratuita e Permanente (Recomendada)** | **Web:** Vercel (`npx expo export -p web`)<br>**API:** Render / Railway<br>**Banco:** Neon / Supabase (PostgreSQL) | Gratuito (Free Tiers) | Para uso contínuo com link fixo (`https://infut.vercel.app`) sem precisar deixar seu PC ligado. |
+| **Opção 2: Plataforma Única Full-Stack** | **Web + API + PostgreSQL:** tudo no **Railway** ou **Render** | Gratuito / ~US$ 5/mês | Para gerenciar tudo (banco, API e frontend estático) em um único painel. |
+| **Opção 3: Link Instantâneo de Teste (Sem Nuvem)** | **Web + API + SQLite:** rodando no seu PC expostos via **Cloudflare Tunnel (`cloudflared`)** ou **Ngrok** | Gratuito | Para testar rápido com amigos hoje mesmo enquanto o seu computador estiver ligado. |
+
+#### Passos da Publicação Web (Opção 1 / Produção)
+1. Migrar o `datasource db` do Prisma para **PostgreSQL** (Neon ou Supabase) e publicar o `backend/` com HTTPS (Render ou Railway), rodando `npx prisma migrate deploy` e `npm run prisma:seed`.
+2. Gerar o build estático da versão Web apontando para a URL pública da API:
    ```bash
    cd mobile
    EXPO_PUBLIC_API_URL=https://sua-api-em-producao.com/api npx expo export --platform web
    ```
-2. Publicar a pasta `mobile/dist/` na **Vercel** ou **Netlify** com redirecionamento SPA habilitado e domínio configurado (ex.: `app.infut.com.br`).
-3. Criar páginas públicas estáticas de `/termos` e `/privacidade` (exigidas pela Google Play).
+3. Publicar a pasta `mobile/dist/` na **Vercel** ou **Netlify** (com rewrite de SPA para `index.html` e variável `EXPO_PUBLIC_API_URL` configurada no painel).
+4. Criar páginas públicas estáticas de `/termos` e `/privacidade` (exigidas pela Google Play).
 
 ### 6.2. Publicação na Google Play Store
 1. Instalar e logar no EAS CLI:

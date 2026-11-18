@@ -83,6 +83,8 @@ export const borderRadius = {
 
 export const layout = {
   maxWidth: 680,
+  tabletMaxWidth: 820,
+  desktopMaxWidth: 1120,
   authMaxWidth: 460,
 };
 

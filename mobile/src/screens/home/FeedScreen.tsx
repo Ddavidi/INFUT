@@ -14,21 +14,14 @@ import { useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { listPeladas, joinPeladaByCode } from '../../services/peladaService';
 import { Pelada } from '../../types';
-import { colors, fonts, spacing, borderRadius, layout, shadows } from '../../constants/theme';
+import { colors, fonts, spacing, borderRadius, shadows } from '../../constants/theme';
 import { showMessage } from '../../utils/alerts';
+import { formatPeladaSchedule } from '../../utils/dateTime';
+import { useResponsive } from '../../hooks/useResponsive';
 
 type Props = {
   navigation: NativeStackNavigationProp<any>;
 };
-
-function formatDate(dateStr: string): string {
-  const date = new Date(dateStr);
-  const day = date.getDate().toString().padStart(2, '0');
-  const month = (date.getMonth() + 1).toString().padStart(2, '0');
-  const hours = date.getHours().toString().padStart(2, '0');
-  const mins = date.getMinutes().toString().padStart(2, '0');
-  return `${day}/${month} às ${hours}:${mins}`;
-}
 
 function getStatusBadge(pelada: Pelada): { label: string; color: string; bg: string } {
   if (pelada.myRole === 'ORGANIZER') {
@@ -49,7 +42,15 @@ function getStatusBadge(pelada: Pelada): { label: string; color: string; bg: str
   return { label: 'Membro', color: colors.textSecondary, bg: colors.surfaceLight };
 }
 
-function PeladaCard({ pelada, onPress }: { pelada: Pelada; onPress: () => void }) {
+function PeladaCard({
+  pelada,
+  onPress,
+  isGrid,
+}: {
+  pelada: Pelada;
+  onPress: () => void;
+  isGrid?: boolean;
+}) {
   const sportEmojis: Record<string, string> = {
     Futebol: '⚽',
     Futsal: '🏟️',
@@ -68,7 +69,7 @@ function PeladaCard({ pelada, onPress }: { pelada: Pelada; onPress: () => void }
 
   return (
     <TouchableOpacity
-      style={styles.card}
+      style={[styles.card, isGrid && styles.cardGrid]}
       activeOpacity={0.8}
       onPress={onPress}
       accessibilityRole="button"
@@ -106,7 +107,9 @@ function PeladaCard({ pelada, onPress }: { pelada: Pelada; onPress: () => void }
       <View style={styles.cardInfoBlock}>
         <View style={styles.cardRow}>
           <Text style={styles.cardIcon}>📅</Text>
-          <Text style={styles.cardInfo}>{formatDate(pelada.dateTime)}</Text>
+          <Text style={styles.cardInfo}>
+            {formatPeladaSchedule(pelada.dateTime, pelada.durationHours, false)}
+          </Text>
         </View>
         <View style={styles.cardRow}>
           <Text style={styles.cardIcon}>📍</Text>
@@ -147,6 +150,7 @@ function PeladaCard({ pelada, onPress }: { pelada: Pelada; onPress: () => void }
 }
 
 export function FeedScreen({ navigation }: Props) {
+  const { isDesktop, numColumns, containerMaxWidth, pagePadding, topSpace } = useResponsive();
   const [peladas, setPeladas] = useState<Pelada[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -199,49 +203,65 @@ export function FeedScreen({ navigation }: Props) {
 
   return (
     <View style={styles.container}>
-      <View style={styles.headerWrapper}>
-        <View style={styles.headerTopRow}>
-          <View style={{ flex: 1, minWidth: 0 }}>
-            <Text style={styles.headerTitle}>INFUT</Text>
-            <Text style={styles.headerSubtitle}>Minhas peladas e convites</Text>
+      <View
+        style={[
+          styles.headerWrapper,
+          {
+            maxWidth: containerMaxWidth,
+            paddingHorizontal: pagePadding,
+            paddingTop: topSpace,
+          },
+        ]}
+      >
+        <View style={[isDesktop && styles.desktopHeaderRow]}>
+          <View style={[styles.headerTopRow, isDesktop && { flex: 1, marginBottom: 0 }]}>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={styles.headerTitle}>INFUT</Text>
+              <Text style={styles.headerSubtitle}>Minhas peladas e convites</Text>
+            </View>
+            <View style={styles.countPill}>
+              <Text style={styles.countPillText}>{peladas.length} jogos</Text>
+            </View>
           </View>
-          <View style={styles.countPill}>
-            <Text style={styles.countPillText}>{peladas.length} jogos</Text>
-          </View>
-        </View>
 
-        <View style={styles.joinCard}>
-          <Text style={styles.joinLabel}>ENTRAR COM CÓDIGO DE CONVITE</Text>
-          <View style={styles.joinBox}>
-            <TextInput
-              style={styles.joinInput}
-              placeholder="Código (ex: QUINTA)"
-              placeholderTextColor={colors.textMuted}
-              value={inviteCode}
-              onChangeText={setInviteCode}
-              autoCapitalize="characters"
-              autoCorrect={false}
-              accessibilityLabel="Código de convite da pelada"
-            />
-            <TouchableOpacity
-              style={[styles.joinButton, joining && { opacity: 0.6 }]}
-              onPress={handleJoinByCode}
-              disabled={joining}
-              accessibilityRole="button"
-              accessibilityLabel="Entrar com código de convite"
-            >
-              {joining ? (
-                <ActivityIndicator size="small" color={colors.textInverse} />
-              ) : (
-                <Text style={styles.joinButtonText}>Entrar</Text>
-              )}
-            </TouchableOpacity>
+          <View style={[styles.joinCard, isDesktop && { width: 380 }]}>
+            <Text style={styles.joinLabel}>ENTRAR COM CÓDIGO DE CONVITE</Text>
+            <View style={styles.joinBox}>
+              <TextInput
+                style={styles.joinInput}
+                placeholder="Código (ex: QUINTA)"
+                placeholderTextColor={colors.textMuted}
+                value={inviteCode}
+                onChangeText={setInviteCode}
+                autoCapitalize="characters"
+                autoCorrect={false}
+                accessibilityLabel="Código de convite da pelada"
+              />
+              <TouchableOpacity
+                style={[styles.joinButton, joining && { opacity: 0.6 }]}
+                onPress={handleJoinByCode}
+                disabled={joining}
+                accessibilityRole="button"
+                accessibilityLabel="Entrar com código de convite"
+              >
+                {joining ? (
+                  <ActivityIndicator size="small" color={colors.textInverse} />
+                ) : (
+                  <Text style={styles.joinButtonText}>Entrar</Text>
+                )}
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </View>
 
       {loading && peladas.length === 0 ? (
-        <View style={styles.loadingContainer}>
+        <View
+          style={[
+            styles.loadingContainer,
+            { maxWidth: containerMaxWidth, paddingHorizontal: pagePadding },
+          ]}
+        >
           <View style={styles.loadingCard}>
             <ActivityIndicator size="large" color={colors.primary} />
             <Text style={styles.loadingText}>Carregando suas peladas…</Text>
@@ -249,15 +269,26 @@ export function FeedScreen({ navigation }: Props) {
         </View>
       ) : (
         <FlatList
+          key={`feed-${numColumns}`}
           data={peladas}
+          numColumns={numColumns}
+          columnWrapperStyle={numColumns > 1 ? styles.gridRow : undefined}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => (
             <PeladaCard
               pelada={item}
+              isGrid={numColumns > 1}
               onPress={() => navigation.navigate('PeladaDetails', { peladaId: item.id })}
             />
           )}
-          contentContainerStyle={styles.list}
+          contentContainerStyle={[
+            styles.list,
+            {
+              maxWidth: containerMaxWidth,
+              paddingHorizontal: pagePadding,
+              paddingBottom: isDesktop ? spacing.xxl : 100,
+            },
+          ]}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
           }
@@ -298,11 +329,14 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   headerWrapper: {
     width: '100%',
-    maxWidth: layout.maxWidth,
     alignSelf: 'center',
-    paddingTop: 52,
-    paddingHorizontal: spacing.lg,
     paddingBottom: spacing.sm,
+  },
+  desktopHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.lg,
   },
   headerTopRow: {
     flexDirection: 'row',
@@ -353,11 +387,12 @@ const styles = StyleSheet.create({
   },
   joinBox: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: spacing.sm,
   },
   joinInput: {
     flex: 1,
-    minWidth: 0,
+    minWidth: 140,
     backgroundColor: colors.surfaceLight,
     borderWidth: 1,
     borderColor: colors.borderStrong,
@@ -385,9 +420,7 @@ const styles = StyleSheet.create({
   loadingContainer: {
     flex: 1,
     width: '100%',
-    maxWidth: layout.maxWidth,
     alignSelf: 'center',
-    paddingHorizontal: spacing.lg,
     paddingTop: spacing.lg,
   },
   loadingCard: {
@@ -406,11 +439,12 @@ const styles = StyleSheet.create({
   },
   list: {
     width: '100%',
-    maxWidth: layout.maxWidth,
     alignSelf: 'center',
-    paddingHorizontal: spacing.lg,
     paddingTop: spacing.sm,
-    paddingBottom: 100,
+  },
+  gridRow: {
+    gap: spacing.md,
+    alignItems: 'stretch',
   },
   card: {
     backgroundColor: colors.card,
@@ -420,6 +454,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     ...shadows.card,
+  },
+  cardGrid: {
+    flex: 1,
+    maxWidth: '49%',
   },
   cardHeader: {
     flexDirection: 'row',

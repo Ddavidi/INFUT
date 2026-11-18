@@ -96,8 +96,9 @@ O sistema adota controle de acesso baseado em papéis (**Role-Based Access Contr
 * **Eventos Únicos ou Recorrentes:**
   * Criação de jogos avulsos ou **Recorrentes Semanais** (ex.: *Toda Quinta-feira às 20h*), gerando automaticamente as próximas ocorrências no calendário.
 * **Configuração Completa do Evento:**
-  * Título, Modalidade Esportiva, Data e Horário de início/término.
+  * Título, Modalidade Esportiva, Data, Horário de Início e Duração em Horas (`durationHours`) com cálculo automático do horário de término.
   * Local (Nome da quadra/arena + Endereço completo com integração para abrir no Google Maps/Waze).
+  * Link opcional do grupo no WhatsApp (`whatsappGroupUrl`), exibindo botão direto *"Entrar no Grupo do WhatsApp"* e inclusão automática no texto de convite.
   * Limite máximo de jogadores de linha e vagas reservadas para goleiros.
   * Visibilidade: **Privada** (acesso apenas via link/código de convite) ou **Pública** (visível no mapa/feed para jogadores da mesma região).
 
@@ -117,22 +118,23 @@ O sistema adota controle de acesso baseado em papéis (**Role-Based Access Contr
 
 ### 3.5. Sorteio de Times e Operação de Jogo (Matchday)
 * **Sorteio Inteligente de Equipes:**
-  * Definição de quantos jogadores por time (ex.: 5x5 no Futsal, 7x7 no Society).
-  * Opção de **Sorteio Aleatório** ou **Sorteio Equilibrado por Posição** (garantindo que dois zagueiros ou dois goleiros não caiam todos no mesmo time e distribuindo atacantes/meias igualmente).
-  * Visualização das camisas/coletes (Time A, Time B, Time C / Próximo).
+  * Definição de quantos jogadores de linha por time (`playersPerTeam`, ex.: 5 na linha + 1 goleiro = máx. 6 atletas por equipe), respeitando estritamente o limite de vagas por equipe e listando atletas excedentes separadamente em **Próximo / De fora dos times**.
+  * Escolha livre da **quantidade de times** (2 a 8) e dos **nomes ou cores** de cada equipe (ex.: *Time Amarelo*, *Time Azul*, *Time Vermelho*, *Com Colete*, *Sem Colete*).
+  * Opção de **Sorteio Aleatório**, **Sorteio Equilibrado por Posição** (garantindo que dois zagueiros ou dois goleiros não caiam todos no mesmo time e distribuindo atacantes/meias igualmente) ou **Montagem Manual**.
+  * Visualização clara das equipes formadas e histórico de partidas.
 * **Placar, Cronômetro e Súmula Rápida:**
-  * Cronômetro regressivo de partida com alarme sonoro para troca de times.
-  * Registro rápido de gols/pontos por jogador durante ou após a partida.
+  * Cronômetro regressivo de partida com predefinições (7, 10 e 15 min) e alarme visual ao encerrar.
+  * Registro rápido de placar, vitórias, gols e assistências por jogador durante a pelada ao vivo.
 
 ### 3.6. Controle Financeiro e Rateio (Caixa da Pelada)
 * **Modalidades de Cobrança:**
   * Jogo Gratuito, Valor Fixo por Jogador (ex.: R$ 15,00 por pessoa) ou Rateio do Aluguel da Quadra.
-  * Diferenciação opcional entre **Mensalistas** (já pagos no mês) e **Diaristas/Avulsos** (pagam por jogo), além de isenção configurável para Goleiros.
-* **Integração Facilitada com Pix:**
-  * Cadastro da Chave Pix do organizador para cópia com 1 clique ("Pix Copia e Cola") direto na tela da pelada.
-* **Painel de Status de Pagamento:**
-  * Jogador clica em *"Já paguei"* (status muda para *Em análise*).
-  * Organizador/Co-organizador confere e dá baixa (*Pago* ✅ ou *Pendente* ⏳), visualizando o total arrecadado vs valor restante para fechar a quadra.
+  * Diferenciação entre **Mensalistas** e **Diaristas/Avulsos** (exclusiva para usuários com conta cadastrada — **convidados avulsos sem conta não podem ser definidos como mensalistas**), além de isenção configurável para Goleiros.
+* **Integração Facilitada com Pix (Visível para Todos):**
+  * O card **Chave Pix da Pelada** fica disponível na tela principal para todos os participantes copiarem a chave com 1 clique e informarem pagamento (*"Já Paguei via Pix"*).
+* **Visibilidade Financeira e Caixa Exclusivo dos Organizadores:**
+  * **Todos os participantes** podem visualizar o selo de status de pagamento (*Pago ✅*, *Em análise 🟡*, *Isento 🛡️*, *Pendente ⏳*) ao lado de cada jogador confirmado na lista de presença.
+  * A aba **Financeiro (Caixa)** — com totais arrecadados, previstos e botões de baixa manual — é visível **exclusivamente para Organizadores e Co-organizadores**.
 
 ### 3.7. Estatísticas, Gamificação e Resenha Pós-Jogo
 * **Votação de Destaques:**
@@ -222,8 +224,10 @@ Para garantir que o lançamento comercial ocorra sem bloqueios nas lojas e tenha
   * Compartilhamento da mesma API REST (`backend/`) e regras de negócio.
 * **Links Inteligentes e Prévia no WhatsApp (OpenGraph / Meta Tags):**
   * Ao colar o link de uma pelada no WhatsApp, deve aparecer automaticamente o título da pelada, data, local e número de vagas restantes.
-* **Layout Responsivo:**
-  * Adaptado tanto para quem abre o link pelo navegador do celular (Chrome/Safari Mobile) quanto para organizadores que acessam pelo computador/notebook.
+* **Layout Responsivo Completo (Mobile, Tablet e Desktop Web):**
+  * **Mobile (320px+):** Barra de navegação inferior, colunas empilhadas e quebra automática (`flexWrap`) em barras de ação e listas para evitar cortes em telas compactas.
+  * **Tablet (768px+):** Containers ampliados (`820px`) com melhor aproveitamento de largura.
+  * **Desktop Web (960px+):** Navegação convertida automaticamente em **Sidebar lateral esquerda**, grids de **2 colunas** nas listas (*Peladas*, *Explorar*, *Ranking*) e painéis divididos em 2 colunas nas telas de detalhes, jogo ao vivo, pós-jogo, gestão de membros e formulários (`1120px`).
 
 ### 5.3. Infraestrutura de Produção (Backend & Banco de Dados)
 * **Banco de Dados em Produção:** Migração do SQLite local de desenvolvimento para **PostgreSQL** gerenciado em nuvem (ex.: Supabase, Neon ou Railway) utilizando o **Prisma ORM**.
@@ -238,6 +242,6 @@ Para garantir que o lançamento comercial ocorra sem bloqueios nas lojas e tenha
 | **Fase 1: Fundação** | Autenticação, Perfil e Cadastro de Peladas | Login/Registro JWT, Edição de Perfil Esportivo, Criação de Pelada (com recorrência) e Feed básico. | ✅ Concluído |
 | **Fase 2: Core do MVP** | Presença, Detalhes e Convites | Tabela de Participantes, Tela de Detalhes da Pelada, Botão Confirmar/Sair, Lista de Espera, Edição de Pelada e Convite de Visitante. | ✅ Concluído |
 | **Fase 3: Dia de Jogo & Caixa** | Sorteio de Times e Controle Financeiro | Sorteio equilibrado por posição, Placar ao vivo, Check-in na quadra, Controle de Pagamentos (Pix / Mensalista / Diarista) e Co-organizador. | ✅ Concluído |
-| **Fase 4: Engajamento & Mapa** | Estatísticas, Avaliações e Geolocalização | Explorar por região/esporte, rota no Google Maps, registro de gols/vitórias, votação de Craque/Goleiro Paredão e Ranking geral. | ✅ Concluído |
+| **Fase 4: Engajamento & Responsividade** | Estatísticas, Avaliações, Busca e Layout Multi-tela | Explorar por região/esporte, rota no Google Maps, registro de gols/vitórias, votação de Craque/Goleiro Paredão, Ranking geral e responsividade completa (Mobile 320px+ & Desktop Web com Sidebar/2 colunas). | ✅ Concluído |
 | **Fase 5: Lançamento (Go-Live)** | Publicação Web e Google Play Store | Build Web em produção, PostgreSQL em nuvem, Termos/LGPD/Exclusão de Conta (prontos no app) e submissão na Google Play Store. | 🔄 Próximo Passo |
 

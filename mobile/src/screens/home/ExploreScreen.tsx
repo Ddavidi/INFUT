@@ -16,7 +16,9 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { explorePeladas } from '../../services/peladaService';
 import { Pelada } from '../../types';
 import { SPORTS } from '../../constants/sports';
-import { colors, fonts, spacing, borderRadius, layout, shadows } from '../../constants/theme';
+import { colors, fonts, spacing, borderRadius, shadows } from '../../constants/theme';
+import { formatPeladaSchedule } from '../../utils/dateTime';
+import { useResponsive } from '../../hooks/useResponsive';
 
 type Props = {
   navigation: NativeStackNavigationProp<any>;
@@ -35,16 +37,8 @@ const SPORT_EMOJIS: Record<string, string> = {
   'Tênis de Mesa': '🏓',
 };
 
-function formatDate(dateStr: string): string {
-  const date = new Date(dateStr);
-  const day = date.getDate().toString().padStart(2, '0');
-  const month = (date.getMonth() + 1).toString().padStart(2, '0');
-  const hours = date.getHours().toString().padStart(2, '0');
-  const mins = date.getMinutes().toString().padStart(2, '0');
-  return `${day}/${month} às ${hours}:${mins}`;
-}
-
 export function ExploreScreen({ navigation }: Props) {
+  const { isDesktop, numColumns, containerMaxWidth, pagePadding, topSpace } = useResponsive();
   const [peladas, setPeladas] = useState<Pelada[]>([]);
   const [selectedSport, setSelectedSport] = useState('Todos');
   const [search, setSearch] = useState('');
@@ -81,7 +75,16 @@ export function ExploreScreen({ navigation }: Props) {
 
   return (
     <View style={styles.container}>
-      <View style={styles.headerWrapper}>
+      <View
+        style={[
+          styles.headerWrapper,
+          {
+            maxWidth: containerMaxWidth,
+            paddingHorizontal: pagePadding,
+            paddingTop: topSpace,
+          },
+        ]}
+      >
         <Text style={styles.headerTitle}>Explorar</Text>
         <Text style={styles.headerSubtitle}>Encontre peladas públicas na sua região</Text>
 
@@ -124,7 +127,12 @@ export function ExploreScreen({ navigation }: Props) {
       </View>
 
       {loading && peladas.length === 0 ? (
-        <View style={styles.loadingContainer}>
+        <View
+          style={[
+            styles.loadingContainer,
+            { maxWidth: containerMaxWidth, paddingHorizontal: pagePadding },
+          ]}
+        >
           <View style={styles.loadingCard}>
             <ActivityIndicator size="large" color={colors.primary} />
             <Text style={styles.loadingText}>Buscando peladas públicas na região…</Text>
@@ -132,9 +140,19 @@ export function ExploreScreen({ navigation }: Props) {
         </View>
       ) : (
         <FlatList
+          key={`explore-${numColumns}`}
           data={peladas}
+          numColumns={numColumns}
+          columnWrapperStyle={numColumns > 1 ? styles.gridRow : undefined}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.list}
+          contentContainerStyle={[
+            styles.list,
+            {
+              maxWidth: containerMaxWidth,
+              paddingHorizontal: pagePadding,
+              paddingBottom: isDesktop ? spacing.xxl : 100,
+            },
+          ]}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
           }
@@ -146,7 +164,7 @@ export function ExploreScreen({ navigation }: Props) {
 
             return (
               <TouchableOpacity
-                style={styles.card}
+                style={[styles.card, numColumns > 1 && styles.cardGrid]}
                 activeOpacity={0.8}
                 onPress={() => navigation.navigate('PeladaDetails', { peladaId: item.id })}
                 accessibilityRole="button"
@@ -170,7 +188,9 @@ export function ExploreScreen({ navigation }: Props) {
                 </View>
 
                 <View style={styles.infoBlock}>
-                  <Text style={styles.cardInfo}>📅 {formatDate(item.dateTime)}</Text>
+                  <Text style={styles.cardInfo}>
+                    📅 {formatPeladaSchedule(item.dateTime, item.durationHours, false)}
+                  </Text>
                   <Text style={styles.cardInfo} numberOfLines={1}>
                     📍 {item.location}
                   </Text>
@@ -236,10 +256,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   headerWrapper: {
     width: '100%',
-    maxWidth: layout.maxWidth,
     alignSelf: 'center',
-    paddingTop: 52,
-    paddingHorizontal: spacing.lg,
     paddingBottom: spacing.sm,
   },
   headerTitle: { fontSize: fonts.sizes.xxl, fontWeight: '900', color: colors.textPrimary },
@@ -283,9 +300,7 @@ const styles = StyleSheet.create({
   loadingContainer: {
     flex: 1,
     width: '100%',
-    maxWidth: layout.maxWidth,
     alignSelf: 'center',
-    paddingHorizontal: spacing.lg,
     paddingTop: spacing.lg,
   },
   loadingCard: {
@@ -304,11 +319,12 @@ const styles = StyleSheet.create({
   },
   list: {
     width: '100%',
-    maxWidth: layout.maxWidth,
     alignSelf: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingBottom: 100,
     paddingTop: spacing.sm,
+  },
+  gridRow: {
+    gap: spacing.md,
+    alignItems: 'stretch',
   },
   card: {
     backgroundColor: colors.card,
@@ -319,8 +335,13 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     ...shadows.card,
   },
+  cardGrid: {
+    flex: 1,
+    maxWidth: '49%',
+  },
   cardTop: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'flex-start',
     marginBottom: spacing.sm + 4,
     gap: spacing.sm + 4,
@@ -369,8 +390,10 @@ const styles = StyleSheet.create({
   cardSubInfo: { fontSize: fonts.sizes.xs, lineHeight: 18, color: colors.textMuted, paddingLeft: 20 },
   cardFooter: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'space-between',
     alignItems: 'center',
+    gap: spacing.sm,
   },
   pricePill: {
     backgroundColor: colors.successSoft,

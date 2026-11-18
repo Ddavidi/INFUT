@@ -16,6 +16,7 @@ import { LegalModal } from '../../components/ui/LegalModal';
 import { useAuth } from '../../hooks/useAuth';
 import { colors, fonts, spacing, borderRadius, layout, shadows } from '../../constants/theme';
 import { showMessage } from '../../utils/alerts';
+import { useResponsive } from '../../hooks/useResponsive';
 
 type Props = {
   navigation: NativeStackNavigationProp<any>;
@@ -23,6 +24,7 @@ type Props = {
 
 export function RegisterScreen({ navigation }: Props) {
   const { signUp } = useAuth();
+  const { pagePadding } = useResponsive();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -62,7 +64,10 @@ export function RegisterScreen({ navigation }: Props) {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        contentContainerStyle={[styles.scroll, { paddingHorizontal: pagePadding }]}
+        keyboardShouldPersistTaps="handled"
+      >
         <View style={styles.authContainer}>
           <View style={styles.header}>
             <View style={styles.logoEmblem}>

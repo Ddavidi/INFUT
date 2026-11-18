@@ -20,6 +20,7 @@ import { getPublicPeladaByCode } from '../../services/peladaService';
 import { Pelada } from '../../types';
 import { colors, fonts, spacing, borderRadius, layout, shadows } from '../../constants/theme';
 import { showMessage } from '../../utils/alerts';
+import { useResponsive } from '../../hooks/useResponsive';
 
 type Props = {
   navigation: NativeStackNavigationProp<any>;
@@ -27,6 +28,7 @@ type Props = {
 
 export function LoginScreen({ navigation }: Props) {
   const { signIn } = useAuth();
+  const { isDesktop, pagePadding } = useResponsive();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -87,8 +89,11 @@ export function LoginScreen({ navigation }: Props) {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-        <View style={styles.authContainer}>
+      <ScrollView
+        contentContainerStyle={[styles.scroll, { paddingHorizontal: pagePadding }]}
+        keyboardShouldPersistTaps="handled"
+      >
+        <View style={[styles.authContainer, isDesktop && styles.authContainerDesktop]}>
           <View style={styles.header}>
             <View style={styles.logoEmblem}>
               <Text style={styles.emoji}>⚽</Text>
@@ -97,70 +102,77 @@ export function LoginScreen({ navigation }: Props) {
             <Text style={styles.subtitle}>Organize suas peladas sem bagunça</Text>
           </View>
 
-          <View style={styles.authCard}>
-            <Text style={styles.cardHeading}>Entrar na conta</Text>
-            <Input
-              label="E-mail"
-              placeholder="seu@email.com"
-              value={email}
-              onChangeText={setEmail}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-            <Input
-              label="Senha"
-              placeholder="Sua senha"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-            />
-
-            <Button title="Entrar" onPress={handleLogin} loading={loading} style={{ marginTop: spacing.xs }} />
-
-            <Button
-              title="Não tem conta? Criar agora"
-              onPress={() => navigation.navigate('Register')}
-              variant="ghost"
-              style={{ marginTop: spacing.sm }}
-            />
-          </View>
-
-          {/* Visitor Invite Preview */}
-          <View style={styles.visitorBox}>
-            <View style={styles.visitorBadgeRow}>
-              <View style={styles.visitorPill}>
-                <Text style={styles.visitorPillText}>MODO VISITANTE</Text>
-              </View>
-            </View>
-            <Text style={styles.visitorTitle}>Recebeu um código no WhatsApp?</Text>
-            <Text style={styles.visitorSubtitle}>
-              Confira local, horário e vagas antes mesmo de entrar.
-            </Text>
-            <View style={styles.visitorRow}>
-              <TextInput
-                style={styles.visitorInput}
-                placeholder="Ex: QUINTA"
-                placeholderTextColor={colors.textMuted}
-                value={inviteCode}
-                onChangeText={setInviteCode}
-                autoCapitalize="characters"
+          <View style={[isDesktop && styles.desktopCardsRow]}>
+            <View style={[styles.authCard, isDesktop && styles.desktopCardCol]}>
+              <Text style={styles.cardHeading}>Entrar na conta</Text>
+              <Input
+                label="E-mail"
+                placeholder="seu@email.com"
+                value={email}
+                onChangeText={setEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
                 autoCorrect={false}
-                accessibilityLabel="Código de convite"
               />
-              <TouchableOpacity
-                style={styles.visitorBtn}
-                onPress={handlePreviewInvite}
-                disabled={previewLoading}
-                accessibilityRole="button"
-                accessibilityLabel="Ver convite"
-              >
-                {previewLoading ? (
-                  <ActivityIndicator size="small" color={colors.primary} />
-                ) : (
-                  <Text style={styles.visitorBtnText}>Ver Convite</Text>
-                )}
-              </TouchableOpacity>
+              <Input
+                label="Senha"
+                placeholder="Sua senha"
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry
+              />
+
+              <Button title="Entrar" onPress={handleLogin} loading={loading} style={{ marginTop: spacing.xs }} />
+
+              <Button
+                title="Não tem conta? Criar agora"
+                onPress={() => navigation.navigate('Register')}
+                variant="ghost"
+                style={{ marginTop: spacing.sm }}
+              />
+            </View>
+
+            {/* Visitor Invite Preview */}
+            <View
+              style={[
+                styles.visitorBox,
+                isDesktop && [styles.desktopCardCol, { marginTop: 0 }],
+              ]}
+            >
+              <View style={styles.visitorBadgeRow}>
+                <View style={styles.visitorPill}>
+                  <Text style={styles.visitorPillText}>MODO VISITANTE</Text>
+                </View>
+              </View>
+              <Text style={styles.visitorTitle}>Recebeu um código no WhatsApp?</Text>
+              <Text style={styles.visitorSubtitle}>
+                Confira local, horário e vagas antes mesmo de entrar.
+              </Text>
+              <View style={styles.visitorRow}>
+                <TextInput
+                  style={styles.visitorInput}
+                  placeholder="Ex: QUINTA"
+                  placeholderTextColor={colors.textMuted}
+                  value={inviteCode}
+                  onChangeText={setInviteCode}
+                  autoCapitalize="characters"
+                  autoCorrect={false}
+                  accessibilityLabel="Código de convite"
+                />
+                <TouchableOpacity
+                  style={styles.visitorBtn}
+                  onPress={handlePreviewInvite}
+                  disabled={previewLoading}
+                  accessibilityRole="button"
+                  accessibilityLabel="Ver convite"
+                >
+                  {previewLoading ? (
+                    <ActivityIndicator size="small" color={colors.primary} />
+                  ) : (
+                    <Text style={styles.visitorBtnText}>Ver Convite</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
         </View>
@@ -261,13 +273,24 @@ const styles = StyleSheet.create({
   scroll: {
     flexGrow: 1,
     justifyContent: 'center',
-    paddingHorizontal: spacing.lg,
     paddingVertical: spacing.xl,
   },
   authContainer: {
     width: '100%',
     maxWidth: layout.authMaxWidth,
     alignSelf: 'center',
+  },
+  authContainerDesktop: {
+    maxWidth: 900,
+  },
+  desktopCardsRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.lg,
+  },
+  desktopCardCol: {
+    flex: 1,
+    minWidth: 0,
   },
   header: { alignItems: 'center', marginBottom: spacing.lg },
   logoEmblem: {
@@ -345,10 +368,10 @@ const styles = StyleSheet.create({
     marginTop: 2,
     marginBottom: spacing.sm + 2,
   },
-  visitorRow: { flexDirection: 'row', gap: spacing.sm },
+  visitorRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   visitorInput: {
     flex: 1,
-    minWidth: 0,
+    minWidth: 140,
     backgroundColor: colors.surfaceLight,
     borderWidth: 1,
     borderColor: colors.borderStrong,

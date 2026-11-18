@@ -137,6 +137,8 @@ export interface Pelada {
   goalkeepersExempt: boolean;
   playersPerTeam: number;
   cancelDeadlineHours: number;
+  durationHours: number;
+  whatsappGroupUrl: string | null;
   status: PeladaLifecycleStatus;
   organizerId: string;
   createdAt: string;
@@ -178,6 +180,8 @@ export interface CreatePeladaInput {
   goalkeepersExempt?: boolean;
   playersPerTeam?: number;
   cancelDeadlineHours?: number;
+  durationHours?: number;
+  whatsappGroupUrl?: string | null;
 }
 
 export interface UpdateProfileInput {
