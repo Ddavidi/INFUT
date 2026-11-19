@@ -62,6 +62,13 @@ export function PeladaDetailsScreen({ navigation, route }: Props) {
   const [showConfigModal, setShowConfigModal] = useState(false);
   const [configInitialTab, setConfigInitialTab] = useState<ConfigModalTab>('rules');
   const [rsvpPosition, setRsvpPosition] = useState<string>('');
+  const [expandGoalkeepers, setExpandGoalkeepers] = useState(true);
+  const [expandLineList, setExpandLineList] = useState(true);
+  const [showAllLinePlayers, setShowAllLinePlayers] = useState(false);
+  const [expandWaitlist, setExpandWaitlist] = useState(false);
+  const [expandDeclined, setExpandDeclined] = useState(false);
+  const [financeFilter, setFinanceFilter] = useState<'PENDING' | 'PAID' | 'ALL'>('PENDING');
+  const [expandFinanceList, setExpandFinanceList] = useState(true);
 
   const loadPelada = useCallback(async () => {
     try {
@@ -616,11 +623,7 @@ export function PeladaDetailsScreen({ navigation, route }: Props) {
             return (
               <View style={styles.positionPickerBlock}>
                 <Text style={styles.positionPickerLabel}>Posição nesta pelada (opcional):</Text>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  style={styles.positionScroll}
-                >
+                <View style={styles.positionWrapGrid}>
                   {linePositions.map((pos) => {
                     const selected = rsvpPosition === pos;
                     return (
@@ -655,7 +658,7 @@ export function PeladaDetailsScreen({ navigation, route }: Props) {
                       </TouchableOpacity>
                     );
                   })}
-                </ScrollView>
+                </View>
               </View>
             );
           })()}
@@ -709,41 +712,85 @@ export function PeladaDetailsScreen({ navigation, route }: Props) {
     </View>
   );
 
+  const displayedLinePlayers = showAllLinePlayers
+    ? confirmedLine
+    : confirmedLine.slice(0, 6);
+
   const rostersContent = (
     <>
       {/* Goalkeepers */}
       <View style={styles.sectionCard}>
-        <View style={styles.sectionHeaderRow}>
+        <TouchableOpacity
+          style={styles.accordionHeader}
+          onPress={() => setExpandGoalkeepers((v) => !v)}
+          accessibilityRole="button"
+          accessibilityLabel="Expandir ou recolher lista de goleiros"
+        >
           <Text style={styles.sectionTitleNoMargin}>Goleiros</Text>
-          <View style={styles.countTag}>
-            <Text style={styles.countTagText}>{confirmedGoalkeepers.length}</Text>
+          <View style={styles.accordionRight}>
+            <View style={styles.countTag}>
+              <Text style={styles.countTagText}>{confirmedGoalkeepers.length}</Text>
+            </View>
+            <Text style={styles.accordionChevron}>{expandGoalkeepers ? '▴' : '▾'}</Text>
           </View>
-        </View>
-        {confirmedGoalkeepers.length === 0 ? (
-          <Text style={styles.emptyListText}>Nenhum goleiro confirmado ainda.</Text>
-        ) : (
-          confirmedGoalkeepers.map((player, index) =>
-            renderPlayerRow(player, index, showPaymentStatusOnList)
+        </TouchableOpacity>
+        {expandGoalkeepers && (
+          confirmedGoalkeepers.length === 0 ? (
+            <Text style={[styles.emptyListText, { marginTop: spacing.sm }]}>
+              Nenhum goleiro confirmado ainda.
+            </Text>
+          ) : (
+            <View style={{ marginTop: spacing.xs }}>
+              {confirmedGoalkeepers.map((player, index) =>
+                renderPlayerRow(player, index, showPaymentStatusOnList)
+              )}
+            </View>
           )
         )}
       </View>
 
       {/* Confirmed Line Players */}
       <View style={styles.sectionCard}>
-        <View style={styles.sectionHeaderRow}>
+        <TouchableOpacity
+          style={styles.accordionHeader}
+          onPress={() => setExpandLineList((v) => !v)}
+          accessibilityRole="button"
+          accessibilityLabel="Expandir ou recolher confirmados na linha"
+        >
           <Text style={styles.sectionTitleNoMargin}>Confirmados na Linha</Text>
-          <View style={styles.countTag}>
-            <Text style={styles.countTagText}>
-              {confirmedLine.length}
-              {pelada.maxPlayers ? `/${pelada.maxPlayers}` : ''}
-            </Text>
+          <View style={styles.accordionRight}>
+            <View style={styles.countTag}>
+              <Text style={styles.countTagText}>
+                {confirmedLine.length}
+                {pelada.maxPlayers ? `/${pelada.maxPlayers}` : ''}
+              </Text>
+            </View>
+            <Text style={styles.accordionChevron}>{expandLineList ? '▴' : '▾'}</Text>
           </View>
-        </View>
-        {confirmedLine.length === 0 ? (
-          <Text style={styles.emptyListText}>Nenhum jogador de linha confirmado.</Text>
-        ) : (
-          confirmedLine.map((player, index) =>
-            renderPlayerRow(player, index, showPaymentStatusOnList)
+        </TouchableOpacity>
+        {expandLineList && (
+          confirmedLine.length === 0 ? (
+            <Text style={[styles.emptyListText, { marginTop: spacing.sm }]}>
+              Nenhum jogador de linha confirmado.
+            </Text>
+          ) : (
+            <View style={{ marginTop: spacing.xs }}>
+              {displayedLinePlayers.map((player, index) =>
+                renderPlayerRow(player, index, showPaymentStatusOnList)
+              )}
+              {confirmedLine.length > 6 && (
+                <TouchableOpacity
+                  style={styles.expandListBtn}
+                  onPress={() => setShowAllLinePlayers((v) => !v)}
+                >
+                  <Text style={styles.expandListBtnText}>
+                    {showAllLinePlayers
+                      ? 'Recolher lista ▴'
+                      : `Ver todos os ${confirmedLine.length} confirmados ▾`}
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
           )
         )}
       </View>
@@ -751,32 +798,56 @@ export function PeladaDetailsScreen({ navigation, route }: Props) {
       {/* Waitlist */}
       {waitlist.length > 0 && (
         <View style={styles.sectionCard}>
-          <View style={styles.sectionHeaderRow}>
+          <TouchableOpacity
+            style={styles.accordionHeader}
+            onPress={() => setExpandWaitlist((v) => !v)}
+            accessibilityRole="button"
+            accessibilityLabel="Expandir ou recolher lista de espera"
+          >
             <Text style={[styles.sectionTitleNoMargin, { color: colors.warning }]}>
               Lista de Espera (Suplentes)
             </Text>
-            <View style={[styles.countTag, { backgroundColor: colors.warningSoft }]}>
-              <Text style={[styles.countTagText, { color: colors.warning }]}>
-                {waitlist.length}
-              </Text>
+            <View style={styles.accordionRight}>
+              <View style={[styles.countTag, { backgroundColor: colors.warningSoft }]}>
+                <Text style={[styles.countTagText, { color: colors.warning }]}>
+                  {waitlist.length}
+                </Text>
+              </View>
+              <Text style={styles.accordionChevron}>{expandWaitlist ? '▴' : '▾'}</Text>
             </View>
-          </View>
-          {waitlist.map((player, index) => renderPlayerRow(player, index))}
+          </TouchableOpacity>
+          {expandWaitlist && (
+            <View style={{ marginTop: spacing.xs }}>
+              {waitlist.map((player, index) => renderPlayerRow(player, index))}
+            </View>
+          )}
         </View>
       )}
 
       {/* Declined */}
       {declined.length > 0 && (
         <View style={styles.sectionCard}>
-          <View style={styles.sectionHeaderRow}>
+          <TouchableOpacity
+            style={styles.accordionHeader}
+            onPress={() => setExpandDeclined((v) => !v)}
+            accessibilityRole="button"
+            accessibilityLabel="Expandir ou recolher jogadores que não vão"
+          >
             <Text style={[styles.sectionTitleNoMargin, { color: colors.textMuted }]}>
               Não vão
             </Text>
-            <View style={styles.countTag}>
-              <Text style={styles.countTagText}>{declined.length}</Text>
+            <View style={styles.accordionRight}>
+              <View style={styles.countTag}>
+                <Text style={styles.countTagText}>{declined.length}</Text>
+              </View>
+              <Text style={styles.accordionChevron}>{expandDeclined ? '▴' : '▾'}</Text>
             </View>
-          </View>
-          {declined.map((player, index) => renderPlayerRow(player, index))}
+          </TouchableOpacity>
+          {expandDeclined && (
+            <View style={{ marginTop: spacing.xs }}>
+              {declined.map((player, index) => renderPlayerRow(player, index))}
+            </View>
+          )}
         </View>
       )}
     </>
@@ -966,83 +1037,137 @@ export function PeladaDetailsScreen({ navigation, route }: Props) {
                 </View>
               ) : null}
 
-              {/* Payment List */}
+              {/* Payment List (Filterable & Collapsible) */}
               <View style={styles.sectionCard}>
-                <Text style={styles.sectionTitle}>Status por Jogador Confirmado</Text>
-                {allConfirmed.length === 0 ? (
-                  <Text style={styles.emptyListText}>Nenhum jogador confirmado.</Text>
-                ) : (
-                  allConfirmed.map((player) => {
-                    const pLabel = getPaymentLabel(player.paymentStatus);
-                    return (
-                      <View key={player.id} style={styles.financePlayerRow}>
-                        <View style={{ flex: 1 }}>
-                          <Text style={styles.playerName}>
-                            {player.displayName}
-                            {player.isGoalkeeper ? ' (Goleiro)' : ''}
-                          </Text>
-                          <View style={styles.paymentBadgeWrap}>
-                            <View style={[styles.paymentPill, { backgroundColor: pLabel.bg }]}>
-                              <Text style={[styles.paymentStatusText, { color: pLabel.color }]}>
-                                {pLabel.text}
-                              </Text>
-                            </View>
-                          </View>
-                        </View>
+                <TouchableOpacity
+                  style={styles.accordionHeader}
+                  onPress={() => setExpandFinanceList((v) => !v)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Expandir ou recolher lista de pagamentos"
+                >
+                  <Text style={styles.sectionTitleNoMargin}>
+                    Status por Jogador ({allConfirmed.length})
+                  </Text>
+                  <Text style={styles.accordionChevron}>{expandFinanceList ? '▴' : '▾'}</Text>
+                </TouchableOpacity>
 
-                        {canManage && (
-                          <View style={styles.counterGroup}>
+                {expandFinanceList && (() => {
+                  const filteredFinance = allConfirmed.filter((p) => {
+                    if (financeFilter === 'PENDING') {
+                      return p.paymentStatus === 'PENDING' || p.paymentStatus === 'WAITING_CONFIRMATION';
+                    }
+                    if (financeFilter === 'PAID') {
+                      return p.paymentStatus === 'PAID' || p.paymentStatus === 'EXEMPT';
+                    }
+                    return true;
+                  });
+                  return (
+                    <View style={{ marginTop: spacing.sm }}>
+                      <View style={styles.filterPillsRow}>
+                        {(
+                          [
+                            { key: 'PENDING', label: `Pendentes (${pelada.financialSummary.pendingCount + pelada.financialSummary.waitingCount})` },
+                            { key: 'PAID', label: `Pagos/Isentos (${pelada.financialSummary.paidCount + pelada.financialSummary.exemptCount})` },
+                            { key: 'ALL', label: `Todos (${allConfirmed.length})` },
+                          ] as { key: 'PENDING' | 'PAID' | 'ALL'; label: string }[]
+                        ).map((opt) => {
+                          const active = financeFilter === opt.key;
+                          return (
                             <TouchableOpacity
-                              style={[styles.miniPayBtn, { borderColor: colors.success }]}
-                              hitSlop={HIT_SLOP}
-                              accessibilityRole="button"
-                              accessibilityLabel={`Marcar pagamento de ${player.displayName} como Pago`}
-                              onPress={() =>
-                                runAction(() =>
-                                  updatePlayerPayment(pelada.id, player.id, 'PAID')
-                                )
-                              }
+                              key={opt.key}
+                              style={[styles.filterPillChip, active && styles.filterPillChipActive]}
+                              onPress={() => setFinanceFilter(opt.key)}
                             >
-                              <Text style={{ color: colors.success, fontSize: fonts.sizes.xs, fontWeight: '700' }}>
-                                Pago
+                              <Text
+                                style={[
+                                  styles.filterPillText,
+                                  active && styles.filterPillTextActive,
+                                ]}
+                              >
+                                {opt.label}
                               </Text>
                             </TouchableOpacity>
-                            <TouchableOpacity
-                              style={[styles.miniPayBtn, { borderColor: colors.error }]}
-                              hitSlop={HIT_SLOP}
-                              accessibilityRole="button"
-                              accessibilityLabel={`Marcar pagamento de ${player.displayName} como Pendente`}
-                              onPress={() =>
-                                runAction(() =>
-                                  updatePlayerPayment(pelada.id, player.id, 'PENDING')
-                                )
-                              }
-                            >
-                              <Text style={{ color: colors.error, fontSize: fonts.sizes.xs, fontWeight: '700' }}>
-                                Pend.
-                              </Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                              style={[styles.miniPayBtn, { borderColor: colors.info }]}
-                              hitSlop={HIT_SLOP}
-                              accessibilityRole="button"
-                              accessibilityLabel={`Marcar ${player.displayName} como Isento`}
-                              onPress={() =>
-                                runAction(() =>
-                                  updatePlayerPayment(pelada.id, player.id, 'EXEMPT')
-                                )
-                              }
-                            >
-                              <Text style={{ color: colors.info, fontSize: fonts.sizes.xs, fontWeight: '700' }}>
-                                Isento
-                              </Text>
-                            </TouchableOpacity>
-                          </View>
-                        )}
+                          );
+                        })}
                       </View>
-                    );
-                  })
-                )}
+
+                      {filteredFinance.length === 0 ? (
+                        <Text style={styles.emptyListText}>Nenhum jogador neste filtro.</Text>
+                      ) : (
+                        filteredFinance.map((player) => {
+                          const pLabel = getPaymentLabel(player.paymentStatus);
+                          return (
+                            <View key={player.id} style={styles.financePlayerRow}>
+                              <View style={{ flex: 1 }}>
+                                <Text style={styles.playerName}>
+                                  {player.displayName}
+                                  {player.isGoalkeeper ? ' (Goleiro)' : ''}
+                                </Text>
+                                <View style={styles.paymentBadgeWrap}>
+                                  <View style={[styles.paymentPill, { backgroundColor: pLabel.bg }]}>
+                                    <Text style={[styles.paymentStatusText, { color: pLabel.color }]}>
+                                      {pLabel.text}
+                                    </Text>
+                                  </View>
+                                </View>
+                              </View>
+
+                              {canManage && (
+                                <View style={styles.counterGroup}>
+                                  <TouchableOpacity
+                                    style={[styles.miniPayBtn, { borderColor: colors.success }]}
+                                    hitSlop={HIT_SLOP}
+                                    accessibilityRole="button"
+                                    accessibilityLabel={`Marcar pagamento de ${player.displayName} como Pago`}
+                                    onPress={() =>
+                                      runAction(() =>
+                                        updatePlayerPayment(pelada.id, player.id, 'PAID')
+                                      )
+                                    }
+                                  >
+                                    <Text style={{ color: colors.success, fontSize: fonts.sizes.xs, fontWeight: '700' }}>
+                                      Pago
+                                    </Text>
+                                  </TouchableOpacity>
+                                  <TouchableOpacity
+                                    style={[styles.miniPayBtn, { borderColor: colors.error }]}
+                                    hitSlop={HIT_SLOP}
+                                    accessibilityRole="button"
+                                    accessibilityLabel={`Marcar pagamento de ${player.displayName} como Pendente`}
+                                    onPress={() =>
+                                      runAction(() =>
+                                        updatePlayerPayment(pelada.id, player.id, 'PENDING')
+                                      )
+                                    }
+                                  >
+                                    <Text style={{ color: colors.error, fontSize: fonts.sizes.xs, fontWeight: '700' }}>
+                                      Pend.
+                                    </Text>
+                                  </TouchableOpacity>
+                                  <TouchableOpacity
+                                    style={[styles.miniPayBtn, { borderColor: colors.info }]}
+                                    hitSlop={HIT_SLOP}
+                                    accessibilityRole="button"
+                                    accessibilityLabel={`Marcar ${player.displayName} como Isento`}
+                                    onPress={() =>
+                                      runAction(() =>
+                                        updatePlayerPayment(pelada.id, player.id, 'EXEMPT')
+                                      )
+                                    }
+                                  >
+                                    <Text style={{ color: colors.info, fontSize: fonts.sizes.xs, fontWeight: '700' }}>
+                                      Isento
+                                    </Text>
+                                  </TouchableOpacity>
+                                </View>
+                              )}
+                            </View>
+                          );
+                        })
+                      )}
+                    </View>
+                  );
+                })()}
               </View>
             </View>
           )}
@@ -1417,8 +1542,10 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginBottom: spacing.xs + 2,
   },
-  positionScroll: {
-    flexGrow: 0,
+  positionWrapGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
   },
   positionChip: {
     backgroundColor: colors.surfaceLight,
@@ -1427,7 +1554,65 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.full,
     paddingHorizontal: spacing.md,
     paddingVertical: 6,
-    marginRight: spacing.xs + 2,
+  },
+  accordionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  accordionRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  accordionChevron: {
+    color: colors.primary,
+    fontSize: fonts.sizes.md,
+    fontWeight: '800',
+  },
+  expandListBtn: {
+    marginTop: spacing.sm + 2,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
+    backgroundColor: colors.surfaceLight,
+    alignItems: 'center',
+    minHeight: 40,
+    justifyContent: 'center',
+  },
+  expandListBtnText: {
+    color: colors.primary,
+    fontSize: fonts.sizes.xs,
+    fontWeight: '800',
+  },
+  filterPillsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: spacing.sm,
+  },
+  filterPillChip: {
+    backgroundColor: colors.surfaceLight,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: borderRadius.sm,
+    paddingHorizontal: spacing.sm + 2,
+    paddingVertical: 6,
+  },
+  filterPillChipActive: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primarySoft,
+  },
+  filterPillText: {
+    color: colors.textSecondary,
+    fontSize: fonts.sizes.xs,
+    fontWeight: '700',
+  },
+  filterPillTextActive: {
+    color: colors.primary,
+    fontWeight: '800',
   },
   positionChipSelected: {
     backgroundColor: colors.primarySoft,

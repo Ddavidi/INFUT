@@ -154,7 +154,7 @@ export function CreatePeladaScreen({ navigation }: Props) {
         />
 
         <Text style={styles.sectionLabel}>Esporte *</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.sportScroll}>
+        <View style={styles.chipsWrapGrid}>
           {SPORTS.map((s) => (
             <TouchableOpacity
               key={s.sport}
@@ -169,7 +169,7 @@ export function CreatePeladaScreen({ navigation }: Props) {
               </Text>
             </TouchableOpacity>
           ))}
-        </ScrollView>
+        </View>
       </View>
 
       {/* Secao 2: Data e Localizacao */}
@@ -209,7 +209,7 @@ export function CreatePeladaScreen({ navigation }: Props) {
         </View>
 
         <Text style={styles.sectionLabel}>Duração rápida</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.sportScroll}>
+        <View style={styles.chipsWrapGrid}>
           {DURATION_PRESETS.map((h) => {
             const selected = parseDurationHours(durationHours) === h;
             return (
@@ -227,7 +227,7 @@ export function CreatePeladaScreen({ navigation }: Props) {
               </TouchableOpacity>
             );
           })}
-        </ScrollView>
+        </View>
 
         {calculateEndTimeText(time, durationHours) ? (
           <View style={styles.endTimeBanner}>
@@ -362,7 +362,7 @@ export function CreatePeladaScreen({ navigation }: Props) {
       {isRecurring && (
         <>
           <Text style={[styles.sectionLabel, { marginTop: spacing.sm }]}>Dia da semana</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={[styles.sportScroll, { marginBottom: 0 }]}>
+          <View style={[styles.chipsWrapGrid, { marginBottom: 0 }]}>
             {DAYS.map((d) => (
               <TouchableOpacity
                 key={d.value}
@@ -377,7 +377,7 @@ export function CreatePeladaScreen({ navigation }: Props) {
                 </Text>
               </TouchableOpacity>
             ))}
-          </ScrollView>
+          </View>
         </>
       )}
     </View>
@@ -480,6 +480,12 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   sportScroll: { marginBottom: spacing.xs, flexGrow: 0 },
+  chipsWrapGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs + 2,
+    marginBottom: spacing.xs,
+  },
   sportChip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -488,8 +494,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     borderRadius: borderRadius.full,
     paddingHorizontal: spacing.md,
-    minHeight: 40,
-    marginRight: spacing.sm,
+    minHeight: 38,
   },
   sportChipSelected: { borderColor: colors.primary, backgroundColor: colors.primarySoft },
   sportEmoji: { fontSize: 18, marginRight: spacing.xs },

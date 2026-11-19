@@ -1,4 +1,4 @@
-// Post-Game Screen — 2-Step MVP Voting (Vote First -> Reveal Winners), Stats, WhatsApp & +7 Days Cycle
+// Post-Game Screen — 2-Step MVP Voting (Pop-up Modal), Compact Stats & Weekly Cycle
 import React, { useState, useCallback } from 'react';
 import {
   View,
@@ -8,6 +8,8 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
+  Modal,
+  TextInput,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -18,11 +20,10 @@ import {
   updatePeladaStatus,
   updatePeladaVotingStatus,
   updatePlayerCheckin,
-  voteGoalkeeper,
   voteMvp,
 } from '../../services/peladaService';
 import { Pelada, PeladaPlayer } from '../../types';
-import { colors, fonts, spacing, borderRadius, shadows } from '../../constants/theme';
+import { colors, fonts, spacing, borderRadius, shadows, layout } from '../../constants/theme';
 import { showConfirm, showMessage } from '../../utils/alerts';
 import { formatPeladaSchedule } from '../../utils/dateTime';
 import { buildInviteUrl, shareOrCopyText } from '../../utils/inviteLink';
@@ -40,7 +41,14 @@ export function PostGameScreen({ navigation, route }: Props) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
-  const [editingVote, setEditingVote] = useState(false);
+
+  // Pop-ups & Collapsibles to keep vertical screen compact
+  const [showVoteModal, setShowVoteModal] = useState(false);
+  const [voteSearch, setVoteSearch] = useState('');
+  const [showAbsenceModal, setShowAbsenceModal] = useState(false);
+  const [expandRankingList, setExpandRankingList] = useState(false);
+  const [expandMatches, setExpandMatches] = useState(true);
+  const [showAllStats, setShowAllStats] = useState(false);
 
   const loadPelada = useCallback(async () => {
     try {
@@ -103,10 +111,10 @@ export function PostGameScreen({ navigation, route }: Props) {
     if (!pelada) return;
     const votesCast = pelada.votesCastCount ?? 0;
     showConfirm(
-      'Encerrar Votação e Revelar Vencedores',
+      'Encerrar Votação e Revelar MVP',
       votesCast === 0
         ? 'Nenhum voto foi registrado ainda. Deseja encerrar a votação mesmo assim?'
-        : `${votesCast} voto(s) já foram registrados. Ao encerrar, o MVP e o Melhor Goleiro serão revelados para todos os participantes.`,
+        : `${votesCast} voto(s) já foram registrados. Ao encerrar, o vencedor do MVP será revelado para todos os participantes.`,
       () =>
         runAction(
           () => updatePeladaVotingStatus(pelada.id, 'CLOSED'),
@@ -141,10 +149,6 @@ export function PostGameScreen({ navigation, route }: Props) {
       pelada.mvpRanking.length > 0
         ? `\n\n*MVP da Pelada:* ${pelada.mvpRanking[0].displayName} (${pelada.mvpRanking[0].votes} voto(s))`
         : '';
-    const gkLine =
-      pelada.goalkeeperRanking.length > 0
-        ? `\n*Melhor Goleiro:* ${pelada.goalkeeperRanking[0].displayName} (${pelada.goalkeeperRanking[0].votes} voto(s))`
-        : '';
 
     const matchesBlock =
       pelada.matches.length > 0
@@ -174,7 +178,6 @@ export function PostGameScreen({ navigation, route }: Props) {
       `*Resenha Pós-Jogo — ${pelada.title}*\n` +
       `${formatPeladaSchedule(pelada.dateTime, pelada.durationHours)}` +
       mvpLine +
-      gkLine +
       matchesBlock +
       highlightsBlock +
       `\n\nConfira no INFUT: ${buildInviteUrl(pelada.inviteCode)}`;
@@ -182,7 +185,7 @@ export function PostGameScreen({ navigation, route }: Props) {
     await shareOrCopyText(
       'Resenha copiada',
       message,
-      'Resumo pós-jogo e vencedores copiados para colar no WhatsApp.'
+      'Resumo pós-jogo e MVP copiados para colar no WhatsApp.'
     );
   }
 
@@ -246,6 +249,8 @@ export function PostGameScreen({ navigation, route }: Props) {
       b.wins -
       (a.goals * 3 + a.assists * 2 + a.wins)
   );
+  const displayedStats = showAllStats ? sortedStats : sortedStats.slice(0, 5);
+  const noShowCount = allConfirmed.filter((p) => p.attendanceStatus === 'NO_SHOW').length;
 
   const votingStatus = pelada.votingStatus || 'OPEN';
   const isVotingOpen = votingStatus === 'OPEN';
@@ -257,264 +262,161 @@ export function PostGameScreen({ navigation, route }: Props) {
   );
   const hasVotedMvp = Boolean(pelada.myPlayer?.votedMvpForId);
   const myMvpTarget = allConfirmed.find((p) => p.id === pelada.myPlayer?.votedMvpForId);
-  const myGkTarget = allConfirmed.find((p) => p.id === pelada.myPlayer?.votedGoalkeeperForId);
 
   const votesCast = pelada.votesCastCount ?? 0;
   const eligibleCount = pelada.eligibleVotersCount ?? eligibleForVoting.length;
   const voteProgressPct =
     eligibleCount > 0 ? Math.min(100, Math.round((votesCast / eligibleCount) * 100)) : 0;
 
-  const stepHeaderCard = (
-    <View style={styles.stepBannerCard}>
-      <View style={styles.stepTopRow}>
-        <Text style={styles.stepEyebrow}>
-          {!isVotingOpen
-            ? 'RESULTADO OFICIAL DA PELADA'
-            : hasVotedMvp && !editingVote
-            ? 'ETAPA 2 DE 2 • VOTO REGISTRADO'
-            : 'ETAPA 1 DE 2 • VOTAÇÃO ABERTA'}
-        </Text>
-        <Text style={styles.voteProgressCount}>
-          {votesCast}/{eligibleCount} voto(s)
-        </Text>
-      </View>
+  const filteredVoteCandidates = eligibleForVoting.filter((p) => {
+    const q = voteSearch.trim().toLowerCase();
+    if (!q) return true;
+    return (
+      p.displayName.toLowerCase().includes(q) ||
+      (p.position || '').toLowerCase().includes(q)
+    );
+  });
 
-      <Text style={styles.stepTitle}>
-        {!isVotingOpen
-          ? 'Vencedores Revelados'
-          : hasVotedMvp && !editingVote
-          ? 'Aguardando encerramento da votação'
-          : 'Vote no MVP e no Melhor Goleiro'}
-      </Text>
-
-      <Text style={styles.stepSubtitle}>
-        {!isVotingOpen
-          ? 'A votação foi encerrada. Confira abaixo os campeões da votação e as estatísticas completas da pelada.'
-          : hasVotedMvp && !editingVote
-          ? 'Seu voto já está contabilizado. O resultado permanece secreto até todos votarem ou o organizador encerrar a votação.'
-          : 'Os votos são secretos nesta etapa. O vencedor só será revelado após a conclusão da votação.'}
-      </Text>
-
-      <View style={styles.progressTrack}>
-        <View style={[styles.progressFill, { width: `${voteProgressPct}%` }]} />
-      </View>
-
-      {isVotingOpen && canManage && (
-        <TouchableOpacity
-          style={styles.closeVotingBtn}
-          disabled={actionLoading}
-          onPress={handleCloseVoting}
-          accessibilityRole="button"
-          accessibilityLabel="Encerrar votação e revelar vencedores"
-        >
-          <Text style={styles.closeVotingBtnText}>
-            Encerrar Votação e Revelar Vencedores
-          </Text>
-        </TouchableOpacity>
-      )}
-    </View>
-  );
-
-  const votingOrWinnersColumn = (
+  const mvpColumn = (
     <>
       {isVotingOpen ? (
-        <>
-          {hasVotedMvp && !editingVote ? (
-            <View style={styles.sectionCard}>
-              <Text style={styles.sectionTitle}>Seu Voto Computado</Text>
-              <View style={styles.myVoteBox}>
-                <View style={styles.myVoteRow}>
-                  <Text style={styles.myVoteLabel}>MVP</Text>
-                  <Text style={styles.myVoteValue}>
-                    {myMvpTarget?.displayName || 'Selecionado'}
-                  </Text>
-                </View>
-                {myGkTarget ? (
-                  <View style={styles.myVoteRow}>
-                    <Text style={styles.myVoteLabel}>Melhor Goleiro</Text>
-                    <Text style={styles.myVoteValue}>{myGkTarget.displayName}</Text>
-                  </View>
-                ) : null}
-              </View>
-              {canVote && (
-                <TouchableOpacity
-                  style={styles.secondaryOutlineBtn}
-                  onPress={() => setEditingVote(true)}
-                >
-                  <Text style={styles.secondaryOutlineBtnText}>Alterar meu voto</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          ) : (
-            <View style={styles.sectionCard}>
-              <View style={styles.sectionHeaderRow}>
-                <Text style={styles.sectionTitleNoMargin}>Escolha os Destaques</Text>
-                {editingVote && (
-                  <TouchableOpacity onPress={() => setEditingVote(false)}>
-                    <Text style={styles.cancelEditText}>Cancelar</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-              <Text style={styles.helperText}>
-                {canVote
-                  ? 'Selecione o MVP da rodada e, se quiser, o Melhor Goleiro entre os jogadores presentes:'
-                  : 'Somente participantes confirmados que compareceram podem registrar voto.'}
-              </Text>
+        <View style={styles.stepBannerCard}>
+          <View style={styles.stepTopRow}>
+            <Text style={styles.stepEyebrow}>
+              {hasVotedMvp ? 'ETAPA 2 DE 2 • VOTO REGISTRADO' : 'ETAPA 1 DE 2 • VOTAÇÃO DO MVP'}
+            </Text>
+            <Text style={styles.voteProgressCount}>
+              {votesCast}/{eligibleCount} voto(s)
+            </Text>
+          </View>
 
-              {eligibleForVoting.length === 0 ? (
-                <Text style={[styles.emptyText, { marginTop: spacing.sm }]}>
-                  Nenhum jogador elegível para votação.
+          <Text style={styles.stepTitle}>
+            {hasVotedMvp ? `Seu voto: ${myMvpTarget?.displayName || 'Registrado'}` : 'Votação de MVP Aberta'}
+          </Text>
+
+          <Text style={styles.stepSubtitle}>
+            {hasVotedMvp
+              ? 'O vencedor permanece oculto até todos votarem ou o organizador encerrar a votação.'
+              : 'Os votos são secretos. O MVP só será revelado após o encerramento da votação.'}
+          </Text>
+
+          <View style={styles.progressTrack}>
+            <View style={[styles.progressFill, { width: `${voteProgressPct}%` }]} />
+          </View>
+
+          <View style={styles.votingButtonsStack}>
+            {canVote && (
+              <TouchableOpacity
+                style={[styles.primaryActionBtn, hasVotedMvp && styles.secondaryActionBtn]}
+                onPress={() => {
+                  setVoteSearch('');
+                  setShowVoteModal(true);
+                }}
+                accessibilityRole="button"
+                accessibilityLabel={hasVotedMvp ? 'Alterar meu voto de MVP' : 'Abrir votação de MVP'}
+              >
+                <Text style={hasVotedMvp ? styles.secondaryActionBtnText : styles.primaryActionBtnText}>
+                  {hasVotedMvp ? 'Alterar Meu Voto no MVP' : 'Votar no MVP da Pelada'}
                 </Text>
-              ) : (
-                eligibleForVoting.map((player) => {
-                  const isMyMvpVote = pelada.myPlayer?.votedMvpForId === player.id;
-                  const isMyGkVote = pelada.myPlayer?.votedGoalkeeperForId === player.id;
-                  return (
-                    <View key={player.id} style={styles.voteRow}>
-                      <View style={{ flex: 1, minWidth: 130 }}>
-                        <Text style={styles.playerName} numberOfLines={1}>
-                          {player.displayName}
-                          {player.isGoalkeeper ? ' (GOL)' : ''}
-                        </Text>
-                        <Text style={styles.statsLabel}>
-                          {player.goals} gol(s) • {player.assists} assist. • {player.wins} vit.
-                        </Text>
-                      </View>
+              </TouchableOpacity>
+            )}
 
-                      {canVote && (
-                        <View style={styles.voteActions}>
-                          <TouchableOpacity
-                            style={[styles.voteBtn, isMyMvpVote && styles.voteBtnActive]}
-                            disabled={actionLoading}
-                            hitSlop={HIT_SLOP}
-                            onPress={() =>
-                              runAction(async () => {
-                                const updated = await voteMvp(pelada.id, player.id);
-                                setEditingVote(false);
-                                return updated;
-                              })
-                            }
-                          >
-                            <Text
-                              style={[
-                                styles.voteBtnText,
-                                isMyMvpVote && { color: colors.textInverse },
-                              ]}
-                            >
-                              {isMyMvpVote ? 'MVP Selecionado' : 'Votar MVP'}
-                            </Text>
-                          </TouchableOpacity>
-
-                          {player.isGoalkeeper && (
-                            <TouchableOpacity
-                              style={[
-                                styles.voteBtn,
-                                { borderColor: colors.info },
-                                isMyGkVote && { backgroundColor: colors.info },
-                              ]}
-                              disabled={actionLoading}
-                              hitSlop={HIT_SLOP}
-                              onPress={() =>
-                                runAction(
-                                  () => voteGoalkeeper(pelada.id, player.id),
-                                  `Voto de Goleiro registrado em ${player.displayName}.`
-                                )
-                              }
-                            >
-                              <Text
-                                style={[
-                                  styles.voteBtnText,
-                                  { color: colors.info },
-                                  isMyGkVote && { color: colors.textInverse },
-                                ]}
-                              >
-                                {isMyGkVote ? 'Goleiro ✓' : 'Goleiro'}
-                              </Text>
-                            </TouchableOpacity>
-                          )}
-                        </View>
-                      )}
-                    </View>
-                  );
-                })
-              )}
-            </View>
-          )}
-        </>
+            {canManage && (
+              <TouchableOpacity
+                style={hasVotedMvp ? styles.primaryActionBtn : styles.secondaryActionBtn}
+                disabled={actionLoading}
+                onPress={handleCloseVoting}
+                accessibilityRole="button"
+                accessibilityLabel="Encerrar votação e revelar MVP"
+              >
+                <Text
+                  style={
+                    hasVotedMvp ? styles.primaryActionBtnText : styles.secondaryActionBtnText
+                  }
+                >
+                  Encerrar Votação e Revelar Vencedor
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
       ) : (
         <>
-          {/* OFFICIAL WINNERS REVEAL */}
-          {pelada.mvpRanking.length > 0 || pelada.goalkeeperRanking.length > 0 ? (
-            <View style={styles.winnersHighlightCard}>
-              <Text style={styles.winnersEyebrow}>CAMPEÕES DA RODADA</Text>
-              {pelada.mvpRanking.length > 0 && (
-                <View style={styles.winnerRow}>
-                  <View style={styles.winnerBadge}>
-                    <Text style={styles.winnerBadgeText}>MVP</Text>
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.winnerName}>{pelada.mvpRanking[0].displayName}</Text>
-                    <Text style={styles.winnerVotes}>
-                      {pelada.mvpRanking[0].votes} voto(s)
-                    </Text>
-                  </View>
-                </View>
-              )}
-              {pelada.goalkeeperRanking.length > 0 && (
-                <View style={styles.winnerRow}>
-                  <View style={[styles.winnerBadge, { borderColor: colors.info, backgroundColor: colors.infoSoft }]}>
-                    <Text style={[styles.winnerBadgeText, { color: colors.info }]}>GOL</Text>
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.winnerName}>{pelada.goalkeeperRanking[0].displayName}</Text>
-                    <Text style={styles.winnerVotes}>
-                      {pelada.goalkeeperRanking[0].votes} voto(s)
-                    </Text>
-                  </View>
-                </View>
-              )}
+          <View style={styles.winnersHighlightCard}>
+            <View style={styles.stepTopRow}>
+              <Text style={styles.winnersEyebrow}>RESULTADO OFICIAL • MVP DA PELADA</Text>
+              <Text style={styles.voteProgressCount}>{votesCast} voto(s)</Text>
             </View>
-          ) : (
-            <View style={styles.sectionCard}>
-              <Text style={styles.sectionTitle}>Resultado da Votação</Text>
+
+            {pelada.mvpRanking.length > 0 ? (
+              <View style={styles.winnerRow}>
+                <View style={styles.winnerBadge}>
+                  <Text style={styles.winnerBadgeText}>MVP</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.winnerName}>{pelada.mvpRanking[0].displayName}</Text>
+                  <Text style={styles.winnerVotes}>
+                    {pelada.mvpRanking[0].votes} voto(s) computado(s)
+                  </Text>
+                </View>
+              </View>
+            ) : (
               <Text style={styles.emptyText}>Nenhum voto foi registrado nesta pelada.</Text>
-            </View>
-          )}
+            )}
 
-          {pelada.mvpRanking.length > 0 && (
-            <View style={styles.sectionCard}>
-              <Text style={styles.sectionTitle}>Classificação MVP</Text>
-              {pelada.mvpRanking.map((entry, idx) => (
-                <View key={entry.playerId} style={styles.rankRow}>
-                  <Text style={styles.rankName}>
-                    {idx + 1}º {entry.displayName}
-                  </Text>
-                  <Text style={styles.rankVotes}>{entry.votes} voto(s)</Text>
-                </View>
-              ))}
-            </View>
-          )}
+            {pelada.mvpRanking.length > 1 && (
+              <TouchableOpacity
+                style={styles.accordionSubBtn}
+                onPress={() => setExpandRankingList((v) => !v)}
+              >
+                <Text style={styles.accordionSubBtnText}>
+                  {expandRankingList
+                    ? 'Ocultar classificação de votos ▴'
+                    : `Ver classificação completa (${pelada.mvpRanking.length}) ▾`}
+                </Text>
+              </TouchableOpacity>
+            )}
 
-          {pelada.goalkeeperRanking.length > 0 && (
-            <View style={styles.sectionCard}>
-              <Text style={styles.sectionTitle}>Classificação Melhor Goleiro</Text>
-              {pelada.goalkeeperRanking.map((entry, idx) => (
-                <View key={entry.playerId} style={styles.rankRow}>
-                  <Text style={styles.rankName}>
-                    {idx + 1}º {entry.displayName}
-                  </Text>
-                  <Text style={styles.rankVotes}>{entry.votes} voto(s)</Text>
-                </View>
-              ))}
-            </View>
-          )}
+            {expandRankingList && pelada.mvpRanking.length > 0 && (
+              <View style={styles.rankListBox}>
+                {pelada.mvpRanking.map((entry, idx) => (
+                  <View key={entry.playerId} style={styles.rankRow}>
+                    <Text style={styles.rankName}>
+                      {idx + 1}º {entry.displayName}
+                    </Text>
+                    <Text style={styles.rankVotes}>{entry.votes} voto(s)</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+          </View>
 
           {canManage && (
             <TouchableOpacity style={styles.reopenBtn} onPress={handleReopenVoting}>
-              <Text style={styles.reopenBtnText}>Reabrir Votação</Text>
+              <Text style={styles.reopenBtnText}>Reabrir Votação de MVP</Text>
             </TouchableOpacity>
           )}
         </>
+      )}
+
+      {/* Weekly Cycle + Reopen Live (placed compactly) */}
+      {canManage && (
+        <View style={styles.sectionCard}>
+          <Text style={styles.sectionTitle}>Ciclo Semanal</Text>
+          <Text style={styles.helperText}>
+            Crie a edição da próxima semana (+7 dias) mantendo o código #{pelada.inviteCode}, os
+            membros e todas as regras configuradas.
+          </Text>
+          <TouchableOpacity
+            style={styles.nextCycleBtn}
+            disabled={actionLoading}
+            onPress={handleStartNextCycle}
+            accessibilityRole="button"
+            accessibilityLabel="Preparar próxima pelada em 7 dias"
+          >
+            <Text style={styles.nextCycleBtnText}>Preparar Próxima Pelada (+7 dias)</Text>
+          </TouchableOpacity>
+        </View>
       )}
     </>
   );
@@ -526,42 +428,67 @@ export function PostGameScreen({ navigation, route }: Props) {
 
         {pelada.matches.length > 0 && (
           <View style={styles.matchesSummaryBox}>
-            <Text style={styles.subLabel}>Placares registrados:</Text>
-            {pelada.matches.map((m) => (
-              <View key={m.id} style={styles.matchHistoryRow}>
-                <Text style={styles.matchScoreText}>
-                  {m.teamAName} {m.scoreA} x {m.scoreB} {m.teamBName}
-                </Text>
-                <View style={styles.winnerPill}>
-                  <Text style={styles.matchWinnerText}>
-                    {m.winner === 'EMPATE' ? 'Empate' : m.winner}
+            <TouchableOpacity
+              style={styles.accordionHeader}
+              onPress={() => setExpandMatches((v) => !v)}
+            >
+              <Text style={styles.subLabel}>
+                Placares registrados ({pelada.matches.length})
+              </Text>
+              <Text style={styles.accordionChevron}>{expandMatches ? '▴' : '▾'}</Text>
+            </TouchableOpacity>
+
+            {expandMatches &&
+              pelada.matches.map((m) => (
+                <View key={m.id} style={styles.matchHistoryRow}>
+                  <Text style={styles.matchScoreText}>
+                    {m.teamAName} {m.scoreA} x {m.scoreB} {m.teamBName}
                   </Text>
+                  <View style={styles.winnerPill}>
+                    <Text style={styles.matchWinnerText}>
+                      {m.winner === 'EMPATE' ? 'Empate' : m.winner}
+                    </Text>
+                  </View>
                 </View>
-              </View>
-            ))}
+              ))}
           </View>
         )}
 
-        <Text style={[styles.subLabel, { marginTop: pelada.matches.length > 0 ? spacing.md : 0 }]}>
-          Desempenho dos atletas:
+        <Text style={[styles.subLabel, { marginTop: pelada.matches.length > 0 ? spacing.sm : 0 }]}>
+          Destaques em campo:
         </Text>
         {sortedStats.length === 0 ? (
           <Text style={styles.emptyText}>Nenhuma estatística registrada.</Text>
         ) : (
-          sortedStats.map((player, idx) => (
-            <View key={player.id} style={styles.statLineRow}>
-              <Text style={styles.statRankNum}>{idx + 1}º</Text>
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={styles.playerName} numberOfLines={1}>
-                  {player.displayName}
-                  {player.attendanceStatus === 'NO_SHOW' ? ' (Faltou)' : ''}
-                </Text>
-                <Text style={styles.statsLabel}>
-                  {player.goals} gol(s) • {player.assists} assist. • {player.wins} vit.
-                </Text>
+          <>
+            {displayedStats.map((player, idx) => (
+              <View key={player.id} style={styles.statLineRow}>
+                <Text style={styles.statRankNum}>{idx + 1}º</Text>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={styles.playerName} numberOfLines={1}>
+                    {player.displayName}
+                    {player.attendanceStatus === 'NO_SHOW' ? ' (Faltou)' : ''}
+                  </Text>
+                  <Text style={styles.statsLabel}>
+                    {player.goals} gol(s) • {player.assists} assist. • {player.wins} vit.
+                  </Text>
+                </View>
               </View>
-            </View>
-          ))
+            ))}
+
+            {sortedStats.length > 5 && (
+              <TouchableOpacity
+                style={styles.accordionSubBtn}
+                onPress={() => setShowAllStats((v) => !v)}
+              >
+                <Text style={styles.accordionSubBtnText}>
+                  {showAllStats
+                    ? 'Mostrar apenas Top 5 ▴'
+                    : `Ver todos os ${sortedStats.length} atletas ▾`}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </>
         )}
 
         {!isVotingOpen && (
@@ -580,83 +507,22 @@ export function PostGameScreen({ navigation, route }: Props) {
 
       {canManage && (
         <View style={styles.sectionCard}>
-          <Text style={styles.sectionTitle}>Controle de Faltas</Text>
-          <Text style={styles.helperText}>
-            Marque apenas quem confirmou vaga e não compareceu ao jogo:
-          </Text>
-
-          {allConfirmed.length === 0 ? (
-            <Text style={[styles.emptyText, { marginTop: spacing.sm }]}>
-              Nenhum jogador confirmado nesta lista.
-            </Text>
-          ) : (
-            allConfirmed.map((player) => {
-              const isNoShow = player.attendanceStatus === 'NO_SHOW';
-              return (
-                <View key={player.id} style={styles.absenceRow}>
-                  <View style={{ flex: 1, minWidth: 140 }}>
-                    <Text style={styles.playerName} numberOfLines={1}>
-                      {player.displayName}
-                    </Text>
-                    <Text
-                      style={[
-                        styles.absenceSub,
-                        { color: isNoShow ? colors.error : colors.success },
-                      ]}
-                    >
-                      {isNoShow
-                        ? 'Marcado como falta'
-                        : player.attendanceStatus === 'INJURED'
-                        ? 'Compareceu (saiu por lesão)'
-                        : 'Compareceu'}
-                    </Text>
-                  </View>
-                  <TouchableOpacity
-                    style={[styles.absenceBtn, isNoShow && styles.absenceBtnActive]}
-                    disabled={actionLoading}
-                    hitSlop={HIT_SLOP}
-                    onPress={() =>
-                      runAction(() =>
-                        updatePlayerCheckin(pelada.id, player.id, {
-                          attendanceStatus: isNoShow ? 'PRESENT' : 'NO_SHOW',
-                        })
-                      )
-                    }
-                  >
-                    <Text
-                      style={[
-                        styles.absenceBtnText,
-                        isNoShow && { color: colors.error },
-                      ]}
-                    >
-                      {isNoShow ? 'Desmarcar falta' : 'Marcar falta'}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              );
-            })
-          )}
-        </View>
-      )}
-
-      {canManage && (
-        <View style={styles.sectionCard}>
-          <Text style={styles.sectionTitle}>Ciclo Semanal da Pelada</Text>
-          <Text style={styles.helperText}>
-            Abra a edição da próxima semana (+7 dias) mantendo o código #{pelada.inviteCode}, os
-            membros do grupo e todas as regras configuradas.
-          </Text>
-          <TouchableOpacity
-            style={styles.nextCycleBtn}
-            disabled={actionLoading}
-            onPress={handleStartNextCycle}
-            accessibilityRole="button"
-            accessibilityLabel="Preparar próxima pelada em 7 dias"
-          >
-            <Text style={styles.nextCycleBtnText}>
-              Preparar Próxima Pelada (+7 dias)
-            </Text>
-          </TouchableOpacity>
+          <View style={styles.sectionHeaderRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.sectionTitleNoMargin}>Controle de Faltas</Text>
+              <Text style={styles.helperTextNoMargin}>
+                {noShowCount === 0
+                  ? 'Nenhuma falta marcada entre os confirmados.'
+                  : `${noShowCount} jogador(es) marcado(s) como falta.`}
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={styles.compactOpenBtn}
+              onPress={() => setShowAbsenceModal(true)}
+            >
+              <Text style={styles.compactOpenBtnText}>Gerenciar</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       )}
 
@@ -728,21 +594,174 @@ export function PostGameScreen({ navigation, route }: Props) {
         }
       >
         <View style={[styles.pageContainer, { maxWidth: containerMaxWidth }]}>
-          {stepHeaderCard}
-
           {isDesktop ? (
             <View style={styles.desktopColumns}>
-              <View style={styles.desktopLeftCol}>{votingOrWinnersColumn}</View>
+              <View style={styles.desktopLeftCol}>{mvpColumn}</View>
               <View style={styles.desktopRightCol}>{statsAndManageColumn}</View>
             </View>
           ) : (
             <>
-              {votingOrWinnersColumn}
+              {mvpColumn}
               {statsAndManageColumn}
             </>
           )}
         </View>
       </ScrollView>
+
+      {/* POP-UP MODAL: VOTAÇÃO DE MVP */}
+      <Modal
+        visible={showVoteModal}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setShowVoteModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.stepEyebrow}>ESCOLHA O CRAQUE DA RODADA</Text>
+                <Text style={styles.modalTitle}>Votar no MVP da Pelada</Text>
+              </View>
+              <TouchableOpacity
+                style={styles.modalCloseBtn}
+                onPress={() => setShowVoteModal(false)}
+                accessibilityRole="button"
+                accessibilityLabel="Fechar votação de MVP"
+              >
+                <Text style={styles.modalCloseText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <TextInput
+              style={styles.modalSearchInput}
+              placeholder="Buscar jogador por nome ou posição..."
+              placeholderTextColor={colors.textMuted}
+              value={voteSearch}
+              onChangeText={setVoteSearch}
+            />
+
+            <ScrollView showsVerticalScrollIndicator style={{ maxHeight: 420 }}>
+              {filteredVoteCandidates.length === 0 ? (
+                <Text style={styles.emptyText}>Nenhum jogador encontrado.</Text>
+              ) : (
+                filteredVoteCandidates.map((player) => {
+                  const isSelected = pelada.myPlayer?.votedMvpForId === player.id;
+                  return (
+                    <View key={player.id} style={styles.modalRow}>
+                      <View style={{ flex: 1, minWidth: 120 }}>
+                        <Text style={styles.playerName} numberOfLines={1}>
+                          {player.displayName}
+                          {player.isGoalkeeper ? ' (GOL)' : ''}
+                        </Text>
+                        <Text style={styles.statsLabel}>
+                          {player.position ? `${player.position} • ` : ''}
+                          {player.goals}G • {player.assists}A • {player.wins}V
+                        </Text>
+                      </View>
+                      <TouchableOpacity
+                        style={[styles.voteBtn, isSelected && styles.voteBtnActive]}
+                        disabled={actionLoading}
+                        onPress={() =>
+                          runAction(async () => {
+                            const updated = await voteMvp(pelada.id, player.id);
+                            setShowVoteModal(false);
+                            return updated;
+                          })
+                        }
+                      >
+                        <Text
+                          style={[
+                            styles.voteBtnText,
+                            isSelected && { color: colors.textInverse },
+                          ]}
+                        >
+                          {isSelected ? 'Selecionado ✓' : 'Votar MVP'}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  );
+                })
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* POP-UP MODAL: CONTROLE DE FALTAS */}
+      {canManage && (
+        <Modal
+          visible={showAbsenceModal}
+          animationType="fade"
+          transparent
+          onRequestClose={() => setShowAbsenceModal(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalCard}>
+              <View style={styles.modalHeader}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.stepEyebrow}>ORGANIZADOR</Text>
+                  <Text style={styles.modalTitle}>Controle de Faltas</Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.modalCloseBtn}
+                  onPress={() => setShowAbsenceModal(false)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Fechar controle de faltas"
+                >
+                  <Text style={styles.modalCloseText}>✕</Text>
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView showsVerticalScrollIndicator style={{ maxHeight: 440 }}>
+                {allConfirmed.map((player) => {
+                  const isNoShow = player.attendanceStatus === 'NO_SHOW';
+                  return (
+                    <View key={player.id} style={styles.modalRow}>
+                      <View style={{ flex: 1, minWidth: 120 }}>
+                        <Text style={styles.playerName} numberOfLines={1}>
+                          {player.displayName}
+                        </Text>
+                        <Text
+                          style={[
+                            styles.absenceSub,
+                            { color: isNoShow ? colors.error : colors.success },
+                          ]}
+                        >
+                          {isNoShow
+                            ? 'Marcado como falta'
+                            : player.attendanceStatus === 'INJURED'
+                            ? 'Compareceu (saiu por lesão)'
+                            : 'Compareceu'}
+                        </Text>
+                      </View>
+                      <TouchableOpacity
+                        style={[styles.absenceBtn, isNoShow && styles.absenceBtnActive]}
+                        disabled={actionLoading}
+                        onPress={() =>
+                          runAction(() =>
+                            updatePlayerCheckin(pelada.id, player.id, {
+                              attendanceStatus: isNoShow ? 'PRESENT' : 'NO_SHOW',
+                            })
+                          )
+                        }
+                      >
+                        <Text
+                          style={[
+                            styles.absenceBtnText,
+                            isNoShow && { color: colors.error },
+                          ]}
+                        >
+                          {isNoShow ? 'Desmarcar' : 'Faltou'}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  );
+                })}
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
+      )}
     </View>
   );
 }
@@ -839,7 +858,7 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.lg,
     borderWidth: 1,
     borderColor: colors.borderStrong,
-    padding: spacing.md + 4,
+    padding: spacing.md + 2,
     marginBottom: spacing.md,
     gap: spacing.xs + 2,
     ...shadows.card,
@@ -869,8 +888,8 @@ const styles = StyleSheet.create({
   },
   stepSubtitle: {
     color: colors.textSecondary,
-    fontSize: fonts.sizes.sm,
-    lineHeight: 20,
+    fontSize: fonts.sizes.xs + 1,
+    lineHeight: 19,
   },
   progressTrack: {
     height: 6,
@@ -886,8 +905,11 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
     borderRadius: borderRadius.full,
   },
-  closeVotingBtn: {
+  votingButtonsStack: {
+    gap: spacing.sm,
     marginTop: spacing.sm,
+  },
+  primaryActionBtn: {
     backgroundColor: colors.primary,
     borderRadius: borderRadius.md,
     paddingVertical: spacing.sm + 5,
@@ -896,10 +918,27 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     minHeight: 46,
   },
-  closeVotingBtnText: {
+  primaryActionBtnText: {
     color: colors.textInverse,
     fontSize: fonts.sizes.sm,
     fontWeight: '800',
+    textAlign: 'center',
+  },
+  secondaryActionBtn: {
+    backgroundColor: colors.surfaceLight,
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing.sm + 4,
+    paddingHorizontal: spacing.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 46,
+  },
+  secondaryActionBtnText: {
+    color: colors.textPrimary,
+    fontSize: fonts.sizes.sm,
+    fontWeight: '700',
     textAlign: 'center',
   },
   desktopColumns: {
@@ -928,29 +967,29 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: spacing.xs + 2,
+    gap: spacing.sm,
   },
   sectionTitle: {
     fontSize: fonts.sizes.md,
     fontWeight: '800',
     color: colors.textPrimary,
-    marginBottom: spacing.sm + 2,
+    marginBottom: spacing.sm,
   },
   sectionTitleNoMargin: {
     fontSize: fonts.sizes.md,
     fontWeight: '800',
     color: colors.textPrimary,
   },
-  cancelEditText: {
-    color: colors.primary,
-    fontSize: fonts.sizes.xs,
-    fontWeight: '700',
-  },
   helperText: {
     color: colors.textSecondary,
     fontSize: fonts.sizes.xs + 1,
     lineHeight: 18,
     marginBottom: spacing.sm,
+  },
+  helperTextNoMargin: {
+    color: colors.textSecondary,
+    fontSize: fonts.sizes.xs,
+    marginTop: 2,
   },
   subLabel: {
     color: colors.textSecondary,
@@ -963,54 +1002,14 @@ const styles = StyleSheet.create({
     fontSize: fonts.sizes.sm,
     fontStyle: 'italic',
   },
-  myVoteBox: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
-    padding: spacing.md,
-    gap: spacing.sm,
-    marginBottom: spacing.md,
-  },
-  myVoteRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  myVoteLabel: {
-    color: colors.textMuted,
-    fontSize: fonts.sizes.xs,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-  },
-  myVoteValue: {
-    color: colors.primary,
-    fontSize: fonts.sizes.md,
-    fontWeight: '800',
-  },
-  secondaryOutlineBtn: {
-    borderWidth: 1,
-    borderColor: colors.borderStrong,
-    backgroundColor: colors.surfaceLight,
-    borderRadius: borderRadius.md,
-    paddingVertical: spacing.sm + 3,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 44,
-  },
-  secondaryOutlineBtnText: {
-    color: colors.textPrimary,
-    fontSize: fonts.sizes.xs + 1,
-    fontWeight: '700',
-  },
   winnersHighlightCard: {
     backgroundColor: colors.surfaceElevated,
     borderRadius: borderRadius.lg,
     borderWidth: 1,
     borderColor: colors.primary,
-    padding: spacing.md + 4,
+    padding: spacing.md + 2,
     marginBottom: spacing.md,
-    gap: spacing.md,
+    gap: spacing.sm + 2,
     ...shadows.card,
   },
   winnersEyebrow: {
@@ -1049,67 +1048,69 @@ const styles = StyleSheet.create({
     fontSize: fonts.sizes.xs,
     fontWeight: '600',
   },
+  rankListBox: {
+    marginTop: spacing.xs,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
   rankRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: colors.borderLight,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderLight,
   },
   rankName: {
     color: colors.textPrimary,
-    fontSize: fonts.sizes.sm + 1,
+    fontSize: fonts.sizes.sm,
     fontWeight: '700',
   },
   rankVotes: {
     color: colors.primary,
-    fontSize: fonts.sizes.sm,
+    fontSize: fonts.sizes.xs + 1,
     fontWeight: '800',
     fontVariant: ['tabular-nums'],
   },
-  voteRow: {
+  accordionHeader: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: spacing.sm + 4,
-    borderTopWidth: 1,
-    borderTopColor: colors.borderLight,
-    gap: spacing.sm,
   },
-  playerName: {
-    color: colors.textPrimary,
-    fontSize: fonts.sizes.sm + 1,
-    fontWeight: '700',
+  accordionChevron: {
+    color: colors.primary,
+    fontSize: fonts.sizes.md,
+    fontWeight: '800',
   },
-  statsLabel: {
-    color: colors.textSecondary,
-    fontSize: fonts.sizes.xs,
-    marginTop: 2,
-    fontVariant: ['tabular-nums'],
-  },
-  voteActions: {
-    flexDirection: 'row',
-    gap: spacing.xs + 2,
-    alignItems: 'center',
-  },
-  voteBtn: {
-    borderWidth: 1,
-    borderColor: colors.primary,
+  accordionSubBtn: {
+    marginTop: spacing.sm,
+    paddingVertical: spacing.sm,
     borderRadius: borderRadius.md,
-    paddingHorizontal: spacing.sm + 4,
-    paddingVertical: spacing.xs + 3,
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
+    backgroundColor: colors.surfaceLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 40,
+  },
+  accordionSubBtnText: {
+    color: colors.primary,
+    fontSize: fonts.sizes.xs,
+    fontWeight: '800',
+  },
+  compactOpenBtn: {
+    backgroundColor: colors.surfaceLight,
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.md,
     minHeight: 40,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  voteBtnActive: {
-    backgroundColor: colors.primary,
-  },
-  voteBtnText: {
-    color: colors.primary,
-    fontSize: fonts.sizes.xs + 1,
+  compactOpenBtnText: {
+    color: colors.textPrimary,
+    fontSize: fonts.sizes.xs,
     fontWeight: '800',
   },
   matchesSummaryBox: {
@@ -1119,7 +1120,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: spacing.sm,
+    paddingVertical: spacing.xs + 4,
     borderTopWidth: 1,
     borderTopColor: colors.borderLight,
     gap: spacing.sm,
@@ -1135,7 +1136,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.borderStrong,
     paddingHorizontal: spacing.sm + 2,
-    paddingVertical: 4,
+    paddingVertical: 3,
     borderRadius: borderRadius.full,
   },
   matchWinnerText: {
@@ -1147,60 +1148,36 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm + 2,
-    paddingVertical: spacing.sm,
+    paddingVertical: spacing.xs + 4,
     borderTopWidth: 1,
     borderTopColor: colors.borderLight,
   },
   statRankNum: {
-    width: 28,
+    width: 26,
     color: colors.primary,
     fontSize: fonts.sizes.sm,
     fontWeight: '800',
   },
-  absenceRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: spacing.sm + 2,
-    borderTopWidth: 1,
-    borderTopColor: colors.borderLight,
-    gap: spacing.sm,
-  },
-  absenceSub: {
-    fontSize: fonts.sizes.xs,
+  playerName: {
+    color: colors.textPrimary,
+    fontSize: fonts.sizes.sm,
     fontWeight: '700',
-    marginTop: 2,
   },
-  absenceBtn: {
-    borderWidth: 1,
-    borderColor: colors.borderStrong,
-    backgroundColor: colors.surfaceLight,
-    borderRadius: borderRadius.md,
-    paddingHorizontal: spacing.sm + 4,
-    paddingVertical: spacing.xs + 3,
-    minHeight: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  absenceBtnActive: {
-    borderColor: colors.error,
-    backgroundColor: colors.errorSoft,
-  },
-  absenceBtnText: {
+  statsLabel: {
     color: colors.textSecondary,
-    fontSize: fonts.sizes.xs + 1,
-    fontWeight: '700',
+    fontSize: fonts.sizes.xs,
+    marginTop: 2,
+    fontVariant: ['tabular-nums'],
   },
   reopenBtn: {
     borderWidth: 1,
     borderColor: colors.borderStrong,
     backgroundColor: colors.surfaceLight,
     borderRadius: borderRadius.md,
-    paddingVertical: spacing.sm + 4,
+    paddingVertical: spacing.sm + 3,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 46,
+    minHeight: 44,
     marginBottom: spacing.md,
   },
   reopenBtnText: {
@@ -1218,27 +1195,134 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 46,
+    minHeight: 44,
   },
   whatsappShareBtnText: {
     color: colors.textPrimary,
-    fontSize: fonts.sizes.sm,
+    fontSize: fonts.sizes.xs + 1,
     fontWeight: '700',
     textAlign: 'center',
   },
   nextCycleBtn: {
     backgroundColor: colors.primary,
     borderRadius: borderRadius.md,
-    paddingVertical: spacing.sm + 6,
+    paddingVertical: spacing.sm + 5,
     paddingHorizontal: spacing.md,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 48,
+    minHeight: 46,
   },
   nextCycleBtnText: {
     color: colors.textInverse,
-    fontSize: fonts.sizes.sm + 1,
+    fontSize: fonts.sizes.sm,
     fontWeight: '800',
     textAlign: 'center',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: colors.overlay,
+    justifyContent: 'center',
+    padding: spacing.md,
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: layout.maxWidth,
+    alignSelf: 'center',
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
+    padding: spacing.lg,
+    maxHeight: '88%',
+    ...shadows.card,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.md,
+    gap: spacing.sm,
+  },
+  modalTitle: {
+    color: colors.textPrimary,
+    fontSize: fonts.sizes.lg,
+    fontWeight: '800',
+    marginTop: 2,
+  },
+  modalCloseBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: borderRadius.sm,
+    backgroundColor: colors.surfaceLight,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalCloseText: {
+    color: colors.textSecondary,
+    fontSize: fonts.sizes.md,
+    fontWeight: '700',
+  },
+  modalSearchInput: {
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 10,
+    color: colors.textPrimary,
+    fontSize: fonts.sizes.sm,
+    marginBottom: spacing.sm + 2,
+  },
+  modalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: spacing.sm + 2,
+    borderTopWidth: 1,
+    borderTopColor: colors.borderLight,
+    gap: spacing.sm,
+  },
+  voteBtn: {
+    borderWidth: 1,
+    borderColor: colors.primary,
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.md,
+    minHeight: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  voteBtnActive: {
+    backgroundColor: colors.primary,
+  },
+  voteBtnText: {
+    color: colors.primary,
+    fontSize: fonts.sizes.xs + 1,
+    fontWeight: '800',
+  },
+  absenceSub: {
+    fontSize: fonts.sizes.xs,
+    fontWeight: '700',
+    marginTop: 2,
+  },
+  absenceBtn: {
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
+    backgroundColor: colors.surfaceLight,
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.md,
+    minHeight: 38,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  absenceBtnActive: {
+    borderColor: colors.error,
+    backgroundColor: colors.errorSoft,
+  },
+  absenceBtnText: {
+    color: colors.textPrimary,
+    fontSize: fonts.sizes.xs,
+    fontWeight: '700',
   },
 });

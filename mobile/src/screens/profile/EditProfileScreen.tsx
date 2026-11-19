@@ -222,7 +222,7 @@ export function EditProfileScreen() {
         />
 
         <Text style={styles.sectionLabel}>Esporte Favorito</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.horizontalScroll}>
+        <View style={styles.chipsWrapGrid}>
           {SPORTS.map((s) => (
             <TouchableOpacity
               key={s.sport}
@@ -240,7 +240,7 @@ export function EditProfileScreen() {
               </Text>
             </TouchableOpacity>
           ))}
-        </ScrollView>
+        </View>
 
         {positions.length > 0 && (
           <>
@@ -505,6 +505,12 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
   },
   horizontalScroll: { marginBottom: spacing.md, flexGrow: 0 },
+  chipsWrapGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs + 2,
+    marginBottom: spacing.md,
+  },
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -514,8 +520,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     borderRadius: borderRadius.full,
     paddingHorizontal: spacing.md,
-    minHeight: 40,
-    marginRight: spacing.sm,
+    minHeight: 38,
   },
   chipSelected: { borderColor: colors.primary, backgroundColor: colors.primarySoft },
   chipEmoji: { fontSize: 18, marginRight: spacing.xs },

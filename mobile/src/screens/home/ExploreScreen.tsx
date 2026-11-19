@@ -101,11 +101,7 @@ export function ExploreScreen({ navigation }: Props) {
           />
         </View>
 
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.filterScroll}
-        >
+        <View style={styles.filterWrapGrid}>
           {SPORT_FILTERS.map((sport) => {
             const active = selectedSport === sport;
             return (
@@ -123,7 +119,7 @@ export function ExploreScreen({ navigation }: Props) {
               </TouchableOpacity>
             );
           })}
-        </ScrollView>
+        </View>
       </View>
 
       {loading && peladas.length === 0 ? (
@@ -279,16 +275,21 @@ const styles = StyleSheet.create({
     fontSize: fonts.sizes.md,
   },
   filterScroll: { flexGrow: 0, marginBottom: spacing.xs },
+  filterWrapGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs + 2,
+    marginBottom: spacing.xs,
+  },
   filterChip: {
     backgroundColor: colors.surfaceLight,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: borderRadius.full,
     paddingHorizontal: spacing.md,
-    minHeight: 40,
+    minHeight: 36,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: spacing.sm,
   },
   filterChipActive: {
     backgroundColor: colors.primarySoft,

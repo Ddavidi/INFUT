@@ -1125,109 +1125,193 @@ export class PeladaService {
 
     matches.push(newMatch);
 
-    // Winner stays + waiting queue + random draw from previous loser pool
+    // Winner stays + waiting queue + random draw from previous loser pool (supports 'AMBOS' on tie)
     if (
       envelope.config.gameMode === 'WINNER_STAYS_QUEUE' &&
       teams.length >= 2 &&
       (envelope.waitingQueue.length > 0 || envelope.lastLoserPool.length > 0)
     ) {
-      let leavingIdx = -1;
-      if (winner !== 'EMPATE') {
-        leavingIdx = teams.findIndex(
-          (t) =>
-            (t.name === data.teamAName || t.name === data.teamBName) &&
-            t.name !== winner
-        );
-      } else if (data.leavingTeamName) {
-        leavingIdx = teams.findIndex((t) => t.name === data.leavingTeamName);
-      }
-      if (leavingIdx === -1) {
-        leavingIdx = 1;
-      }
-
-      const stayingIdx = leavingIdx === 0 ? 1 : 0;
-      const stayingTeam = teams[stayingIdx];
-      const losingTeam = teams[leavingIdx];
       const perTeam = envelope.config.playersPerTeam || pelada.playersPerTeam || 5;
-
       const waitingLine = envelope.waitingQueue.filter((p) => !p.isGoalkeeper);
       const waitingGks = envelope.waitingQueue.filter((p) => p.isGoalkeeper);
       const lastLoserLine = envelope.lastLoserPool.filter((p) => !p.isGoalkeeper);
       const lastLoserGks = envelope.lastLoserPool.filter((p) => p.isGoalkeeper);
-      const losingTeamLine = losingTeam.players.filter((p) => !p.isGoalkeeper);
-      const losingTeamGks = losingTeam.players.filter((p) => p.isGoalkeeper);
 
-      const takenFromQueue = waitingLine.slice(0, perTeam);
-      const remainingQueue = waitingLine.slice(perTeam);
-      const nextLine: DrawnTeamPlayer[] = [...takenFromQueue];
-      let drawnFromLoser: DrawnTeamPlayer[] = [];
-      let newWaitingLine: DrawnTeamPlayer[] = [];
-      let newLastLoserLine: DrawnTeamPlayer[] = [];
+      if (winner === 'EMPATE' && data.leavingTeamName === 'AMBOS') {
+        const team0 = teams[0];
+        const team1 = teams[1];
+        const team0Line = team0.players.filter((p) => !p.isGoalkeeper);
+        const team1Line = team1.players.filter((p) => !p.isGoalkeeper);
+        const bothTieLine = [...team0Line, ...team1Line];
+        const bothTieGks = [
+          ...team0.players.filter((p) => p.isGoalkeeper),
+          ...team1.players.filter((p) => p.isGoalkeeper),
+        ];
 
-      if (takenFromQueue.length < perTeam) {
-        const needed = perTeam - takenFromQueue.length;
-        if (lastLoserLine.length > 0) {
-          const shuffledLastLoser = shuffleArray(lastLoserLine);
-          drawnFromLoser = shuffledLastLoser.slice(0, needed);
-          const notDrawnFromLastLoser = shuffledLastLoser.slice(needed);
-          nextLine.push(...drawnFromLoser);
-          // Players not drawn from last loser wait guaranteed at the front of the next queue
-          newWaitingLine = [...remainingQueue, ...notDrawnFromLastLoser];
-          newLastLoserLine = losingTeamLine;
+        const totalNeeded = perTeam * 2;
+        const takenFromQueue = waitingLine.slice(0, totalNeeded);
+        const remainingQueue = waitingLine.slice(totalNeeded);
+        const combinedNextLine: DrawnTeamPlayer[] = [...takenFromQueue];
+        const drawnFromPool: DrawnTeamPlayer[] = [];
+        let newWaitingLine: DrawnTeamPlayer[] = [...remainingQueue];
+        let newLastLoserLine: DrawnTeamPlayer[] = [];
+
+        if (combinedNextLine.length < totalNeeded) {
+          const need1 = totalNeeded - combinedNextLine.length;
+          if (lastLoserLine.length > 0) {
+            const shuffledLast = shuffleArray(lastLoserLine);
+            const pickLast = shuffledLast.slice(0, need1);
+            const leftLast = shuffledLast.slice(need1);
+            combinedNextLine.push(...pickLast);
+            drawnFromPool.push(...pickLast);
+            newWaitingLine.push(...leftLast);
+          }
+
+          if (combinedNextLine.length < totalNeeded) {
+            const need2 = totalNeeded - combinedNextLine.length;
+            const shuffledTie = shuffleArray(bothTieLine);
+            const pickTie = shuffledTie.slice(0, need2);
+            const leftTie = shuffledTie.slice(need2);
+            combinedNextLine.push(...pickTie);
+            drawnFromPool.push(...pickTie);
+            newWaitingLine.push(...leftTie);
+            newLastLoserLine = [];
+          } else {
+            newLastLoserLine = bothTieLine;
+          }
         } else {
-          const shuffledCurrentLoser = shuffleArray(losingTeamLine);
-          drawnFromLoser = shuffledCurrentLoser.slice(0, needed);
-          const notDrawnFromCurrentLoser = shuffledCurrentLoser.slice(needed);
-          nextLine.push(...drawnFromLoser);
-          newWaitingLine = notDrawnFromCurrentLoser;
-          newLastLoserLine = [];
+          newWaitingLine = [...remainingQueue, ...lastLoserLine];
+          newLastLoserLine = bothTieLine;
         }
+
+        const nextLine0 = combinedNextLine.filter((_, idx) => idx % 2 === 0);
+        const nextLine1 = combinedNextLine.filter((_, idx) => idx % 2 === 1);
+
+        const allOutGks = [...waitingGks, ...lastLoserGks];
+        let gk0: DrawnTeamPlayer[] = [];
+        let gk1: DrawnTeamPlayer[] = [];
+        let newOutGks: DrawnTeamPlayer[] = [];
+
+        if (allOutGks.length >= 2) {
+          gk0 = [allOutGks[0]];
+          gk1 = [allOutGks[1]];
+          newOutGks = [...allOutGks.slice(2), ...bothTieGks];
+        } else if (allOutGks.length === 1) {
+          gk0 = [allOutGks[0]];
+          gk1 = bothTieGks.slice(0, 1);
+          newOutGks = bothTieGks.slice(1);
+        } else {
+          gk0 = bothTieGks[0] ? [bothTieGks[0]] : [];
+          gk1 = bothTieGks[1] ? [bothTieGks[1]] : [];
+          newOutGks = bothTieGks.slice(2);
+        }
+
+        envelope.teams = [
+          { name: team0.name, players: [...gk0, ...nextLine0] },
+          { name: team1.name, players: [...gk1, ...nextLine1] },
+        ];
+        envelope.waitingQueue = [...newWaitingLine, ...newOutGks];
+        envelope.lastLoserPool = newLastLoserLine;
+
+        const parts: string[] = [];
+        if (takenFromQueue.length > 0) {
+          parts.push(`Da fila (${takenFromQueue.length}): ${takenFromQueue.map((p) => p.name).join(', ')}`);
+        }
+        if (drawnFromPool.length > 0) {
+          parts.push(`Sorteados para completar (${drawnFromPool.length}): ${drawnFromPool.map((p) => p.name).join(', ')}`);
+        }
+        envelope.lastRotationSummary = `Empate: saíram ambos os times! Novos ${team0.name} e ${team1.name} em quadra — ${parts.join(' • ')}.`;
       } else {
-        newWaitingLine = [...remainingQueue, ...lastLoserLine];
-        newLastLoserLine = losingTeamLine;
+        let leavingIdx = -1;
+        if (winner !== 'EMPATE') {
+          leavingIdx = teams.findIndex(
+            (t) =>
+              (t.name === data.teamAName || t.name === data.teamBName) &&
+              t.name !== winner
+          );
+        } else if (data.leavingTeamName) {
+          leavingIdx = teams.findIndex((t) => t.name === data.leavingTeamName);
+        }
+        if (leavingIdx === -1) {
+          leavingIdx = 1;
+        }
+
+        const stayingIdx = leavingIdx === 0 ? 1 : 0;
+        const stayingTeam = teams[stayingIdx];
+        const losingTeam = teams[leavingIdx];
+        const losingTeamLine = losingTeam.players.filter((p) => !p.isGoalkeeper);
+        const losingTeamGks = losingTeam.players.filter((p) => p.isGoalkeeper);
+
+        const takenFromQueue = waitingLine.slice(0, perTeam);
+        const remainingQueue = waitingLine.slice(perTeam);
+        const nextLine: DrawnTeamPlayer[] = [...takenFromQueue];
+        let drawnFromLoser: DrawnTeamPlayer[] = [];
+        let newWaitingLine: DrawnTeamPlayer[] = [];
+        let newLastLoserLine: DrawnTeamPlayer[] = [];
+
+        if (takenFromQueue.length < perTeam) {
+          const needed = perTeam - takenFromQueue.length;
+          if (lastLoserLine.length > 0) {
+            const shuffledLastLoser = shuffleArray(lastLoserLine);
+            drawnFromLoser = shuffledLastLoser.slice(0, needed);
+            const notDrawnFromLastLoser = shuffledLastLoser.slice(needed);
+            nextLine.push(...drawnFromLoser);
+            newWaitingLine = [...remainingQueue, ...notDrawnFromLastLoser];
+            newLastLoserLine = losingTeamLine;
+          } else {
+            const shuffledCurrentLoser = shuffleArray(losingTeamLine);
+            drawnFromLoser = shuffledCurrentLoser.slice(0, needed);
+            const notDrawnFromCurrentLoser = shuffledCurrentLoser.slice(needed);
+            nextLine.push(...drawnFromLoser);
+            newWaitingLine = notDrawnFromCurrentLoser;
+            newLastLoserLine = [];
+          }
+        } else {
+          newWaitingLine = [...remainingQueue, ...lastLoserLine];
+          newLastLoserLine = losingTeamLine;
+        }
+
+        const allOutGks = [...waitingGks, ...lastLoserGks];
+        let nextGks: DrawnTeamPlayer[] = [];
+        let newOutGks: DrawnTeamPlayer[] = [];
+        if (allOutGks.length > 0) {
+          nextGks = [allOutGks[0]];
+          newOutGks = [...allOutGks.slice(1), ...losingTeamGks];
+        } else {
+          nextGks = losingTeamGks.slice(0, 1);
+        }
+
+        const newChallengingTeam: DrawnTeam = {
+          name: losingTeam.name,
+          players: [...nextGks, ...nextLine],
+        };
+
+        const nextTeams =
+          stayingIdx === 0
+            ? [stayingTeam, newChallengingTeam]
+            : [newChallengingTeam, stayingTeam];
+
+        envelope.teams = nextTeams;
+        envelope.waitingQueue = [...newWaitingLine, ...newOutGks];
+        envelope.lastLoserPool = newLastLoserLine;
+
+        const parts: string[] = [];
+        if (takenFromQueue.length > 0) {
+          parts.push(
+            `Da fila (${takenFromQueue.length}): ${takenFromQueue.map((p) => p.name).join(', ')}`
+          );
+        }
+        if (drawnFromLoser.length > 0) {
+          parts.push(
+            `Sorteados do perdedor (${drawnFromLoser.length}): ${drawnFromLoser
+              .map((p) => p.name)
+              .join(', ')}`
+          );
+        }
+        envelope.lastRotationSummary = `${stayingTeam.name} permanece. Entraram em ${newChallengingTeam.name} — ${parts.join(
+          ' • '
+        )}.`;
       }
-
-      const allOutGks = [...waitingGks, ...lastLoserGks];
-      let nextGks: DrawnTeamPlayer[] = [];
-      let newOutGks: DrawnTeamPlayer[] = [];
-      if (allOutGks.length > 0) {
-        nextGks = [allOutGks[0]];
-        newOutGks = [...allOutGks.slice(1), ...losingTeamGks];
-      } else {
-        // Only 2 goalkeepers active -> GK stays on goal
-        nextGks = losingTeamGks.slice(0, 1);
-      }
-
-      const newChallengingTeam: DrawnTeam = {
-        name: losingTeam.name,
-        players: [...nextGks, ...nextLine],
-      };
-
-      const nextTeams =
-        stayingIdx === 0
-          ? [stayingTeam, newChallengingTeam]
-          : [newChallengingTeam, stayingTeam];
-
-      envelope.teams = nextTeams;
-      envelope.waitingQueue = [...newWaitingLine, ...newOutGks];
-      envelope.lastLoserPool = newLastLoserLine;
-
-      const parts: string[] = [];
-      if (takenFromQueue.length > 0) {
-        parts.push(
-          `Da fila (${takenFromQueue.length}): ${takenFromQueue.map((p) => p.name).join(', ')}`
-        );
-      }
-      if (drawnFromLoser.length > 0) {
-        parts.push(
-          `Sorteados do perdedor (${drawnFromLoser.length}): ${drawnFromLoser
-            .map((p) => p.name)
-            .join(', ')}`
-        );
-      }
-      envelope.lastRotationSummary = `${stayingTeam.name} permanece. Entraram em ${newChallengingTeam.name} — ${parts.join(
-        ' • '
-      )}.`;
     }
 
     await prisma.pelada.update({
