@@ -53,17 +53,17 @@ function PeladaCard({
   onPress: () => void;
   isGrid?: boolean;
 }) {
-  const sportEmojis: Record<string, string> = {
-    Futebol: '⚽',
-    Futsal: '🏟️',
-    'Vôlei': '🏐',
-    Volei: '🏐',
-    Basquete: '🏀',
-    Handebol: '🤾',
-    'Beach Tennis': '🎾',
-    'Tênis de Mesa': '🏓',
+  const sportMonograms: Record<string, string> = {
+    Futebol: 'FUT',
+    Futsal: 'SAL',
+    'Vôlei': 'VOL',
+    Volei: 'VOL',
+    Basquete: 'BAS',
+    Handebol: 'HAN',
+    'Beach Tennis': 'BCH',
+    'Tênis de Mesa': 'TEN',
   };
-  const emoji = sportEmojis[pelada.sport] || '🎯';
+  const monogram = sportMonograms[pelada.sport] || 'JOG';
   const badge = getStatusBadge(pelada);
   const spotsLabel = pelada.maxPlayers
     ? `${pelada.confirmedFieldCount}/${pelada.maxPlayers} linha`
@@ -80,7 +80,7 @@ function PeladaCard({
       {/* Zona 1: Identidade */}
       <View style={styles.cardHeader}>
         <View style={styles.sportSquircle}>
-          <Text style={styles.cardEmoji}>{emoji}</Text>
+          <Text style={styles.cardMonogram}>{monogram}</Text>
         </View>
         <View style={styles.cardHeaderText}>
           <View style={styles.titleRow}>
@@ -105,22 +105,22 @@ function PeladaCard({
         </View>
       </View>
 
-      {/* Zona 2: Informacoes Internas (Raio Concentrico) */}
+      {/* Zona 2: Informacoes Internas */}
       <View style={styles.cardInfoBlock}>
         <View style={styles.cardRow}>
-          <Text style={styles.cardIcon}>📅</Text>
+          <Text style={styles.cardKey}>DATA</Text>
           <Text style={styles.cardInfo}>
             {formatPeladaSchedule(pelada.dateTime, pelada.durationHours, false)}
           </Text>
         </View>
         <View style={styles.cardRow}>
-          <Text style={styles.cardIcon}>📍</Text>
+          <Text style={styles.cardKey}>LOCAL</Text>
           <Text style={styles.cardInfo} numberOfLines={1}>
             {pelada.location}
           </Text>
         </View>
         <View style={styles.cardRow}>
-          <Text style={styles.cardIcon}>👥</Text>
+          <Text style={styles.cardKey}>VAGAS</Text>
           <Text style={styles.cardInfo}>
             {spotsLabel}
             {pelada.confirmedGoalkeepersCount > 0
@@ -283,7 +283,7 @@ export function FeedScreen({ navigation }: Props) {
                   accessibilityRole="button"
                   accessibilityLabel="Instalar aplicativo INFUT na tela inicial"
                 >
-                  <Text style={styles.installAppPillText}>📲 Instalar App</Text>
+                  <Text style={styles.installAppPillText}>Instalar App</Text>
                 </TouchableOpacity>
               )}
               <View style={styles.countPill}>
@@ -362,8 +362,7 @@ export function FeedScreen({ navigation }: Props) {
           }
           ListEmptyComponent={
             <View style={styles.emptyCard}>
-              <Text style={styles.emptyEmoji}>⚽</Text>
-              <Text style={styles.emptyTitle}>Nenhuma peladinha ainda</Text>
+              <Text style={styles.emptyTitle}>Nenhuma pelada ainda</Text>
               <Text style={styles.emptySubtitle}>
                 Crie sua primeira pelada, explore jogos públicos na sua região ou digite um código de convite acima.
               </Text>
@@ -548,15 +547,16 @@ const styles = StyleSheet.create({
     gap: spacing.sm + 4,
   },
   sportSquircle: {
-    width: 46,
-    height: 46,
-    borderRadius: 14,
+    width: 44,
+    height: 44,
+    borderRadius: 12,
     backgroundColor: colors.surfaceLight,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.borderStrong,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  cardMonogram: { fontSize: 11, fontWeight: '900', color: colors.primary, letterSpacing: 0.6 },
   cardEmoji: { fontSize: 22 },
   cardHeaderText: { flex: 1, minWidth: 0 },
   titleRow: { flexDirection: 'row', alignItems: 'center' },
@@ -604,7 +604,8 @@ const styles = StyleSheet.create({
     borderColor: colors.borderLight,
     marginBottom: spacing.sm + 4,
   },
-  cardRow: { flexDirection: 'row', alignItems: 'center' },
+  cardRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  cardKey: { fontSize: 10, fontWeight: '800', color: colors.textMuted, width: 42, letterSpacing: 0.4 },
   cardIcon: { fontSize: 14, marginRight: spacing.sm, width: 20 },
   cardInfo: {
     fontSize: fonts.sizes.sm,

@@ -47,8 +47,26 @@ export const updateRoleSchema = z.object({
 });
 
 export const updateCheckinSchema = z.object({
-  attendanceStatus: z.enum(['PENDING', 'PRESENT', 'NO_SHOW']).optional(),
+  attendanceStatus: z.enum(['PENDING', 'PRESENT', 'INJURED', 'NO_SHOW']).optional(),
   memberType: z.enum(['MENSALISTA', 'DIARISTA']).optional(),
+});
+
+export const batchCheckinSchema = z.object({
+  attendanceStatus: z.enum(['PENDING', 'PRESENT', 'INJURED']),
+  playerIds: z.array(z.string()).optional(),
+});
+
+export const updateGameConfigSchema = z.object({
+  matchDurationMinutes: z.number().int().min(1).max(120).optional(),
+  playersPerTeam: z.number().int().min(1).max(20).optional(),
+  gameMode: z.enum(['FIXED_TEAMS', 'WINNER_STAYS_QUEUE']).optional(),
+  drawMode: z.enum(['POSITION', 'RANDOM', 'MANUAL']).optional(),
+  fixedTeamsCount: z.number().int().min(2).max(8).optional(),
+  teamNames: z.array(z.string().min(1).max(60)).min(2).max(8).optional(),
+});
+
+export const updateVotingStatusSchema = z.object({
+  votingStatus: z.enum(['OPEN', 'CLOSED']),
 });
 
 export const updateStatsSchema = z.object({
@@ -69,12 +87,16 @@ export const recordMatchSchema = z.object({
   teamBName: z.string().min(1, 'Time B e obrigatorio'),
   scoreA: z.number().int().min(0),
   scoreB: z.number().int().min(0),
+  leavingTeamName: z.string().optional(),
 });
 
 export const drawTeamsSchema = z.object({
-  playersPerTeam: z.number().int().min(2).max(15).optional(),
-  balancedByPosition: z.boolean().optional().default(true),
+  playersPerTeam: z.number().int().min(1).max(20).optional(),
+  balancedByPosition: z.boolean().optional(),
   teamNames: z.array(z.string().min(1).max(60)).min(2).max(10).optional(),
+  gameMode: z.enum(['FIXED_TEAMS', 'WINNER_STAYS_QUEUE']).optional(),
+  drawMode: z.enum(['POSITION', 'RANDOM', 'MANUAL']).optional(),
+  fixedTeamsCount: z.number().int().min(2).max(8).optional(),
 });
 
 export const updatePeladaStatusSchema = z.object({
@@ -98,6 +120,9 @@ export type AddGuestInput = z.infer<typeof addGuestSchema>;
 export type UpdatePaymentInput = z.infer<typeof updatePaymentSchema>;
 export type UpdateRoleInput = z.infer<typeof updateRoleSchema>;
 export type UpdateCheckinInput = z.infer<typeof updateCheckinSchema>;
+export type BatchCheckinInput = z.infer<typeof batchCheckinSchema>;
+export type UpdateGameConfigInput = z.infer<typeof updateGameConfigSchema>;
+export type UpdateVotingStatusInput = z.infer<typeof updateVotingStatusSchema>;
 export type UpdateStatsInput = z.infer<typeof updateStatsSchema>;
 export type VoteMvpInput = z.infer<typeof voteMvpSchema>;
 export type VoteGoalkeeperInput = z.infer<typeof voteGoalkeeperSchema>;

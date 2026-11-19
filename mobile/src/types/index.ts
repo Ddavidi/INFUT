@@ -49,8 +49,20 @@ export type PlayerRole = 'ORGANIZER' | 'CO_ORGANIZER' | 'PLAYER';
 export type PlayerStatus = 'CONFIRMED' | 'WAITLIST' | 'DECLINED';
 export type PaymentStatus = 'PENDING' | 'WAITING_CONFIRMATION' | 'PAID' | 'EXEMPT';
 export type MemberType = 'MENSALISTA' | 'DIARISTA';
-export type AttendanceStatus = 'PENDING' | 'PRESENT' | 'NO_SHOW';
+export type AttendanceStatus = 'PENDING' | 'PRESENT' | 'INJURED' | 'NO_SHOW';
 export type PeladaLifecycleStatus = 'OPEN' | 'IN_PROGRESS' | 'FINISHED';
+export type PeladaGameMode = 'WINNER_STAYS_QUEUE' | 'FIXED_TEAMS';
+export type PeladaDrawMode = 'POSITION' | 'RANDOM' | 'MANUAL';
+export type PeladaVotingStatus = 'OPEN' | 'CLOSED';
+
+export interface PeladaGameConfig {
+  matchDurationMinutes: number;
+  playersPerTeam: number;
+  gameMode: PeladaGameMode;
+  drawMode: PeladaDrawMode;
+  fixedTeamsCount: number;
+  teamNames: string[];
+}
 
 export interface PeladaPlayer {
   id: string;
@@ -152,6 +164,13 @@ export interface Pelada {
   };
   players: PeladaPlayer[];
   teams: DrawnTeam[];
+  waitingQueue?: DrawnTeamPlayer[];
+  lastLoserPool?: DrawnTeamPlayer[];
+  lastRotationSummary?: string | null;
+  gameConfig?: PeladaGameConfig;
+  votingStatus?: PeladaVotingStatus;
+  votesCastCount?: number;
+  eligibleVotersCount?: number;
   matches: MatchRecord[];
   confirmedCount: number;
   confirmedFieldCount: number;

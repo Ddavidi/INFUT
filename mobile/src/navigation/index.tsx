@@ -16,7 +16,7 @@ export type AppStackParamList = {
   MainTabs: undefined;
   PeladaDetails: { peladaId: string };
   ManageMembers: { peladaId: string };
-  LivePelada: { peladaId: string };
+  LivePelada: { peladaId: string; openConfigOnStart?: boolean };
   PostGame: { peladaId: string };
 };
 

@@ -159,24 +159,25 @@ async function main() {
   await prisma.pelada.update({
     where: { id: quintaPelada.id },
     data: {
-      teamsJson: JSON.stringify(quintaTeams),
+      teamsJson: JSON.stringify({
+        version: 2,
+        teams: quintaTeams,
+        waitingQueue: [],
+        lastLoserPool: [],
+        lastRotationSummary: null,
+        config: {
+          matchDurationMinutes: 10,
+          playersPerTeam: 5,
+          gameMode: 'WINNER_STAYS_QUEUE',
+          drawMode: 'POSITION',
+          fixedTeamsCount: 3,
+          teamNames: ['Time Amarelo', 'Time Azul', 'Time Vermelho'],
+        },
+        votingStatus: 'OPEN',
+      }),
       matchesJson: JSON.stringify(quintaMatches),
     },
   });
-
-  // Registrar votos iniciais (Craque no Pedro e Goleiro Paredao no Joao)
-  const davidRecord = quintaPelada.players.find((p) => p.userId === user1.id);
-  const joaoRecord = quintaPelada.players.find((p) => p.userId === user2.id);
-  const pedroRecord = quintaPelada.players.find((p) => p.userId === user4.id);
-  if (davidRecord && pedroRecord) {
-    await prisma.peladaPlayer.update({
-      where: { id: davidRecord.id },
-      data: {
-        votedMvpForId: pedroRecord.id,
-        ...(joaoRecord && { votedGoalkeeperForId: joaoRecord.id }),
-      },
-    });
-  }
 
   const nextSaturday = new Date();
   nextSaturday.setDate(nextSaturday.getDate() + ((6 - nextSaturday.getDay() + 7) % 7 || 7));

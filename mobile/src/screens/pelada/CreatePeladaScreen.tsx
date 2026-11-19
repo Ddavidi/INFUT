@@ -164,7 +164,6 @@ export function CreatePeladaScreen({ navigation }: Props) {
               accessibilityLabel={s.sport}
               accessibilityState={{ selected: selectedSport === s.sport }}
             >
-              <Text style={styles.sportEmoji}>{s.emoji}</Text>
               <Text style={[styles.sportName, selectedSport === s.sport && styles.sportNameSelected]}>
                 {s.sport}
               </Text>
@@ -233,7 +232,7 @@ export function CreatePeladaScreen({ navigation }: Props) {
         {calculateEndTimeText(time, durationHours) ? (
           <View style={styles.endTimeBanner}>
             <Text style={styles.endTimeBannerText}>
-              ⏱️ Horário: Início às {time.trim()} • Término automático às{' '}
+              Horário: Início às {time.trim()} • Término automático às{' '}
               {calculateEndTimeText(time, durationHours)}
             </Text>
           </View>

@@ -277,4 +277,46 @@ export class PeladaController {
       next(error);
     }
   }
+
+  async updateGameConfig(req: Request, res: Response, next: NextFunction) {
+    try {
+      const userId = req.user!.userId;
+      const pelada = await peladaService.updateGameConfig(
+        String(req.params.id),
+        userId,
+        req.body
+      );
+      res.status(200).json(pelada);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async batchCheckin(req: Request, res: Response, next: NextFunction) {
+    try {
+      const userId = req.user!.userId;
+      const pelada = await peladaService.batchCheckin(
+        String(req.params.id),
+        userId,
+        req.body
+      );
+      res.status(200).json(pelada);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async updateVotingStatus(req: Request, res: Response, next: NextFunction) {
+    try {
+      const userId = req.user!.userId;
+      const pelada = await peladaService.updateVotingStatus(
+        String(req.params.id),
+        userId,
+        req.body.votingStatus
+      );
+      res.status(200).json(pelada);
+    } catch (error) {
+      next(error);
+    }
+  }
 }

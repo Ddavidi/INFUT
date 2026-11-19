@@ -70,8 +70,8 @@ export function MainTabs() {
         component={FeedScreen}
         options={{
           title: 'Peladas',
-          tabBarIcon: ({ focused }) => (
-            <Text style={{ fontSize: fonts.sizes.lg, opacity: focused ? 1 : 0.7 }}>{'⚽'}</Text>
+          tabBarIcon: ({ color, focused }) => (
+            <Text style={{ fontSize: fonts.sizes.md, fontWeight: '800', color, opacity: focused ? 1 : 0.7 }}>◈</Text>
           ),
         }}
       />
@@ -80,8 +80,8 @@ export function MainTabs() {
         component={ExploreScreen}
         options={{
           title: 'Explorar',
-          tabBarIcon: ({ focused }) => (
-            <Text style={{ fontSize: fonts.sizes.lg, opacity: focused ? 1 : 0.7 }}>{'🗺️'}</Text>
+          tabBarIcon: ({ color, focused }) => (
+            <Text style={{ fontSize: fonts.sizes.md, fontWeight: '800', color, opacity: focused ? 1 : 0.7 }}>◎</Text>
           ),
         }}
       />
@@ -90,8 +90,8 @@ export function MainTabs() {
         component={CreatePeladaScreen}
         options={{
           title: 'Criar',
-          tabBarIcon: ({ focused }) => (
-            <Text style={{ fontSize: fonts.sizes.lg, opacity: focused ? 1 : 0.7 }}>{'➕'}</Text>
+          tabBarIcon: ({ color, focused }) => (
+            <Text style={{ fontSize: fonts.sizes.lg, fontWeight: '800', color, opacity: focused ? 1 : 0.7 }}>+</Text>
           ),
         }}
       />
@@ -100,8 +100,8 @@ export function MainTabs() {
         component={RankingScreen}
         options={{
           title: 'Ranking',
-          tabBarIcon: ({ focused }) => (
-            <Text style={{ fontSize: fonts.sizes.lg, opacity: focused ? 1 : 0.7 }}>{'🏆'}</Text>
+          tabBarIcon: ({ color, focused }) => (
+            <Text style={{ fontSize: fonts.sizes.md, fontWeight: '800', color, opacity: focused ? 1 : 0.7 }}>▲</Text>
           ),
         }}
       />
@@ -110,8 +110,8 @@ export function MainTabs() {
         component={EditProfileScreen}
         options={{
           title: 'Perfil',
-          tabBarIcon: ({ focused }) => (
-            <Text style={{ fontSize: fonts.sizes.lg, opacity: focused ? 1 : 0.7 }}>{'👤'}</Text>
+          tabBarIcon: ({ color, focused }) => (
+            <Text style={{ fontSize: fonts.sizes.md, fontWeight: '800', color, opacity: focused ? 1 : 0.7 }}>●</Text>
           ),
         }}
       />

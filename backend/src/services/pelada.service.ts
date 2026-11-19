@@ -2,16 +2,31 @@
 import prisma from '../utils/prisma';
 import {
   AddGuestInput,
+  BatchCheckinInput,
   CreatePeladaInput,
   DrawTeamsInput,
   RecordMatchInput,
   RsvpInput,
   SetManualTeamsInput,
   UpdateCheckinInput,
+  UpdateGameConfigInput,
   UpdatePeladaInput,
   UpdatePeladaStatusInput,
   UpdateStatsInput,
 } from '../schemas/pelada.schema';
+
+export type PeladaGameMode = 'WINNER_STAYS_QUEUE' | 'FIXED_TEAMS';
+export type PeladaDrawMode = 'POSITION' | 'RANDOM' | 'MANUAL';
+export type PeladaVotingStatus = 'OPEN' | 'CLOSED';
+
+export interface PeladaGameConfig {
+  matchDurationMinutes: number;
+  playersPerTeam: number;
+  gameMode: PeladaGameMode;
+  drawMode: PeladaDrawMode;
+  fixedTeamsCount: number;
+  teamNames: string[];
+}
 
 export interface DrawnTeamPlayer {
   id: string;
@@ -23,6 +38,16 @@ export interface DrawnTeamPlayer {
 export interface DrawnTeam {
   name: string;
   players: DrawnTeamPlayer[];
+}
+
+export interface StoredTeamsEnvelope {
+  version: 2;
+  teams: DrawnTeam[];
+  waitingQueue: DrawnTeamPlayer[];
+  lastLoserPool: DrawnTeamPlayer[];
+  lastRotationSummary: string | null;
+  config: PeladaGameConfig;
+  votingStatus: PeladaVotingStatus;
 }
 
 export interface MatchRecord {
@@ -169,6 +194,94 @@ export class PeladaService {
     }
   }
 
+  private getDefaultConfig(pelada: any): PeladaGameConfig {
+    return {
+      matchDurationMinutes: 10,
+      playersPerTeam: pelada.playersPerTeam || 5,
+      gameMode: 'WINNER_STAYS_QUEUE',
+      drawMode: 'POSITION',
+      fixedTeamsCount: 3,
+      teamNames: ['Time Amarelo', 'Time Azul', 'Time Vermelho'],
+    };
+  }
+
+  private parseTeamsEnvelope(pelada: any): StoredTeamsEnvelope {
+    const defaultConfig = this.getDefaultConfig(pelada);
+    const parsed = this.safeJsonParse<any>(pelada.teamsJson, null);
+
+    if (!parsed) {
+      return {
+        version: 2,
+        teams: [],
+        waitingQueue: [],
+        lastLoserPool: [],
+        lastRotationSummary: null,
+        config: defaultConfig,
+        votingStatus: 'OPEN',
+      };
+    }
+
+    if (Array.isArray(parsed)) {
+      return {
+        version: 2,
+        teams: parsed,
+        waitingQueue: [],
+        lastLoserPool: [],
+        lastRotationSummary: null,
+        config: {
+          ...defaultConfig,
+          fixedTeamsCount: Math.max(2, parsed.length || 3),
+          teamNames:
+            parsed.length >= 2
+              ? parsed.map((t: any, i: number) => t?.name || `Time ${i + 1}`)
+              : defaultConfig.teamNames,
+        },
+        votingStatus: 'OPEN',
+      };
+    }
+
+    const parsedConfig = parsed.config || {};
+    const mergedTeamNames =
+      Array.isArray(parsedConfig.teamNames) && parsedConfig.teamNames.length >= 2
+        ? parsedConfig.teamNames
+        : defaultConfig.teamNames;
+
+    return {
+      version: 2,
+      teams: Array.isArray(parsed.teams) ? parsed.teams : [],
+      waitingQueue: Array.isArray(parsed.waitingQueue) ? parsed.waitingQueue : [],
+      lastLoserPool: Array.isArray(parsed.lastLoserPool) ? parsed.lastLoserPool : [],
+      lastRotationSummary:
+        typeof parsed.lastRotationSummary === 'string' ? parsed.lastRotationSummary : null,
+      config: {
+        matchDurationMinutes:
+          typeof parsedConfig.matchDurationMinutes === 'number'
+            ? parsedConfig.matchDurationMinutes
+            : defaultConfig.matchDurationMinutes,
+        playersPerTeam:
+          typeof parsedConfig.playersPerTeam === 'number'
+            ? parsedConfig.playersPerTeam
+            : defaultConfig.playersPerTeam,
+        gameMode:
+          parsedConfig.gameMode === 'FIXED_TEAMS' || parsedConfig.gameMode === 'WINNER_STAYS_QUEUE'
+            ? parsedConfig.gameMode
+            : defaultConfig.gameMode,
+        drawMode:
+          parsedConfig.drawMode === 'POSITION' ||
+          parsedConfig.drawMode === 'RANDOM' ||
+          parsedConfig.drawMode === 'MANUAL'
+            ? parsedConfig.drawMode
+            : defaultConfig.drawMode,
+        fixedTeamsCount:
+          typeof parsedConfig.fixedTeamsCount === 'number'
+            ? parsedConfig.fixedTeamsCount
+            : defaultConfig.fixedTeamsCount,
+        teamNames: mergedTeamNames,
+      },
+      votingStatus: parsed.votingStatus === 'CLOSED' ? 'CLOSED' : 'OPEN',
+    };
+  }
+
   private formatPelada(pelada: any, currentUserId?: string) {
     const players = (pelada.players || []).map((p: any) => ({
       ...p,
@@ -206,16 +319,31 @@ export class PeladaService {
       exemptCount,
     };
 
-    const mvpRanking = this.buildVoteRanking(players, 'votedMvpForId');
-    const goalkeeperRanking = this.buildVoteRanking(players, 'votedGoalkeeperForId');
-    const teams = this.safeJsonParse<DrawnTeam[]>(pelada.teamsJson, []);
+    const envelope = this.parseTeamsEnvelope(pelada);
     const matches = this.safeJsonParse<MatchRecord[]>(pelada.matchesJson, []);
+
+    const eligibleVoters = confirmedPlayers.filter((p: any) => p.attendanceStatus !== 'NO_SHOW');
+    const votesCastCount = eligibleVoters.filter((p: any) => Boolean(p.votedMvpForId)).length;
+    const eligibleVotersCount = eligibleVoters.length;
+
+    const isVotingClosed = envelope.votingStatus === 'CLOSED';
+    const mvpRanking = isVotingClosed ? this.buildVoteRanking(players, 'votedMvpForId') : [];
+    const goalkeeperRanking = isVotingClosed
+      ? this.buildVoteRanking(players, 'votedGoalkeeperForId')
+      : [];
 
     const { teamsJson, matchesJson, ...rest } = pelada;
     return {
       ...rest,
       players,
-      teams,
+      teams: envelope.teams,
+      waitingQueue: envelope.waitingQueue,
+      lastLoserPool: envelope.lastLoserPool,
+      lastRotationSummary: envelope.lastRotationSummary,
+      gameConfig: envelope.config,
+      votingStatus: envelope.votingStatus,
+      votesCastCount,
+      eligibleVotersCount,
       matches,
       confirmedCount: confirmedPlayers.length,
       confirmedFieldCount,
@@ -757,15 +885,101 @@ export class PeladaService {
     return this.getById(peladaId, actorUserId);
   }
 
+  private toDrawnPlayer(p: any): DrawnTeamPlayer {
+    const pos = p.position || p.user?.position || null;
+    const isGk =
+      Boolean(p.isGoalkeeper) ||
+      (pos ? normalizeText(pos).includes('goleir') : false);
+    return {
+      id: p.id,
+      name: p.user?.name || p.guestName || 'Convidado',
+      position: pos,
+      isGoalkeeper: isGk,
+    };
+  }
+
+  async updateGameConfig(
+    peladaId: string,
+    actorUserId: string,
+    input: UpdateGameConfigInput
+  ) {
+    const pelada = await this.ensureCanManage(peladaId, actorUserId);
+    const envelope = this.parseTeamsEnvelope(pelada);
+
+    const nextConfig: PeladaGameConfig = {
+      ...envelope.config,
+      ...(input.matchDurationMinutes !== undefined && {
+        matchDurationMinutes: input.matchDurationMinutes,
+      }),
+      ...(input.playersPerTeam !== undefined && {
+        playersPerTeam: input.playersPerTeam,
+      }),
+      ...(input.gameMode !== undefined && { gameMode: input.gameMode }),
+      ...(input.drawMode !== undefined && { drawMode: input.drawMode }),
+      ...(input.fixedTeamsCount !== undefined && {
+        fixedTeamsCount: input.fixedTeamsCount,
+      }),
+      ...(input.teamNames !== undefined && input.teamNames.length >= 2 && {
+        teamNames: input.teamNames.map((n, i) => n.trim() || `Time ${i + 1}`),
+      }),
+    };
+
+    const minNamesNeeded =
+      nextConfig.gameMode === 'FIXED_TEAMS'
+        ? Math.max(2, nextConfig.fixedTeamsCount)
+        : 2;
+    while (nextConfig.teamNames.length < minNamesNeeded) {
+      nextConfig.teamNames.push(`Time ${nextConfig.teamNames.length + 1}`);
+    }
+
+    envelope.config = nextConfig;
+
+    await prisma.pelada.update({
+      where: { id: peladaId },
+      data: {
+        playersPerTeam: nextConfig.playersPerTeam,
+        teamsJson: JSON.stringify(envelope),
+      },
+    });
+
+    return this.getById(peladaId, actorUserId);
+  }
+
+  async batchCheckin(
+    peladaId: string,
+    actorUserId: string,
+    input: BatchCheckinInput
+  ) {
+    await this.ensureCanManage(peladaId, actorUserId);
+
+    await prisma.peladaPlayer.updateMany({
+      where: {
+        peladaId,
+        status: 'CONFIRMED',
+        ...(input.playerIds && input.playerIds.length > 0
+          ? { id: { in: input.playerIds } }
+          : {}),
+      },
+      data: {
+        attendanceStatus: input.attendanceStatus,
+      },
+    });
+
+    return this.getById(peladaId, actorUserId);
+  }
+
   async updateCheckin(
     peladaId: string,
     actorUserId: string,
     playerRecordId: string,
     data: UpdateCheckinInput
   ) {
-    await this.ensureCanManage(peladaId, actorUserId);
+    const pelada = await this.ensureCanManage(peladaId, actorUserId);
     const record = await prisma.peladaPlayer.findUnique({
       where: { id: playerRecordId },
+      include: {
+        user: { select: { name: true, position: true } },
+      },
     });
 
     if (!record || record.peladaId !== peladaId) {
@@ -784,6 +998,84 @@ export class PeladaService {
       },
     });
 
+    // If pelada is IN_PROGRESS and teams are already drawn, dynamically handle latecomers / injuries
+    if (pelada.status === 'IN_PROGRESS' && data.attendanceStatus !== undefined) {
+      const envelope = this.parseTeamsEnvelope(pelada);
+      if (envelope.teams.length > 0) {
+        const playerObj = this.toDrawnPlayer(record);
+        let changedEnvelope = false;
+
+        if (data.attendanceStatus === 'INJURED' || data.attendanceStatus === 'PENDING') {
+          const prevQueueLen = envelope.waitingQueue.length;
+          const prevPoolLen = envelope.lastLoserPool.length;
+          envelope.waitingQueue = envelope.waitingQueue.filter((p) => p.id !== playerRecordId);
+          envelope.lastLoserPool = envelope.lastLoserPool.filter((p) => p.id !== playerRecordId);
+          if (
+            envelope.waitingQueue.length !== prevQueueLen ||
+            envelope.lastLoserPool.length !== prevPoolLen
+          ) {
+            changedEnvelope = true;
+          }
+
+          for (const team of envelope.teams) {
+            const idx = team.players.findIndex((p) => p.id === playerRecordId);
+            if (idx !== -1) {
+              const removedPlayer = team.players[idx];
+              team.players.splice(idx, 1);
+              changedEnvelope = true;
+
+              const queueSubIdx = envelope.waitingQueue.findIndex(
+                (p) => p.isGoalkeeper === removedPlayer.isGoalkeeper
+              );
+              const fallbackQueueIdx =
+                queueSubIdx !== -1
+                  ? queueSubIdx
+                  : envelope.waitingQueue.findIndex((p) => !p.isGoalkeeper);
+
+              if (fallbackQueueIdx !== -1) {
+                const [sub] = envelope.waitingQueue.splice(fallbackQueueIdx, 1);
+                team.players.push(sub);
+                envelope.lastRotationSummary = `${removedPlayer.name} saiu (${
+                  data.attendanceStatus === 'INJURED' ? 'machucado' : 'ausente'
+                }). ${sub.name} entrou da fila no ${team.name}.`;
+              } else if (envelope.lastLoserPool.length > 0) {
+                const poolIdx = envelope.lastLoserPool.findIndex(
+                  (p) => p.isGoalkeeper === removedPlayer.isGoalkeeper
+                );
+                const pickIdx = poolIdx !== -1 ? poolIdx : 0;
+                const [sub] = envelope.lastLoserPool.splice(pickIdx, 1);
+                team.players.push(sub);
+                envelope.lastRotationSummary = `${removedPlayer.name} saiu (${
+                  data.attendanceStatus === 'INJURED' ? 'machucado' : 'ausente'
+                }). ${sub.name} entrou no ${team.name}.`;
+              } else {
+                envelope.lastRotationSummary = `${removedPlayer.name} saiu de ${team.name}.`;
+              }
+            }
+          }
+        } else if (data.attendanceStatus === 'PRESENT') {
+          const alreadyInTeams = envelope.teams.some((t) =>
+            t.players.some((p) => p.id === playerRecordId)
+          );
+          const alreadyInQueue = envelope.waitingQueue.some((p) => p.id === playerRecordId);
+          const alreadyInPool = envelope.lastLoserPool.some((p) => p.id === playerRecordId);
+
+          if (!alreadyInTeams && !alreadyInQueue && !alreadyInPool) {
+            envelope.waitingQueue.push(playerObj);
+            envelope.lastRotationSummary = `${playerObj.name} chegou e entrou no final da fila de próximos.`;
+            changedEnvelope = true;
+          }
+        }
+
+        if (changedEnvelope) {
+          await prisma.pelada.update({
+            where: { id: peladaId },
+            data: { teamsJson: JSON.stringify(envelope) },
+          });
+        }
+      }
+    }
+
     return this.getById(peladaId, actorUserId);
   }
 
@@ -794,7 +1086,8 @@ export class PeladaService {
   ) {
     const pelada = await this.ensureCanManage(peladaId, actorUserId);
 
-    const teams = this.safeJsonParse<DrawnTeam[]>(pelada.teamsJson, []);
+    const envelope = this.parseTeamsEnvelope(pelada);
+    const teams = envelope.teams;
     const matches = this.safeJsonParse<MatchRecord[]>(pelada.matchesJson, []);
 
     const winner =
@@ -827,9 +1120,117 @@ export class PeladaService {
 
     matches.push(newMatch);
 
+    // Winner stays + waiting queue + random draw from previous loser pool
+    if (
+      envelope.config.gameMode === 'WINNER_STAYS_QUEUE' &&
+      teams.length >= 2 &&
+      (envelope.waitingQueue.length > 0 || envelope.lastLoserPool.length > 0)
+    ) {
+      let leavingIdx = -1;
+      if (winner !== 'EMPATE') {
+        leavingIdx = teams.findIndex(
+          (t) =>
+            (t.name === data.teamAName || t.name === data.teamBName) &&
+            t.name !== winner
+        );
+      } else if (data.leavingTeamName) {
+        leavingIdx = teams.findIndex((t) => t.name === data.leavingTeamName);
+      }
+      if (leavingIdx === -1) {
+        leavingIdx = 1;
+      }
+
+      const stayingIdx = leavingIdx === 0 ? 1 : 0;
+      const stayingTeam = teams[stayingIdx];
+      const losingTeam = teams[leavingIdx];
+      const perTeam = envelope.config.playersPerTeam || pelada.playersPerTeam || 5;
+
+      const waitingLine = envelope.waitingQueue.filter((p) => !p.isGoalkeeper);
+      const waitingGks = envelope.waitingQueue.filter((p) => p.isGoalkeeper);
+      const lastLoserLine = envelope.lastLoserPool.filter((p) => !p.isGoalkeeper);
+      const lastLoserGks = envelope.lastLoserPool.filter((p) => p.isGoalkeeper);
+      const losingTeamLine = losingTeam.players.filter((p) => !p.isGoalkeeper);
+      const losingTeamGks = losingTeam.players.filter((p) => p.isGoalkeeper);
+
+      const takenFromQueue = waitingLine.slice(0, perTeam);
+      const remainingQueue = waitingLine.slice(perTeam);
+      const nextLine: DrawnTeamPlayer[] = [...takenFromQueue];
+      let drawnFromLoser: DrawnTeamPlayer[] = [];
+      let newWaitingLine: DrawnTeamPlayer[] = [];
+      let newLastLoserLine: DrawnTeamPlayer[] = [];
+
+      if (takenFromQueue.length < perTeam) {
+        const needed = perTeam - takenFromQueue.length;
+        if (lastLoserLine.length > 0) {
+          const shuffledLastLoser = shuffleArray(lastLoserLine);
+          drawnFromLoser = shuffledLastLoser.slice(0, needed);
+          const notDrawnFromLastLoser = shuffledLastLoser.slice(needed);
+          nextLine.push(...drawnFromLoser);
+          // Players not drawn from last loser wait guaranteed at the front of the next queue
+          newWaitingLine = [...remainingQueue, ...notDrawnFromLastLoser];
+          newLastLoserLine = losingTeamLine;
+        } else {
+          const shuffledCurrentLoser = shuffleArray(losingTeamLine);
+          drawnFromLoser = shuffledCurrentLoser.slice(0, needed);
+          const notDrawnFromCurrentLoser = shuffledCurrentLoser.slice(needed);
+          nextLine.push(...drawnFromLoser);
+          newWaitingLine = notDrawnFromCurrentLoser;
+          newLastLoserLine = [];
+        }
+      } else {
+        newWaitingLine = [...remainingQueue, ...lastLoserLine];
+        newLastLoserLine = losingTeamLine;
+      }
+
+      const allOutGks = [...waitingGks, ...lastLoserGks];
+      let nextGks: DrawnTeamPlayer[] = [];
+      let newOutGks: DrawnTeamPlayer[] = [];
+      if (allOutGks.length > 0) {
+        nextGks = [allOutGks[0]];
+        newOutGks = [...allOutGks.slice(1), ...losingTeamGks];
+      } else {
+        // Only 2 goalkeepers active -> GK stays on goal
+        nextGks = losingTeamGks.slice(0, 1);
+      }
+
+      const newChallengingTeam: DrawnTeam = {
+        name: losingTeam.name,
+        players: [...nextGks, ...nextLine],
+      };
+
+      const nextTeams =
+        stayingIdx === 0
+          ? [stayingTeam, newChallengingTeam]
+          : [newChallengingTeam, stayingTeam];
+
+      envelope.teams = nextTeams;
+      envelope.waitingQueue = [...newWaitingLine, ...newOutGks];
+      envelope.lastLoserPool = newLastLoserLine;
+
+      const parts: string[] = [];
+      if (takenFromQueue.length > 0) {
+        parts.push(
+          `Da fila (${takenFromQueue.length}): ${takenFromQueue.map((p) => p.name).join(', ')}`
+        );
+      }
+      if (drawnFromLoser.length > 0) {
+        parts.push(
+          `Sorteados do perdedor (${drawnFromLoser.length}): ${drawnFromLoser
+            .map((p) => p.name)
+            .join(', ')}`
+        );
+      }
+      envelope.lastRotationSummary = `${stayingTeam.name} permanece. Entraram em ${newChallengingTeam.name} — ${parts.join(
+        ' • '
+      )}.`;
+    }
+
     await prisma.pelada.update({
       where: { id: peladaId },
-      data: { matchesJson: JSON.stringify(matches) },
+      data: {
+        matchesJson: JSON.stringify(matches),
+        teamsJson: JSON.stringify(envelope),
+      },
     });
 
     return this.getById(peladaId, actorUserId);
@@ -842,7 +1243,12 @@ export class PeladaService {
     field: 'votedMvpForId' | 'votedGoalkeeperForId',
     awardLabel: string
   ) {
-    await this.ensurePeladaExists(peladaId);
+    const pelada = await this.ensurePeladaExists(peladaId);
+    const envelope = this.parseTeamsEnvelope(pelada);
+
+    if (envelope.votingStatus === 'CLOSED') {
+      throw this.createHttpError('A votação desta pelada já foi encerrada.', 400);
+    }
 
     const voter = await prisma.peladaPlayer.findUnique({
       where: { peladaId_userId: { peladaId, userId: voterUserId } },
@@ -865,6 +1271,29 @@ export class PeladaService {
       data: { [field]: targetPlayerId },
     });
 
+    // Auto-close voting when all eligible confirmed players have cast their MVP vote
+    if (field === 'votedMvpForId') {
+      const eligiblePlayers = await prisma.peladaPlayer.findMany({
+        where: {
+          peladaId,
+          status: 'CONFIRMED',
+          NOT: { attendanceStatus: 'NO_SHOW' },
+        },
+        select: { id: true, votedMvpForId: true },
+      });
+
+      if (
+        eligiblePlayers.length > 0 &&
+        eligiblePlayers.every((p) => Boolean(p.votedMvpForId))
+      ) {
+        envelope.votingStatus = 'CLOSED';
+        await prisma.pelada.update({
+          where: { id: peladaId },
+          data: { teamsJson: JSON.stringify(envelope) },
+        });
+      }
+    }
+
     return this.getById(peladaId, voterUserId);
   }
 
@@ -876,11 +1305,47 @@ export class PeladaService {
     return this.voteForAward(peladaId, voterUserId, targetPlayerId, 'votedGoalkeeperForId', 'Goleiro Paredao');
   }
 
+  async updateVotingStatus(
+    peladaId: string,
+    actorUserId: string,
+    votingStatus: PeladaVotingStatus
+  ) {
+    const pelada = await this.ensureCanManage(peladaId, actorUserId);
+    const envelope = this.parseTeamsEnvelope(pelada);
+    envelope.votingStatus = votingStatus;
+
+    await prisma.pelada.update({
+      where: { id: peladaId },
+      data: { teamsJson: JSON.stringify(envelope) },
+    });
+
+    return this.getById(peladaId, actorUserId);
+  }
+
   async drawTeams(peladaId: string, actorUserId: string, input: DrawTeamsInput) {
     const pelada = await this.ensureCanManage(peladaId, actorUserId);
+    const envelope = this.parseTeamsEnvelope(pelada);
 
-    const confirmed = await prisma.peladaPlayer.findMany({
-      where: { peladaId, status: 'CONFIRMED' },
+    const nextConfig: PeladaGameConfig = {
+      ...envelope.config,
+      ...(input.playersPerTeam !== undefined && { playersPerTeam: input.playersPerTeam }),
+      ...(input.gameMode !== undefined && { gameMode: input.gameMode }),
+      ...(input.drawMode !== undefined && { drawMode: input.drawMode }),
+      ...(input.balancedByPosition !== undefined && {
+        drawMode: input.balancedByPosition ? 'POSITION' : 'RANDOM',
+      }),
+      ...(input.fixedTeamsCount !== undefined && { fixedTeamsCount: input.fixedTeamsCount }),
+      ...(input.teamNames && input.teamNames.length >= 2 && {
+        teamNames: input.teamNames.map((n, i) => n.trim() || `Time ${i + 1}`),
+      }),
+    };
+
+    const presentPlayers = await prisma.peladaPlayer.findMany({
+      where: {
+        peladaId,
+        status: 'CONFIRMED',
+        attendanceStatus: 'PRESENT',
+      },
       include: {
         user: {
           select: { name: true, position: true },
@@ -888,78 +1353,86 @@ export class PeladaService {
       },
     });
 
-    if (confirmed.length < 2) {
-      throw this.createHttpError('Sao necessarios pelo menos 2 jogadores confirmados para sortear times', 400);
+    if (presentPlayers.length < 2) {
+      throw this.createHttpError(
+        'Marque pelo menos 2 jogadores como Presente na chamada antes de sortear os times.',
+        400
+      );
     }
 
-    const formattedPlayers: DrawnTeamPlayer[] = confirmed.map((p) => {
-      const pos = p.position || p.user?.position || null;
-      const isGk =
-        p.isGoalkeeper ||
-        (pos ? normalizeText(pos).includes('goleir') : false);
-      return {
-        id: p.id,
-        name: p.user?.name || p.guestName || 'Convidado',
-        position: pos,
-        isGoalkeeper: isGk,
-      };
-    });
-
+    const formattedPlayers = presentPlayers.map((p) => this.toDrawnPlayer(p));
     const goalkeepers = shuffleArray(formattedPlayers.filter((p) => p.isGoalkeeper));
     const fieldPlayers = formattedPlayers.filter((p) => !p.isGoalkeeper);
 
-    const perTeam = input.playersPerTeam || pelada.playersPerTeam || 5;
-    const baseCount = fieldPlayers.length > 0 ? fieldPlayers.length : formattedPlayers.length;
-    const customNames = input.teamNames?.map((n) => n.trim()).filter(Boolean);
-    const hasCustomNames = Boolean(customNames && customNames.length >= 2);
-    const numTeams = hasCustomNames
-      ? customNames!.length
-      : Math.max(2, Math.ceil(baseCount / perTeam));
-
-    const teams: DrawnTeam[] = Array.from({ length: numTeams }, (_, i) => ({
-      name: hasCustomNames ? customNames![i] || `Time ${i + 1}` : `Time ${i + 1}`,
-      players: [],
-    }));
-
-    // Distribute goalkeepers first (max 1 per team)
-    const maxGoalkeepers = numTeams;
-    goalkeepers.slice(0, maxGoalkeepers).forEach((gk, idx) => {
-      teams[idx].players.push(gk);
-    });
-
-    // Distribute field players (max `perTeam` line players per team -> max `perTeam + 1` total with GK)
-    const maxFieldSlots = numTeams * perTeam;
-    if (input.balancedByPosition ?? true) {
+    let orderedField: DrawnTeamPlayer[] = [];
+    if (nextConfig.drawMode === 'POSITION') {
       const buckets: DrawnTeamPlayer[][] = [[], [], [], []];
       for (const player of fieldPlayers) {
         buckets[getPositionBucket(player.position)].push(player);
       }
-      const ordered = buckets.flatMap((bucket) => shuffleArray(bucket)).slice(0, maxFieldSlots);
+      orderedField = buckets.flatMap((bucket) => shuffleArray(bucket));
+    } else {
+      orderedField = shuffleArray(fieldPlayers);
+    }
 
-      // Snake draft distribution across teams respecting perTeam limit
-      ordered.forEach((player, idx) => {
+    const perTeam = nextConfig.playersPerTeam || pelada.playersPerTeam || 5;
+    const isQueueMode = nextConfig.gameMode === 'WINNER_STAYS_QUEUE';
+    const numTeams = isQueueMode ? 2 : Math.max(2, nextConfig.fixedTeamsCount || 3);
+
+    while (nextConfig.teamNames.length < numTeams) {
+      nextConfig.teamNames.push(`Time ${nextConfig.teamNames.length + 1}`);
+    }
+
+    const teams: DrawnTeam[] = Array.from({ length: numTeams }, (_, i) => ({
+      name: nextConfig.teamNames[i] || `Time ${i + 1}`,
+      players: [],
+    }));
+
+    // Goalkeepers: max 1 per active team, excess goes to waitingQueue
+    const activeGks = goalkeepers.slice(0, numTeams);
+    const excessGks = goalkeepers.slice(numTeams);
+    activeGks.forEach((gk, idx) => {
+      teams[idx].players.push(gk);
+    });
+
+    // Field players: max perTeam per team, excess goes to waitingQueue
+    const maxFieldSlots = numTeams * perTeam;
+    const activeField = orderedField.slice(0, maxFieldSlots);
+    const excessField = orderedField.slice(maxFieldSlots);
+
+    if (nextConfig.drawMode === 'POSITION') {
+      activeField.forEach((player, idx) => {
         const cycle = Math.floor(idx / numTeams);
         const posInCycle = idx % numTeams;
         const teamIdx = cycle % 2 === 0 ? posInCycle : numTeams - 1 - posInCycle;
         teams[teamIdx].players.push(player);
       });
     } else {
-      const randomPlayers = shuffleArray(fieldPlayers).slice(0, maxFieldSlots);
-      randomPlayers.forEach((player, idx) => {
+      activeField.forEach((player, idx) => {
         teams[idx % numTeams].players.push(player);
       });
     }
 
+    envelope.config = nextConfig;
+    envelope.teams = teams;
+    envelope.waitingQueue = [...excessField, ...excessGks];
+    envelope.lastLoserPool = [];
+    envelope.lastRotationSummary = null;
+
     await prisma.pelada.update({
       where: { id: peladaId },
-      data: { teamsJson: JSON.stringify(teams) },
+      data: {
+        playersPerTeam: perTeam,
+        teamsJson: JSON.stringify(envelope),
+      },
     });
 
     return this.getById(peladaId, actorUserId);
   }
 
   async setManualTeams(peladaId: string, actorUserId: string, input: SetManualTeamsInput) {
-    await this.ensureCanManage(peladaId, actorUserId);
+    const pelada = await this.ensureCanManage(peladaId, actorUserId);
+    const envelope = this.parseTeamsEnvelope(pelada);
 
     const confirmed = await prisma.peladaPlayer.findMany({
       where: { peladaId, status: 'CONFIRMED' },
@@ -970,17 +1443,11 @@ export class PeladaService {
       },
     });
 
-    const playerMap = new Map<string, DrawnTeamPlayer>();
+    const playerMap = new Map<string, { player: DrawnTeamPlayer; isPresent: boolean }>();
     for (const p of confirmed) {
-      const pos = p.position || p.user?.position || null;
-      const isGk =
-        p.isGoalkeeper ||
-        (pos ? normalizeText(pos).includes('goleir') : false);
       playerMap.set(p.id, {
-        id: p.id,
-        name: p.user?.name || p.guestName || 'Convidado',
-        position: pos,
-        isGoalkeeper: isGk,
+        player: this.toDrawnPlayer(p),
+        isPresent: p.attendanceStatus === 'PRESENT',
       });
     }
 
@@ -992,7 +1459,7 @@ export class PeladaService {
         const found = playerMap.get(playerId);
         if (found) {
           assignedIds.add(playerId);
-          players.push(found);
+          players.push(found.player);
         }
       }
       return {
@@ -1005,38 +1472,79 @@ export class PeladaService {
       throw this.createHttpError('Selecione pelo menos um jogador confirmado para montar os times', 400);
     }
 
+    const unassignedPresent = Array.from(playerMap.values())
+      .filter((entry) => entry.isPresent && !assignedIds.has(entry.player.id))
+      .map((entry) => entry.player);
+
+    envelope.teams = teams;
+    envelope.waitingQueue = unassignedPresent;
+    envelope.lastLoserPool = [];
+    envelope.lastRotationSummary = null;
+
     await prisma.pelada.update({
       where: { id: peladaId },
-      data: { teamsJson: JSON.stringify(teams) },
+      data: { teamsJson: JSON.stringify(envelope) },
     });
 
     return this.getById(peladaId, actorUserId);
   }
 
   async updateStatus(peladaId: string, actorUserId: string, input: UpdatePeladaStatusInput) {
-    await this.ensureCanManage(peladaId, actorUserId);
+    const pelada = await this.ensureCanManage(peladaId, actorUserId);
+    const envelope = this.parseTeamsEnvelope(pelada);
+
+    if (input.status === 'IN_PROGRESS') {
+      // On initial start (before any teams are drawn), pre-check confirmed players as PRESENT so manager can adjust latecomers easily
+      const hasAnyCheckin = pelada.players.some(
+        (p) => p.status === 'CONFIRMED' && p.attendanceStatus !== 'PENDING'
+      );
+      if (!hasAnyCheckin) {
+        await prisma.peladaPlayer.updateMany({
+          where: {
+            peladaId,
+            status: 'CONFIRMED',
+            attendanceStatus: 'PENDING',
+          },
+          data: { attendanceStatus: 'PRESENT' },
+        });
+      }
+    }
+
+    if (input.status === 'FINISHED') {
+      // Reset any stray votes and open Step 1 MVP voting cleanly
+      await prisma.peladaPlayer.updateMany({
+        where: { peladaId },
+        data: {
+          votedMvpForId: null,
+          votedGoalkeeperForId: null,
+        },
+      });
+      envelope.votingStatus = 'OPEN';
+    }
 
     await prisma.pelada.update({
       where: { id: peladaId },
-      data: { status: input.status },
+      data: {
+        status: input.status,
+        teamsJson: JSON.stringify(envelope),
+      },
     });
-
-    if (input.status === 'FINISHED') {
-      await prisma.peladaPlayer.updateMany({
-        where: {
-          peladaId,
-          status: 'CONFIRMED',
-          attendanceStatus: 'PENDING',
-        },
-        data: { attendanceStatus: 'PRESENT' },
-      });
-    }
 
     return this.getById(peladaId, actorUserId);
   }
 
   async startNextCycle(peladaId: string, actorUserId: string) {
     const pelada = await this.ensureCanManage(peladaId, actorUserId);
+    const previousEnvelope = this.parseTeamsEnvelope(pelada);
+    const nextCycleEnvelope: StoredTeamsEnvelope = {
+      version: 2,
+      teams: [],
+      waitingQueue: [],
+      lastLoserPool: [],
+      lastRotationSummary: null,
+      config: previousEnvelope.config,
+      votingStatus: 'OPEN',
+    };
 
     const nextDate = new Date(pelada.dateTime);
     nextDate.setDate(nextDate.getDate() + 7);
@@ -1141,10 +1649,11 @@ export class PeladaService {
           isPublic: pelada.isPublic,
           pixKey: pelada.pixKey,
           goalkeepersExempt: pelada.goalkeepersExempt,
-          playersPerTeam: pelada.playersPerTeam,
+          playersPerTeam: nextCycleEnvelope.config.playersPerTeam,
           cancelDeadlineHours: pelada.cancelDeadlineHours,
           durationHours: pelada.durationHours ?? 2,
           whatsappGroupUrl: pelada.whatsappGroupUrl,
+          teamsJson: JSON.stringify(nextCycleEnvelope),
           organizerId: pelada.organizerId,
           status: 'OPEN',
           players: {

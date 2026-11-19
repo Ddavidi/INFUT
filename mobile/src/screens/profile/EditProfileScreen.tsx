@@ -235,7 +235,6 @@ export function EditProfileScreen() {
               accessibilityLabel={s.sport}
               accessibilityState={{ selected: selectedSport === s.sport }}
             >
-              <Text style={styles.chipEmoji}>{s.emoji}</Text>
               <Text style={[styles.chipText, selectedSport === s.sport && styles.chipTextSelected]}>
                 {s.sport}
               </Text>

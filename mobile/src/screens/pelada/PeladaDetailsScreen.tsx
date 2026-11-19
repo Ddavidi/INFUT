@@ -15,7 +15,7 @@ import {
 import { useFocusEffect } from '@react-navigation/native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { AppStackParamList } from '../../navigation';
-import { EditPeladaModal } from '../../components/pelada/EditPeladaModal';
+import { PeladaConfigModal, ConfigModalTab } from '../../components/pelada/PeladaConfigModal';
 import {
   deletePelada,
   getPeladaById,
@@ -40,13 +40,13 @@ const HIT_SLOP = { top: 4, bottom: 4, left: 4, right: 4 };
 function getPaymentLabel(status: PaymentStatus): { text: string; color: string; bg: string } {
   switch (status) {
     case 'PAID':
-      return { text: 'Pago ✅', color: colors.success, bg: colors.successSoft };
+      return { text: 'Pago', color: colors.success, bg: colors.successSoft };
     case 'WAITING_CONFIRMATION':
-      return { text: 'Em analise 🟡', color: colors.warning, bg: colors.warningSoft };
+      return { text: 'Em análise', color: colors.warning, bg: colors.warningSoft };
     case 'EXEMPT':
-      return { text: 'Isento 🛡️', color: colors.info, bg: colors.infoSoft };
+      return { text: 'Isento', color: colors.info, bg: colors.infoSoft };
     default:
-      return { text: 'Pendente ⏳', color: colors.error, bg: colors.errorSoft };
+      return { text: 'Pendente', color: colors.error, bg: colors.errorSoft };
   }
 }
 
@@ -59,7 +59,8 @@ export function PeladaDetailsScreen({ navigation, route }: Props) {
   const [refreshing, setRefreshing] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<DetailTab>('attendance');
-  const [showEditModal, setShowEditModal] = useState(false);
+  const [showConfigModal, setShowConfigModal] = useState(false);
+  const [configInitialTab, setConfigInitialTab] = useState<ConfigModalTab>('rules');
   const [rsvpPosition, setRsvpPosition] = useState<string>('');
 
   const loadPelada = useCallback(async () => {
@@ -215,20 +216,23 @@ export function PeladaDetailsScreen({ navigation, route }: Props) {
     if (!pelada) return;
     showConfirm(
       'Iniciar Pelada',
-      'A pelada será iniciada! Na próxima tela você poderá sortear ou escolher os times manualmente, usar o cronômetro e registrar gols e placares.',
+      'Ao iniciar, você irá para a tela Ao Vivo com a chamada de presentes e poderá revisar as regras do jogo e do sorteio na engrenagem.',
       async () => {
         setActionLoading(true);
         try {
           const updated = await updatePeladaStatus(pelada.id, 'IN_PROGRESS');
           setPelada(updated);
-          navigation.navigate('LivePelada', { peladaId: pelada.id });
+          navigation.navigate('LivePelada', {
+            peladaId: pelada.id,
+            openConfigOnStart: true,
+          });
         } catch (error: any) {
           showMessage('Erro', error.response?.data?.error || 'Não foi possível iniciar a pelada');
         } finally {
           setActionLoading(false);
         }
       },
-      'Iniciar'
+      'Iniciar Pelada'
     );
   }
 
@@ -309,6 +313,15 @@ export function PeladaDetailsScreen({ navigation, route }: Props) {
     );
   }
 
+  const cfg = pelada.gameConfig;
+  const rulesSummary = cfg
+    ? `${cfg.playersPerTeam} na linha • Partida de ${cfg.matchDurationMinutes} min • ${
+        cfg.gameMode === 'FIXED_TEAMS'
+          ? `${cfg.fixedTeamsCount} times fixos`
+          : '2 times + Fila'
+      }`
+    : `${pelada.playersPerTeam} na linha`;
+
   const headerCardContent = (
     <View style={styles.headerCard}>
       <View style={styles.heroTagsRow}>
@@ -316,8 +329,8 @@ export function PeladaDetailsScreen({ navigation, route }: Props) {
           <Text style={styles.sportTagText}>{pelada.sport}</Text>
         </View>
         {pelada.isRecurring && (
-          <View style={styles.infoTag}>
-            <Text style={styles.infoTagText}>Recorrente</Text>
+          <View style={styles.neutralTag}>
+            <Text style={styles.neutralTagText}>Semanal</Text>
           </View>
         )}
         <View style={styles.neutralTag}>
@@ -331,30 +344,44 @@ export function PeladaDetailsScreen({ navigation, route }: Props) {
       <Text style={styles.organizerLine}>Organizado por {pelada.organizer.name}</Text>
 
       <View style={styles.heroMetaBox}>
-        <Text style={styles.metaText}>
-          📅 {formatPeladaSchedule(pelada.dateTime, pelada.durationHours)}
-        </Text>
-        <Text style={styles.metaText}>📍 {pelada.location}</Text>
-        {pelada.locationAddress ? (
-          <Text style={styles.metaSubText}>{pelada.locationAddress}</Text>
-        ) : null}
-        <Text style={styles.metaText}>
-          💰{' '}
-          {pelada.price && pelada.price > 0
-            ? `R$ ${pelada.price.toFixed(2)}`
-            : 'Gratuita'}
-          {pelada.goalkeepersExempt ? ' (Goleiros isentos)' : ''}
-        </Text>
+        <View style={styles.metaLineRow}>
+          <Text style={styles.metaKey}>DATA</Text>
+          <Text style={styles.metaText}>
+            {formatPeladaSchedule(pelada.dateTime, pelada.durationHours)}
+          </Text>
+        </View>
+        <View style={styles.metaLineRow}>
+          <Text style={styles.metaKey}>LOCAL</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.metaText}>{pelada.location}</Text>
+            {pelada.locationAddress ? (
+              <Text style={styles.metaSubTextClean}>{pelada.locationAddress}</Text>
+            ) : null}
+          </View>
+        </View>
+        <View style={styles.metaLineRow}>
+          <Text style={styles.metaKey}>TAXA</Text>
+          <Text style={styles.metaText}>
+            {pelada.price && pelada.price > 0
+              ? `R$ ${pelada.price.toFixed(2)}`
+              : 'Gratuita'}
+            {pelada.goalkeepersExempt ? ' (Goleiros isentos)' : ''}
+          </Text>
+        </View>
+        <View style={styles.metaLineRow}>
+          <Text style={styles.metaKey}>REGRAS</Text>
+          <Text style={styles.metaText}>{rulesSummary}</Text>
+        </View>
       </View>
 
       <View style={styles.headerActionRow}>
         <TouchableOpacity
-          style={[styles.shareBtn, { flex: 1 }]}
+          style={[styles.secondaryActionBtn, styles.headerBtnBase, { flex: 1 }]}
           onPress={handleShareInvite}
           accessibilityRole="button"
           accessibilityLabel="Compartilhar convite no WhatsApp"
         >
-          <Text style={styles.shareBtnText}>📲 Convite WhatsApp</Text>
+          <Text style={styles.secondaryActionText}>Compartilhar Convite</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.mapsBtn}
@@ -362,7 +389,7 @@ export function PeladaDetailsScreen({ navigation, route }: Props) {
           accessibilityRole="button"
           accessibilityLabel="Abrir endereço no Google Maps"
         >
-          <Text style={styles.mapsBtnText}>🗺️ Abrir Maps</Text>
+          <Text style={styles.mapsBtnText}>Abrir Maps</Text>
         </TouchableOpacity>
       </View>
 
@@ -373,7 +400,7 @@ export function PeladaDetailsScreen({ navigation, route }: Props) {
           accessibilityRole="button"
           accessibilityLabel="Entrar no grupo do WhatsApp da pelada"
         >
-          <Text style={styles.whatsappGroupBtnText}>💬 Entrar no Grupo do WhatsApp</Text>
+          <Text style={styles.whatsappGroupBtnText}>Grupo do WhatsApp</Text>
         </TouchableOpacity>
       ) : null}
     </View>
@@ -382,21 +409,40 @@ export function PeladaDetailsScreen({ navigation, route }: Props) {
   const lifecycleCardContent = (
     <View style={styles.lifecycleCard}>
       <View style={styles.lifecycleHeader}>
-        <Text style={styles.lifecycleTitle}>
-          {peladaStatus === 'OPEN'
-            ? '📋 Lista de presença aberta'
-            : peladaStatus === 'IN_PROGRESS'
-            ? '🔴 Pelada em andamento'
-            : '🏁 Pelada finalizada'}
-        </Text>
+        <View style={styles.lifecycleTitleRow}>
+          <View
+            style={[
+              styles.statusDot,
+              {
+                backgroundColor:
+                  peladaStatus === 'OPEN'
+                    ? colors.primary
+                    : peladaStatus === 'IN_PROGRESS'
+                    ? colors.error
+                    : colors.success,
+              },
+            ]}
+          />
+          <Text style={styles.lifecycleTitle}>
+            {peladaStatus === 'OPEN'
+              ? 'Lista de presença aberta'
+              : peladaStatus === 'IN_PROGRESS'
+              ? 'Pelada em andamento'
+              : pelada.votingStatus === 'CLOSED'
+              ? 'Finalizada — Resultado publicado'
+              : 'Finalizada — Votação de MVP aberta'}
+          </Text>
+        </View>
         <Text style={styles.lifecycleSubtitle}>
           {peladaStatus === 'OPEN'
             ? canManage
-              ? 'Quando os jogadores chegarem, inicie a pelada para montar os times, rodar o cronômetro e registrar gols.'
-              : 'Aguarde o organizador iniciar a pelada no dia do jogo.'
+              ? 'Quando a galera chegar em quadra, inicie a pelada para fazer a chamada e sortear os times.'
+              : 'Aguarde o organizador iniciar a pelada no horário do jogo.'
             : peladaStatus === 'IN_PROGRESS'
-            ? 'Entre na pelada ao vivo para acompanhar times, cronômetro, placar e gols em tempo real.'
-            : 'Pelada encerrada! Confira as estatísticas finais e vote no MVP da pelada.'}
+            ? 'Entre na tela ao vivo para acompanhar times, fila de próximos, cronômetro e placar.'
+            : pelada.votingStatus === 'CLOSED'
+            ? 'Confira os vencedores de MVP, o goleiro destaque e as estatísticas completas.'
+            : 'Participe da votação aberta para eleger o MVP e o goleiro destaque da rodada.'}
         </Text>
       </View>
 
@@ -408,7 +454,7 @@ export function PeladaDetailsScreen({ navigation, route }: Props) {
           accessibilityRole="button"
           accessibilityLabel="Iniciar pelada"
         >
-          <Text style={styles.lifecycleActionBtnText}>▶️ Iniciar Pelada</Text>
+          <Text style={styles.lifecycleActionBtnText}>Iniciar Pelada</Text>
         </TouchableOpacity>
       )}
 
@@ -419,18 +465,26 @@ export function PeladaDetailsScreen({ navigation, route }: Props) {
           accessibilityRole="button"
           accessibilityLabel="Entrar na pelada ao vivo"
         >
-          <Text style={styles.lifecycleActionBtnText}>⚽ Entrar na Pelada ao Vivo</Text>
+          <Text style={styles.lifecycleActionBtnText}>Entrar na Pelada ao Vivo</Text>
         </TouchableOpacity>
       )}
 
       {peladaStatus === 'FINISHED' && (
         <TouchableOpacity
-          style={[styles.lifecycleActionBtn, { backgroundColor: colors.success }]}
+          style={styles.lifecycleActionBtn}
           onPress={() => navigation.navigate('PostGame', { peladaId: pelada.id })}
           accessibilityRole="button"
-          accessibilityLabel="Ver estatísticas e votar no MVP"
+          accessibilityLabel={
+            pelada.votingStatus === 'CLOSED'
+              ? 'Ver resultado oficial da pelada'
+              : 'Votar no MVP da pelada'
+          }
         >
-          <Text style={styles.lifecycleActionBtnText}>🏆 Ver Estatísticas e Votar no MVP</Text>
+          <Text style={styles.lifecycleActionBtnText}>
+            {pelada.votingStatus === 'CLOSED'
+              ? 'Ver Resultado Oficial e Estatísticas'
+              : 'Votar no MVP e Ver Estatísticas'}
+          </Text>
         </TouchableOpacity>
       )}
     </View>
@@ -467,7 +521,7 @@ export function PeladaDetailsScreen({ navigation, route }: Props) {
     pelada.pixKey || (pelada.price && pelada.price > 0) ? (
       <View style={styles.sectionCard}>
         <View style={styles.sectionHeaderRow}>
-          <Text style={styles.sectionTitleNoMargin}>🔑 Chave Pix da Pelada</Text>
+          <Text style={styles.sectionTitleNoMargin}>Chave Pix</Text>
           {pelada.myPlayer && pelada.myStatus === 'CONFIRMED' && (
             <View
               style={[
@@ -538,12 +592,12 @@ export function PeladaDetailsScreen({ navigation, route }: Props) {
         <Text style={{ color: colors.primary, fontWeight: '800' }}>
           {pelada.myStatus === 'CONFIRMED'
             ? pelada.myPlayer?.isGoalkeeper
-              ? 'Confirmado (Goleiro) 🧤'
-              : 'Confirmado (Linha) ✅'
+              ? 'Confirmado (Goleiro)'
+              : 'Confirmado (Linha)'
             : pelada.myStatus === 'WAITLIST'
-            ? 'Na Lista de Espera ⏳'
+            ? 'Na Lista de Espera'
             : pelada.myStatus === 'DECLINED'
-            ? 'Não vou ❌'
+            ? 'Não vou'
             : 'Ainda não respondeu'}
         </Text>
       </Text>
@@ -551,7 +605,7 @@ export function PeladaDetailsScreen({ navigation, route }: Props) {
       {peladaStatus === 'OPEN' ? (
         <>
           <Text style={styles.deadlineNotice}>
-            ⏰ Cancelamento sem falta até {pelada.cancelDeadlineHours}h antes do jogo
+            Cancelamento sem falta até {pelada.cancelDeadlineHours}h antes do jogo
           </Text>
 
           {(() => {
@@ -624,7 +678,7 @@ export function PeladaDetailsScreen({ navigation, route }: Props) {
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[styles.rsvpBtn, styles.goalkeeperRsvpBtn]}
+              style={[styles.rsvpBtn, styles.secondaryActionBtn]}
               disabled={actionLoading}
               onPress={() =>
                 runAction(() =>
@@ -632,7 +686,7 @@ export function PeladaDetailsScreen({ navigation, route }: Props) {
                 )
               }
             >
-              <Text style={styles.goalkeeperRsvpText}>Sou Goleiro 🧤</Text>
+              <Text style={styles.secondaryActionText}>Sou Goleiro</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -660,7 +714,7 @@ export function PeladaDetailsScreen({ navigation, route }: Props) {
       {/* Goalkeepers */}
       <View style={styles.sectionCard}>
         <View style={styles.sectionHeaderRow}>
-          <Text style={styles.sectionTitleNoMargin}>🧤 Goleiros</Text>
+          <Text style={styles.sectionTitleNoMargin}>Goleiros</Text>
           <View style={styles.countTag}>
             <Text style={styles.countTagText}>{confirmedGoalkeepers.length}</Text>
           </View>
@@ -677,7 +731,7 @@ export function PeladaDetailsScreen({ navigation, route }: Props) {
       {/* Confirmed Line Players */}
       <View style={styles.sectionCard}>
         <View style={styles.sectionHeaderRow}>
-          <Text style={styles.sectionTitleNoMargin}>⚽ Confirmados na Linha</Text>
+          <Text style={styles.sectionTitleNoMargin}>Confirmados na Linha</Text>
           <View style={styles.countTag}>
             <Text style={styles.countTagText}>
               {confirmedLine.length}
@@ -757,17 +811,20 @@ export function PeladaDetailsScreen({ navigation, route }: Props) {
               accessibilityRole="button"
               accessibilityLabel="Configurar membros da pelada"
             >
-              <Text style={styles.membersTopBtnText}>👥 Membros</Text>
+              <Text style={styles.membersTopBtnText}>Membros</Text>
             </TouchableOpacity>
           )}
-          {isOrganizer && (
+          {canManage && (
             <TouchableOpacity
-              style={styles.editTopBtn}
-              onPress={() => setShowEditModal(true)}
+              style={styles.gearTopBtn}
+              onPress={() => {
+                setConfigInitialTab('rules');
+                setShowConfigModal(true);
+              }}
               accessibilityRole="button"
-              accessibilityLabel="Editar configurações da pelada"
+              accessibilityLabel="Configurar regras de jogo, sorteio e dados da pelada"
             >
-              <Text style={styles.editTopBtnText}>✏️ Editar</Text>
+              <Text style={styles.gearTopBtnText}>⚙</Text>
             </TouchableOpacity>
           )}
           <View style={styles.codePill}>
@@ -828,7 +885,7 @@ export function PeladaDetailsScreen({ navigation, route }: Props) {
             <View>
               <View style={styles.sectionCard}>
                 <View style={styles.sectionHeaderRow}>
-                  <Text style={styles.sectionTitleNoMargin}>💰 Resumo do Caixa</Text>
+                  <Text style={styles.sectionTitleNoMargin}>Resumo do Caixa</Text>
                   <Text style={styles.progressPctText}>{paymentProgressPct}% pago</Text>
                 </View>
 
@@ -866,7 +923,7 @@ export function PeladaDetailsScreen({ navigation, route }: Props) {
                     accessibilityLabel="Copiar cobrança dos jogadores pendentes no WhatsApp"
                   >
                     <Text style={styles.whatsappGroupBtnText}>
-                      📲 Cobrar Pendentes no WhatsApp ({pelada.financialSummary.pendingCount + pelada.financialSummary.waitingCount})
+                      Cobrar Pendentes no WhatsApp ({pelada.financialSummary.pendingCount + pelada.financialSummary.waitingCount})
                     </Text>
                   </TouchableOpacity>
                 )}
@@ -875,7 +932,7 @@ export function PeladaDetailsScreen({ navigation, route }: Props) {
               {/* Pix Card */}
               {pelada.pixKey ? (
                 <View style={styles.sectionCard}>
-                  <Text style={styles.sectionTitle}>🔑 Chave Pix da Pelada</Text>
+                  <Text style={styles.sectionTitle}>Chave Pix</Text>
                   <Text style={styles.pixKeyText}>{pelada.pixKey}</Text>
                   <View style={[styles.rsvpRow, { marginTop: spacing.sm + 4 }]}>
                     <TouchableOpacity
@@ -921,7 +978,8 @@ export function PeladaDetailsScreen({ navigation, route }: Props) {
                       <View key={player.id} style={styles.financePlayerRow}>
                         <View style={{ flex: 1 }}>
                           <Text style={styles.playerName}>
-                            {player.displayName} {player.isGoalkeeper ? '🧤' : ''}
+                            {player.displayName}
+                            {player.isGoalkeeper ? ' (Goleiro)' : ''}
                           </Text>
                           <View style={styles.paymentBadgeWrap}>
                             <View style={[styles.paymentPill, { backgroundColor: pLabel.bg }]}>
@@ -992,17 +1050,18 @@ export function PeladaDetailsScreen({ navigation, route }: Props) {
           {/* Organizer Delete Pelada */}
           {isOrganizer && (
             <TouchableOpacity style={styles.deletePeladaBtn} onPress={handleDeletePelada}>
-              <Text style={styles.deletePeladaText}>🗑️ Cancelar / Excluir Pelada</Text>
+              <Text style={styles.deletePeladaText}>Cancelar / Excluir Pelada</Text>
             </TouchableOpacity>
           )}
         </View>
       </ScrollView>
 
-      {isOrganizer && (
-        <EditPeladaModal
-          visible={showEditModal}
+      {canManage && (
+        <PeladaConfigModal
+          visible={showConfigModal}
           pelada={pelada}
-          onClose={() => setShowEditModal(false)}
+          initialTab={configInitialTab}
+          onClose={() => setShowConfigModal(false)}
           onSaved={(updated) => setPelada(updated)}
         />
       )}
@@ -1042,7 +1101,7 @@ function PlayerRow({
             {index}. {player.displayName}
           </Text>
           <Text style={styles.playerMeta}>
-            {player.isGoalkeeper ? '🧤 Goleiro' : player.position || 'Jogador de linha'}
+            {player.isGoalkeeper ? 'Goleiro' : player.position || 'Jogador de linha'}
             {roleTag ? ` • ${roleTag}` : ''}
             {` • ${player.memberType === 'MENSALISTA' ? 'Mensalista' : 'Avulso'}`}
           </Text>
@@ -1107,16 +1166,17 @@ const styles = StyleSheet.create({
   backBtn: { minHeight: 44, justifyContent: 'center', paddingRight: spacing.md },
   backBtnText: { color: colors.primary, fontSize: fonts.sizes.md, fontWeight: '800' },
   topBarRight: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: spacing.xs },
-  editTopBtn: {
+  gearTopBtn: {
     backgroundColor: colors.surfaceLight,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.borderStrong,
     borderRadius: borderRadius.md,
-    paddingHorizontal: spacing.sm + 4,
+    width: 44,
     minHeight: 44,
+    alignItems: 'center',
     justifyContent: 'center',
   },
-  editTopBtnText: { color: colors.textPrimary, fontSize: fonts.sizes.xs, fontWeight: '700' },
+  gearTopBtnText: { color: colors.textPrimary, fontSize: 18, fontWeight: '700' },
   membersTopBtn: {
     backgroundColor: colors.surfaceElevated,
     borderWidth: 1,
@@ -1209,26 +1269,52 @@ const styles = StyleSheet.create({
     padding: spacing.sm + 4,
     borderWidth: 1,
     borderColor: colors.borderLight,
-    gap: 6,
+    gap: spacing.xs + 4,
   },
-  metaText: { fontSize: fonts.sizes.sm, color: colors.textPrimary, fontVariant: ['tabular-nums'] },
+  metaLineRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+  },
+  metaKey: {
+    width: 58,
+    fontSize: fonts.sizes.xs,
+    fontWeight: '800',
+    color: colors.textMuted,
+    letterSpacing: 0.4,
+    paddingTop: 2,
+  },
+  metaText: {
+    flex: 1,
+    fontSize: fonts.sizes.sm,
+    color: colors.textPrimary,
+    fontVariant: ['tabular-nums'],
+  },
   metaSubText: { fontSize: fonts.sizes.xs, color: colors.textMuted, paddingLeft: 20 },
-  headerActionRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md },
-  shareBtn: {
-    backgroundColor: colors.darkTeal,
-    borderWidth: 1,
-    borderColor: colors.primary,
+  metaSubTextClean: { fontSize: fonts.sizes.xs, color: colors.textMuted, marginTop: 2 },
+  headerBtnBase: {
     borderRadius: borderRadius.md,
     minHeight: 44,
     paddingVertical: 11,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  shareBtnText: { color: colors.primary, fontWeight: '800', fontSize: fonts.sizes.xs },
+  headerActionRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md },
+  shareBtn: {
+    backgroundColor: colors.surfaceLight,
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
+    borderRadius: borderRadius.md,
+    minHeight: 44,
+    paddingVertical: 11,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  shareBtnText: { color: colors.textPrimary, fontWeight: '700', fontSize: fonts.sizes.xs },
   mapsBtn: {
     backgroundColor: colors.surfaceLight,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.borderStrong,
     borderRadius: borderRadius.md,
     paddingHorizontal: spacing.md,
     minHeight: 44,
@@ -1239,16 +1325,26 @@ const styles = StyleSheet.create({
   mapsBtnText: { color: colors.textPrimary, fontWeight: '700', fontSize: fonts.sizes.xs },
   whatsappGroupBtn: {
     marginTop: spacing.sm,
-    backgroundColor: colors.successSoft,
+    backgroundColor: colors.surfaceLight,
     borderWidth: 1,
-    borderColor: colors.success,
+    borderColor: colors.borderStrong,
     borderRadius: borderRadius.md,
     minHeight: 44,
     paddingVertical: 11,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  whatsappGroupBtnText: { color: colors.success, fontWeight: '800', fontSize: fonts.sizes.xs },
+  whatsappGroupBtnText: { color: colors.textPrimary, fontWeight: '700', fontSize: fonts.sizes.xs },
+  lifecycleTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
   tabBar: {
     flexDirection: 'row',
     backgroundColor: colors.surface,

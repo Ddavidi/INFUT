@@ -26,15 +26,15 @@ type Props = {
 
 const SPORT_FILTERS = ['Todos', ...SPORTS.map((s) => s.sport)];
 
-const SPORT_EMOJIS: Record<string, string> = {
-  Futebol: '⚽',
-  Futsal: '🏟️',
-  'Vôlei': '🏐',
-  Volei: '🏐',
-  Basquete: '🏀',
-  Handebol: '🤾',
-  'Beach Tennis': '🎾',
-  'Tênis de Mesa': '🏓',
+const SPORT_MONOGRAMS: Record<string, string> = {
+  Futebol: 'FUT',
+  Futsal: 'SAL',
+  'Vôlei': 'VOL',
+  Volei: 'VOL',
+  Basquete: 'BAS',
+  Handebol: 'HAN',
+  'Beach Tennis': 'BCH',
+  'Tênis de Mesa': 'TEN',
 };
 
 export function ExploreScreen({ navigation }: Props) {
@@ -160,7 +160,7 @@ export function ExploreScreen({ navigation }: Props) {
             const vagasLabel = item.maxPlayers
               ? `${item.confirmedFieldCount}/${item.maxPlayers} vagas`
               : `${item.confirmedCount} confirmados`;
-            const emoji = SPORT_EMOJIS[item.sport] || '🎯';
+            const monogram = SPORT_MONOGRAMS[item.sport] || 'JOG';
 
             return (
               <TouchableOpacity
@@ -172,7 +172,7 @@ export function ExploreScreen({ navigation }: Props) {
               >
                 <View style={styles.cardTop}>
                   <View style={styles.sportSquircle}>
-                    <Text style={styles.sportEmoji}>{emoji}</Text>
+                    <Text style={styles.sportMonogram}>{monogram}</Text>
                   </View>
                   <View style={{ flex: 1, minWidth: 0 }}>
                     <Text style={styles.cardTitle} numberOfLines={1}>
@@ -189,10 +189,10 @@ export function ExploreScreen({ navigation }: Props) {
 
                 <View style={styles.infoBlock}>
                   <Text style={styles.cardInfo}>
-                    📅 {formatPeladaSchedule(item.dateTime, item.durationHours, false)}
+                    {formatPeladaSchedule(item.dateTime, item.durationHours, false)}
                   </Text>
                   <Text style={styles.cardInfo} numberOfLines={1}>
-                    📍 {item.location}
+                    {item.location}
                   </Text>
                   {item.locationAddress ? (
                     <Text style={styles.cardSubInfo} numberOfLines={1}>
@@ -214,7 +214,6 @@ export function ExploreScreen({ navigation }: Props) {
           }}
           ListEmptyComponent={
             <View style={styles.emptyCard}>
-              <Text style={styles.emptyEmoji}>🗺️</Text>
               <Text style={styles.emptyTitle}>Nenhuma pelada encontrada</Text>
               <Text style={styles.emptySubtitle}>
                 {hasActiveFilter
@@ -349,13 +348,14 @@ const styles = StyleSheet.create({
   sportSquircle: {
     width: 44,
     height: 44,
-    borderRadius: 13,
+    borderRadius: 12,
     backgroundColor: colors.surfaceLight,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.borderStrong,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  sportMonogram: { fontSize: 11, fontWeight: '900', color: colors.primary, letterSpacing: 0.6 },
   sportEmoji: { fontSize: 20 },
   cardTitle: { fontSize: fonts.sizes.lg, fontWeight: '800', color: colors.textPrimary },
   cardSport: { fontSize: fonts.sizes.xs, color: colors.primary, fontWeight: '700', marginTop: 2 },

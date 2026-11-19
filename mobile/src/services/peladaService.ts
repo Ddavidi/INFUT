@@ -6,7 +6,11 @@ import {
   MemberType,
   PaymentStatus,
   Pelada,
+  PeladaDrawMode,
+  PeladaGameConfig,
+  PeladaGameMode,
   PeladaLifecycleStatus,
+  PeladaVotingStatus,
 } from '../types';
 
 export async function createPelada(data: CreatePeladaInput): Promise<Pelada> {
@@ -119,9 +123,40 @@ export async function updatePlayerStats(
 
 export async function drawPeladaTeams(
   peladaId: string,
-  data: { playersPerTeam?: number; balancedByPosition?: boolean; teamNames?: string[] }
+  data: {
+    playersPerTeam?: number;
+    balancedByPosition?: boolean;
+    teamNames?: string[];
+    gameMode?: PeladaGameMode;
+    drawMode?: PeladaDrawMode;
+    fixedTeamsCount?: number;
+  }
 ): Promise<Pelada> {
   const response = await api.post(`/peladas/${peladaId}/draw-teams`, data);
+  return response.data;
+}
+
+export async function updatePeladaGameConfig(
+  peladaId: string,
+  config: Partial<PeladaGameConfig>
+): Promise<Pelada> {
+  const response = await api.patch(`/peladas/${peladaId}/game-config`, config);
+  return response.data;
+}
+
+export async function batchUpdatePlayerCheckin(
+  peladaId: string,
+  data: { attendanceStatus: 'PENDING' | 'PRESENT' | 'INJURED'; playerIds?: string[] }
+): Promise<Pelada> {
+  const response = await api.post(`/peladas/${peladaId}/checkin-batch`, data);
+  return response.data;
+}
+
+export async function updatePeladaVotingStatus(
+  peladaId: string,
+  votingStatus: PeladaVotingStatus
+): Promise<Pelada> {
+  const response = await api.patch(`/peladas/${peladaId}/voting-status`, { votingStatus });
   return response.data;
 }
 
@@ -148,7 +183,13 @@ export async function startNextPeladaCycle(peladaId: string): Promise<Pelada> {
 
 export async function recordPeladaMatch(
   peladaId: string,
-  data: { teamAName: string; teamBName: string; scoreA: number; scoreB: number }
+  data: {
+    teamAName: string;
+    teamBName: string;
+    scoreA: number;
+    scoreB: number;
+    leavingTeamName?: string;
+  }
 ): Promise<Pelada> {
   const response = await api.post(`/peladas/${peladaId}/matches`, data);
   return response.data;

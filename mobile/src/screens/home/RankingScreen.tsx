@@ -17,11 +17,11 @@ import { useResponsive } from '../../hooks/useResponsive';
 
 type RankingCategory = 'goals' | 'wins' | 'assists' | 'mvp';
 
-const CATEGORIES: { key: RankingCategory; label: string; emoji: string }[] = [
-  { key: 'goals', label: 'Artilharia', emoji: '⚽' },
-  { key: 'wins', label: 'Vitórias', emoji: '🏆' },
-  { key: 'assists', label: 'Assist.', emoji: '👟' },
-  { key: 'mvp', label: 'MVP', emoji: '👑' },
+const CATEGORIES: { key: RankingCategory; label: string }[] = [
+  { key: 'goals', label: 'Artilharia' },
+  { key: 'wins', label: 'Vitórias' },
+  { key: 'assists', label: 'Assist.' },
+  { key: 'mvp', label: 'MVP' },
 ];
 
 export function RankingScreen() {
@@ -109,7 +109,7 @@ export function RankingScreen() {
                 accessibilityState={{ selected: active }}
               >
                 <Text style={[styles.categoryText, active && styles.categoryTextActive]}>
-                  {c.emoji} {c.label}
+                  {c.label}
                 </Text>
               </TouchableOpacity>
             );
@@ -155,7 +155,7 @@ export function RankingScreen() {
             />
           }
           renderItem={({ item, index }) => {
-            const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}º`;
+            const rankNum = String(index + 1).padStart(2, '0');
             const isLeader = index === 0;
             const isTop3 = index < 3;
 
@@ -168,7 +168,7 @@ export function RankingScreen() {
                 ]}
               >
                 <View style={[styles.rankBadge, isTop3 && styles.rankBadgeTop]}>
-                  <Text style={styles.rankPos}>{medal}</Text>
+                  <Text style={[styles.rankPos, isTop3 && { color: colors.primary }]}>{rankNum}</Text>
                 </View>
                 <View style={{ flex: 1, minWidth: 0 }}>
                   <Text style={styles.playerName} numberOfLines={1}>
@@ -198,7 +198,6 @@ export function RankingScreen() {
           }}
           ListEmptyComponent={
             <View style={styles.emptyCard}>
-              <Text style={styles.emptyEmoji}>🏆</Text>
               <Text style={styles.emptyTitle}>Ranking ainda vazio</Text>
               <Text style={styles.emptySubtitle}>
                 Participe de peladas, registre gols e assistências na súmula e vote nos destaques para pontuar aqui.

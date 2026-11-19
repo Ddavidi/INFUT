@@ -121,7 +121,6 @@ export function ManageMembersScreen({ navigation, route }: Props) {
     return (
       <View style={styles.centered}>
         <View style={styles.stateCard}>
-          <Text style={{ fontSize: 38 }}>🔒</Text>
           <Text style={styles.stateTitle}>Acesso Restrito</Text>
           <Text style={styles.stateText}>
             Apenas o organizador e os co-organizadores podem configurar os membros desta pelada.
@@ -171,7 +170,7 @@ export function ManageMembersScreen({ navigation, route }: Props) {
               {index + 1}. {player.displayName}
             </Text>
             <Text style={styles.memberMeta}>
-              {player.isGoalkeeper ? '🧤 Goleiro' : player.position || 'Jogador de linha'} • {roleLabel}
+              {player.isGoalkeeper ? 'Goleiro' : player.position || 'Jogador de linha'} • {roleLabel}
             </Text>
           </View>
         </View>
@@ -201,7 +200,7 @@ export function ManageMembersScreen({ navigation, route }: Props) {
                   { color: isMensalista ? colors.info : colors.textSecondary },
                 ]}
               >
-                {isMensalista ? '★ Mensalista' : 'Avulso'}
+                {isMensalista ? 'Mensalista' : 'Avulso'}
               </Text>
             </TouchableOpacity>
           ) : (
@@ -302,7 +301,7 @@ export function ManageMembersScreen({ navigation, route }: Props) {
                 guestGoalkeeper && { color: colors.primary },
               ]}
             >
-              🧤 Gol
+              Goleiro
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -320,7 +319,7 @@ export function ManageMembersScreen({ navigation, route }: Props) {
       {/* Goalkeepers */}
       <View style={styles.sectionCard}>
         <View style={styles.sectionHeaderRow}>
-          <Text style={styles.sectionTitleNoMargin}>🧤 Goleiros Confirmados</Text>
+          <Text style={styles.sectionTitleNoMargin}>Goleiros Confirmados</Text>
           <View style={styles.countTag}>
             <Text style={styles.countTagText}>{confirmedGoalkeepers.length}</Text>
           </View>
@@ -339,7 +338,7 @@ export function ManageMembersScreen({ navigation, route }: Props) {
       {/* Line Players */}
       <View style={styles.sectionCard}>
         <View style={styles.sectionHeaderRow}>
-          <Text style={styles.sectionTitleNoMargin}>⚽ Jogadores de Linha</Text>
+          <Text style={styles.sectionTitleNoMargin}>Jogadores de Linha</Text>
           <View style={styles.countTag}>
             <Text style={styles.countTagText}>
               {confirmedLine.length}
@@ -359,7 +358,7 @@ export function ManageMembersScreen({ navigation, route }: Props) {
         <View style={styles.sectionCard}>
           <View style={styles.sectionHeaderRow}>
             <Text style={[styles.sectionTitleNoMargin, { color: colors.warning }]}>
-              ⏳ Lista de Espera
+              Lista de Espera
             </Text>
             <View style={[styles.countTag, { backgroundColor: colors.warningSoft }]}>
               <Text style={[styles.countTagText, { color: colors.warning }]}>

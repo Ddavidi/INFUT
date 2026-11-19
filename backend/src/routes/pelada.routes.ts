@@ -5,6 +5,7 @@ import { authMiddleware } from '../middlewares/auth.middleware';
 import { validate } from '../middlewares/validate.middleware';
 import {
   addGuestSchema,
+  batchCheckinSchema,
   createPeladaSchema,
   drawTeamsSchema,
   joinByCodeSchema,
@@ -12,11 +13,13 @@ import {
   rsvpSchema,
   setManualTeamsSchema,
   updateCheckinSchema,
+  updateGameConfigSchema,
   updatePaymentSchema,
   updatePeladaSchema,
   updatePeladaStatusSchema,
   updateRoleSchema,
   updateStatsSchema,
+  updateVotingStatusSchema,
   voteGoalkeeperSchema,
   voteMvpSchema,
 } from '../schemas/pelada.schema';
@@ -42,10 +45,13 @@ router.delete('/:id/players/:playerId', authMiddleware, (req, res, next) => pela
 router.patch('/:id/players/:playerId/role', authMiddleware, validate(updateRoleSchema), (req, res, next) => peladaController.updatePlayerRole(req, res, next));
 router.patch('/:id/players/:playerId/payment', authMiddleware, validate(updatePaymentSchema), (req, res, next) => peladaController.updatePaymentStatus(req, res, next));
 router.patch('/:id/players/:playerId/checkin', authMiddleware, validate(updateCheckinSchema), (req, res, next) => peladaController.updateCheckin(req, res, next));
+router.post('/:id/checkin-batch', authMiddleware, validate(batchCheckinSchema), (req, res, next) => peladaController.batchCheckin(req, res, next));
 router.patch('/:id/players/:playerId/stats', authMiddleware, validate(updateStatsSchema), (req, res, next) => peladaController.updateStats(req, res, next));
+router.patch('/:id/game-config', authMiddleware, validate(updateGameConfigSchema), (req, res, next) => peladaController.updateGameConfig(req, res, next));
 router.post('/:id/draw-teams', authMiddleware, validate(drawTeamsSchema), (req, res, next) => peladaController.drawTeams(req, res, next));
 router.put('/:id/teams', authMiddleware, validate(setManualTeamsSchema), (req, res, next) => peladaController.setManualTeams(req, res, next));
 router.patch('/:id/status', authMiddleware, validate(updatePeladaStatusSchema), (req, res, next) => peladaController.updateStatus(req, res, next));
+router.patch('/:id/voting-status', authMiddleware, validate(updateVotingStatusSchema), (req, res, next) => peladaController.updateVotingStatus(req, res, next));
 router.post('/:id/next-cycle', authMiddleware, (req, res, next) => peladaController.startNextCycle(req, res, next));
 router.post('/:id/matches', authMiddleware, validate(recordMatchSchema), (req, res, next) => peladaController.recordMatch(req, res, next));
 router.post('/:id/vote-mvp', authMiddleware, validate(voteMvpSchema), (req, res, next) => peladaController.voteMvp(req, res, next));
