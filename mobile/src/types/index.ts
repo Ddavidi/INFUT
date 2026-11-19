@@ -116,6 +116,7 @@ export interface MatchRecord {
   scoreB: number;
   winner: string;
   finishedAt: string;
+  leavingTeamName?: string;
 }
 
 export interface FinancialSummary {
@@ -134,8 +135,36 @@ export interface MvpRankEntry {
   votes: number;
 }
 
+export interface PeladaPastEdition {
+  id: string;
+  title: string;
+  dateTime: string;
+  durationHours?: number;
+  status: PeladaLifecycleStatus;
+  votingStatus?: PeladaVotingStatus;
+  inviteCode: string;
+  matchesCount: number;
+  matches: MatchRecord[];
+  confirmedCount: number;
+  teams: DrawnTeam[];
+  mvp: {
+    playerId: string;
+    displayName: string;
+    photoUrl?: string | null;
+    votes: number;
+  } | null;
+  mvpWinner?: {
+    playerId?: string;
+    id?: string;
+    displayName: string;
+    photoUrl?: string | null;
+    votes: number;
+  } | null;
+}
+
 export interface Pelada {
   id: string;
+  seriesId?: string | null;
   title: string;
   sport: string;
   dateTime: string;
@@ -144,6 +173,7 @@ export interface Pelada {
   price: number | null;
   isRecurring: boolean;
   recurrenceDay: string | null;
+  recurrenceDays?: string | null;
   maxPlayers: number | null;
   inviteCode: string;
   isPublic: boolean;
@@ -157,6 +187,10 @@ export interface Pelada {
   organizerId: string;
   createdAt: string;
   updatedAt: string;
+  pastEditionsCount?: number;
+  pastEditions?: PeladaPastEdition[];
+  activeEditionId?: string;
+  isLatestEdition?: boolean;
   organizer: {
     id: string;
     name: string;
@@ -195,6 +229,7 @@ export interface CreatePeladaInput {
   price?: number | null;
   isRecurring?: boolean;
   recurrenceDay?: string | null;
+  recurrenceDays?: string | null;
   maxPlayers?: number | null;
   isPublic?: boolean;
   pixKey?: string | null;

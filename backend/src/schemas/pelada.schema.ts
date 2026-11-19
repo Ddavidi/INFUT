@@ -10,6 +10,7 @@ export const createPeladaSchema = z.object({
   price: z.number().min(0).optional().nullable(),
   isRecurring: z.boolean().optional().default(false),
   recurrenceDay: z.string().optional().nullable(),
+  recurrenceDays: z.string().optional().nullable(),
   maxPlayers: z.number().int().min(2).optional().nullable(),
   isPublic: z.boolean().optional().default(true),
   pixKey: z.string().optional().nullable(),

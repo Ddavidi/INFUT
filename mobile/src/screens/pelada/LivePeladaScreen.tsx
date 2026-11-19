@@ -1002,7 +1002,7 @@ export function LivePeladaScreen({ navigation, route }: Props) {
                 onChangeText={setModalSearch}
               />
 
-              <ScrollView showsVerticalScrollIndicator style={{ maxHeight: 420 }}>
+              <ScrollView showsVerticalScrollIndicator={false} style={{ flexShrink: 1 }}>
                 {filteredConfirmedForModal.map((player) => {
                   const status = player.attendanceStatus;
                   return (
@@ -1090,7 +1090,7 @@ export function LivePeladaScreen({ navigation, route }: Props) {
                 </TouchableOpacity>
               </View>
 
-              <ScrollView showsVerticalScrollIndicator style={{ maxHeight: 420 }}>
+              <ScrollView showsVerticalScrollIndicator={false} style={{ flexShrink: 1 }}>
                 {presentPlayers.length === 0 ? (
                   <Text style={styles.emptyText}>
                     Nenhum jogador marcado como Presente na chamada.
@@ -1179,7 +1179,7 @@ export function LivePeladaScreen({ navigation, route }: Props) {
                 onChangeText={setModalSearch}
               />
 
-              <ScrollView showsVerticalScrollIndicator style={{ maxHeight: 420 }}>
+              <ScrollView showsVerticalScrollIndicator={false} style={{ flexShrink: 1 }}>
                 {statsCandidates.length === 0 ? (
                   <Text style={styles.emptyText}>
                     Marque jogadores como Presente na chamada para lançar estatísticas.
@@ -1870,6 +1870,7 @@ const styles = StyleSheet.create({
     borderColor: colors.borderStrong,
     padding: spacing.lg,
     maxHeight: '88%',
+    overflow: 'hidden',
     ...shadows.card,
   },
   modalHeader: {

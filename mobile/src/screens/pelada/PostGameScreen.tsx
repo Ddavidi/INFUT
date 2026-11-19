@@ -640,7 +640,7 @@ export function PostGameScreen({ navigation, route }: Props) {
               onChangeText={setVoteSearch}
             />
 
-            <ScrollView showsVerticalScrollIndicator style={{ maxHeight: 420 }}>
+            <ScrollView showsVerticalScrollIndicator={false} style={{ flexShrink: 1 }}>
               {filteredVoteCandidates.length === 0 ? (
                 <Text style={styles.emptyText}>Nenhum jogador encontrado.</Text>
               ) : (
@@ -712,7 +712,7 @@ export function PostGameScreen({ navigation, route }: Props) {
                 </TouchableOpacity>
               </View>
 
-              <ScrollView showsVerticalScrollIndicator style={{ maxHeight: 440 }}>
+              <ScrollView showsVerticalScrollIndicator={false} style={{ flexShrink: 1 }}>
                 {allConfirmed.map((player) => {
                   const isNoShow = player.attendanceStatus === 'NO_SHOW';
                   return (
@@ -1234,6 +1234,7 @@ const styles = StyleSheet.create({
     borderColor: colors.borderStrong,
     padding: spacing.lg,
     maxHeight: '88%',
+    overflow: 'hidden',
     ...shadows.card,
   },
   modalHeader: {

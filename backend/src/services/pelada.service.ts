@@ -1,4 +1,5 @@
 // src/services/pelada.service.ts
+import crypto from 'crypto';
 import prisma from '../utils/prisma';
 import {
   AddGuestInput,
@@ -77,6 +78,49 @@ function shuffleArray<T>(items: T[]): T[] {
     [arr[i], arr[j]] = [arr[j], arr[i]];
   }
   return arr;
+}
+
+const RECURRENCE_DAY_MAP: Record<string, number> = {
+  DOM: 0,
+  SEG: 1,
+  TER: 2,
+  QUA: 3,
+  QUI: 4,
+  SEX: 5,
+  SAB: 6,
+};
+
+function calculateNextPeladaDate(
+  currentDate: Date,
+  recurrenceDaysStr?: string | null,
+  recurrenceDayStr?: string | null
+): Date {
+  if (recurrenceDaysStr && recurrenceDaysStr.includes(',')) {
+    const days = recurrenceDaysStr
+      .split(',')
+      .map((d) => RECURRENCE_DAY_MAP[d.trim().toUpperCase()])
+      .filter((d) => typeof d === 'number');
+
+    if (days.length >= 2) {
+      for (let i = 1; i <= 7; i++) {
+        const testDate = new Date(currentDate);
+        testDate.setDate(testDate.getDate() + i);
+        if (days.includes(testDate.getDay())) {
+          while (testDate.getTime() < Date.now() - 3600000) {
+            testDate.setDate(testDate.getDate() + 7);
+          }
+          return testDate;
+        }
+      }
+    }
+  }
+
+  const nextDate = new Date(currentDate);
+  nextDate.setDate(nextDate.getDate() + 7);
+  while (nextDate.getTime() < Date.now() - 3600000) {
+    nextDate.setDate(nextDate.getDate() + 7);
+  }
+  return nextDate;
 }
 
 function getPositionBucket(position: string | null | undefined): number {
@@ -427,6 +471,39 @@ export class PeladaService {
     });
   }
 
+  private deduplicateBySeries(peladas: any[]): any[] {
+    const seriesMap = new Map<string, any>();
+    const now = Date.now();
+
+    for (const p of peladas) {
+      const sId = p.seriesId || p.id;
+      const existing = seriesMap.get(sId);
+      if (!existing) {
+        seriesMap.set(sId, p);
+      } else {
+        const existingIsFinished = existing.status === 'FINISHED';
+        const currentIsFinished = p.status === 'FINISHED';
+
+        if (existingIsFinished && !currentIsFinished) {
+          seriesMap.set(sId, p);
+        } else if (!existingIsFinished && !currentIsFinished) {
+          const existingDate = new Date(existing.dateTime).getTime();
+          const currentDate = new Date(p.dateTime).getTime();
+          if (currentDate >= now && (existingDate < now || currentDate < existingDate)) {
+            seriesMap.set(sId, p);
+          }
+        } else if (existingIsFinished && currentIsFinished) {
+          const existingDate = new Date(existing.dateTime).getTime();
+          const currentDate = new Date(p.dateTime).getTime();
+          if (currentDate > existingDate) {
+            seriesMap.set(sId, p);
+          }
+        }
+      }
+    }
+    return Array.from(seriesMap.values());
+  }
+
   async create(organizerId: string, data: CreatePeladaInput) {
     const organizer = await prisma.user.findUnique({
       where: { id: organizerId },
@@ -439,9 +516,11 @@ export class PeladaService {
 
     const inviteCode = await this.generateUniqueInviteCode();
     const isFree = !data.price || data.price <= 0;
+    const seriesId = crypto.randomUUID();
 
     const pelada = await prisma.pelada.create({
       data: {
+        seriesId,
         title: data.title,
         sport: data.sport,
         dateTime: new Date(data.dateTime),
@@ -450,6 +529,7 @@ export class PeladaService {
         price: data.price,
         isRecurring: data.isRecurring ?? false,
         recurrenceDay: data.recurrenceDay,
+        recurrenceDays: (data as any).recurrenceDays || null,
         maxPlayers: data.maxPlayers,
         inviteCode,
         isPublic: data.isPublic ?? true,
@@ -473,10 +553,6 @@ export class PeladaService {
       },
     });
 
-    if (pelada.isRecurring && pelada.recurrenceDay) {
-      await this.createRecurringInstances(pelada, organizer.position, 4);
-    }
-
     return this.getById(pelada.id, organizerId);
   }
 
@@ -492,7 +568,8 @@ export class PeladaService {
       orderBy: { dateTime: 'asc' },
     });
 
-    return peladas.map((p) => this.formatPelada(p, userId));
+    const deduplicated = this.deduplicateBySeries(peladas);
+    return deduplicated.map((p) => this.formatPelada(p, userId));
   }
 
   async explore(
@@ -543,7 +620,8 @@ export class PeladaService {
       });
     }
 
-    return filtered.map((p) => this.formatPelada(p, userId));
+    const deduplicated = this.deduplicateBySeries(filtered);
+    return deduplicated.map((p) => this.formatPelada(p, userId));
   }
 
   async getById(peladaId: string, currentUserId?: string) {
@@ -556,32 +634,93 @@ export class PeladaService {
       throw this.createHttpError('Peladinha nao encontrada', 404);
     }
 
-    return this.formatPelada(pelada, currentUserId);
+    const seriesId = pelada.seriesId || pelada.id;
+
+    // Fetch all editions of this series
+    const seriesEditions = await prisma.pelada.findMany({
+      where: {
+        OR: [
+          { seriesId },
+          { id: seriesId },
+          { id: pelada.id },
+        ],
+      },
+      include: {
+        players: {
+          include: {
+            user: { select: { id: true, name: true, photoUrl: true, position: true } },
+          },
+        },
+      },
+      orderBy: { dateTime: 'desc' },
+    });
+
+    const now = Date.now();
+
+    // Determine upcoming/active edition of this series
+    let activeUpcoming = seriesEditions.find(
+      (p) =>
+        p.status !== 'FINISHED' &&
+        new Date(p.dateTime).getTime() >= now - (p.durationHours || 2) * 3600000
+    );
+    if (!activeUpcoming) {
+      activeUpcoming = seriesEditions[0];
+    }
+
+    const pastEditions = seriesEditions
+      .filter(
+        (p) =>
+          p.id !== pelada.id &&
+          (p.status === 'FINISHED' ||
+            new Date(p.dateTime).getTime() < now - (p.durationHours || 2) * 3600000)
+      )
+      .map((p) => {
+        const matches = this.safeJsonParse<MatchRecord[]>(p.matchesJson, []);
+        const env = this.parseTeamsEnvelope(p);
+        const pPlayers = (p.players || []).map((pl: any) => ({
+          ...pl,
+          displayName: pl.user?.name || pl.guestName || 'Jogador',
+        }));
+        const mvpRanking = this.buildVoteRanking(pPlayers, 'votedMvpForId');
+        const topMvp = mvpRanking.length > 0 ? mvpRanking[0] : null;
+
+        return {
+          id: p.id,
+          title: p.title,
+          dateTime: p.dateTime.toISOString(),
+          status: p.status,
+          inviteCode: p.inviteCode,
+          matchesCount: matches.length,
+          matches,
+          confirmedCount: p.players.filter((pl) => pl.status === 'CONFIRMED').length,
+          teams: env.teams,
+          mvp: topMvp,
+        };
+      });
+
+    const formatted = this.formatPelada(pelada, currentUserId);
+    return {
+      ...formatted,
+      seriesId,
+      pastEditionsCount: pastEditions.length,
+      pastEditions,
+      activeEditionId: activeUpcoming ? activeUpcoming.id : pelada.id,
+      isLatestEdition: activeUpcoming ? activeUpcoming.id === pelada.id : true,
+    };
   }
 
   async getPublicByInviteCode(inviteCode: string) {
     const normalizedCode = inviteCode.trim().toUpperCase();
     const pelada = await prisma.pelada.findUnique({
       where: { inviteCode: normalizedCode },
-      include: this.peladaInclude,
+      select: { id: true },
     });
 
     if (!pelada) {
       throw this.createHttpError('Codigo de convite nao encontrado', 404);
     }
 
-    const formatted = this.formatPelada(pelada);
-    return {
-      ...formatted,
-      organizer: {
-        ...formatted.organizer,
-        email: undefined,
-      },
-      players: formatted.players.map((p: any) => ({
-        ...p,
-        user: p.user ? { ...p.user, email: '' } : null,
-      })),
-    };
+    return this.getById(pelada.id);
   }
 
   async update(peladaId: string, userId: string, data: UpdatePeladaInput) {
@@ -1709,11 +1848,12 @@ export class PeladaService {
       votingStatus: 'OPEN',
     };
 
-    const nextDate = new Date(pelada.dateTime);
-    nextDate.setDate(nextDate.getDate() + 7);
-    while (nextDate.getTime() < Date.now() - 3600000) {
-      nextDate.setDate(nextDate.getDate() + 7);
-    }
+    const seriesId = pelada.seriesId || pelada.id;
+    const nextDate = calculateNextPeladaDate(
+      new Date(pelada.dateTime),
+      pelada.recurrenceDays,
+      pelada.recurrenceDay
+    );
 
     const originalInviteCode = pelada.inviteCode;
     const archivedCode = await this.generateUniqueInviteCode();
@@ -1794,11 +1934,13 @@ export class PeladaService {
         data: {
           status: 'FINISHED',
           inviteCode: archivedCode,
+          seriesId,
         },
       });
 
       return tx.pelada.create({
         data: {
+          seriesId,
           title: pelada.title,
           sport: pelada.sport,
           dateTime: nextDate,
@@ -1807,6 +1949,7 @@ export class PeladaService {
           price: pelada.price,
           isRecurring: pelada.isRecurring,
           recurrenceDay: pelada.recurrenceDay,
+          recurrenceDays: pelada.recurrenceDays,
           maxPlayers: pelada.maxPlayers,
           inviteCode: originalInviteCode,
           isPublic: pelada.isPublic,

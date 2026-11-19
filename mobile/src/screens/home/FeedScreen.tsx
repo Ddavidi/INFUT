@@ -93,9 +93,20 @@ function PeladaCard({
             <View style={styles.codeTag}>
               <Text style={styles.codeTagText}>#{pelada.inviteCode}</Text>
             </View>
-            {pelada.isRecurring && (
+            {pelada.recurrenceDays && pelada.recurrenceDays.includes(',') ? (
+              <View style={styles.recurringBadge}>
+                <Text style={styles.recurringText}>2x/sem</Text>
+              </View>
+            ) : pelada.isRecurring ? (
               <View style={styles.recurringBadge}>
                 <Text style={styles.recurringText}>Semanal</Text>
+              </View>
+            ) : null}
+            {Boolean(pelada.pastEditionsCount && pelada.pastEditionsCount > 0) && (
+              <View style={styles.historyBadge}>
+                <Text style={styles.historyBadgeText}>
+                  {pelada.pastEditionsCount} anteriores
+                </Text>
               </View>
             )}
           </View>
@@ -588,6 +599,15 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   recurringText: { fontSize: fonts.sizes.xs, color: colors.info, fontWeight: '700' },
+  historyBadge: {
+    backgroundColor: colors.surfaceLight,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  historyBadgeText: { fontSize: fonts.sizes.xs, color: colors.textSecondary, fontWeight: '700' },
   roleBadge: {
     borderRadius: borderRadius.sm,
     paddingHorizontal: spacing.sm,

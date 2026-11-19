@@ -29,6 +29,7 @@ model User {
 
 model Pelada {
   id                  String   @id @default(uuid())
+  seriesId            String?  @map("series_id")
   title               String
   sport               String
   dateTime            DateTime @map("date_time")
@@ -37,6 +38,7 @@ model Pelada {
   price               Float?
   isRecurring         Boolean  @default(false) @map("is_recurring")
   recurrenceDay       String?  @map("recurrence_day")
+  recurrenceDays      String?  @map("recurrence_days")
   maxPlayers          Int?     @map("max_players")
   inviteCode          String   @unique @default(cuid()) @map("invite_code")
   isPublic            Boolean  @default(true) @map("is_public")

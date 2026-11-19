@@ -11,6 +11,7 @@ import {
   Share,
   Platform,
   Linking,
+  Modal,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -23,7 +24,7 @@ import {
   updatePeladaStatus,
   updatePlayerPayment,
 } from '../../services/peladaService';
-import { PaymentStatus, Pelada, PeladaPlayer } from '../../types';
+import { PaymentStatus, Pelada, PeladaPastEdition, PeladaPlayer } from '../../types';
 import { colors, fonts, spacing, borderRadius, shadows } from '../../constants/theme';
 import { showConfirm, showMessage } from '../../utils/alerts';
 import { formatPeladaSchedule } from '../../utils/dateTime';
@@ -69,6 +70,9 @@ export function PeladaDetailsScreen({ navigation, route }: Props) {
   const [expandDeclined, setExpandDeclined] = useState(false);
   const [financeFilter, setFinanceFilter] = useState<'PENDING' | 'PAID' | 'ALL'>('PENDING');
   const [expandFinanceList, setExpandFinanceList] = useState(true);
+  const [expandPastEditions, setExpandPastEditions] = useState(true);
+  const [selectedPastEditionForModal, setSelectedPastEditionForModal] =
+    useState<PeladaPastEdition | null>(null);
 
   const loadPelada = useCallback(async () => {
     try {
@@ -330,13 +334,47 @@ export function PeladaDetailsScreen({ navigation, route }: Props) {
 
   const headerCardContent = (
     <View style={styles.headerCard}>
+      {pelada.isLatestEdition === false && (
+        <View style={styles.pastEditionWarningCard}>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={styles.pastEditionWarningTitle}>Edição Realizada (Histórico)</Text>
+            <Text style={styles.pastEditionWarningSubtitle}>
+              Você está visualizando a súmula e detalhes de uma edição já concluída desta série.
+            </Text>
+          </View>
+          {pelada.activeEditionId && (
+            <TouchableOpacity
+              style={styles.goToNextBtn}
+              onPress={() => navigation.push('PeladaDetails', { peladaId: pelada.activeEditionId! })}
+              accessibilityRole="button"
+              accessibilityLabel="Ir para a próxima edição da pelada"
+            >
+              <Text style={styles.goToNextBtnText}>Ir para a Próxima →</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
+
       <View style={styles.heroTagsRow}>
         <View style={styles.sportTag}>
           <Text style={styles.sportTagText}>{pelada.sport}</Text>
         </View>
-        {pelada.isRecurring && (
+        {pelada.isLatestEdition !== false && (
+          <View style={styles.nextGameBadge}>
+            <Text style={styles.nextGameBadgeText}>★ Próxima Pelada</Text>
+          </View>
+        )}
+        {pelada.recurrenceDays && pelada.recurrenceDays.includes(',') ? (
+          <View style={styles.neutralTag}>
+            <Text style={styles.neutralTagText}>2x na semana</Text>
+          </View>
+        ) : pelada.isRecurring ? (
           <View style={styles.neutralTag}>
             <Text style={styles.neutralTagText}>Semanal</Text>
+          </View>
+        ) : (
+          <View style={styles.neutralTag}>
+            <Text style={styles.neutralTagText}>Avulsa</Text>
           </View>
         )}
         <View style={styles.neutralTag}>
@@ -631,13 +669,14 @@ export function PeladaDetailsScreen({ navigation, route }: Props) {
                         style={[styles.positionChip, selected && styles.positionChipSelected]}
                         disabled={actionLoading}
                         onPress={() => {
-                          setRsvpPosition(pos);
+                          const nextPos = selected ? '' : pos;
+                          setRsvpPosition(nextPos);
                           if (pelada.myStatus === 'CONFIRMED' && !pelada.myPlayer?.isGoalkeeper) {
                             runAction(() =>
                               rsvpPelada(pelada.id, {
                                 status: 'CONFIRMED',
                                 isGoalkeeper: false,
-                                position: pos,
+                                position: nextPos || undefined,
                               })
                             );
                           }
@@ -852,6 +891,94 @@ export function PeladaDetailsScreen({ navigation, route }: Props) {
     </>
   );
 
+  const pastEditions = pelada.pastEditions || [];
+  const pastEditionsContent = (
+    <View style={styles.sectionCard}>
+      <TouchableOpacity
+        style={styles.accordionHeader}
+        onPress={() => setExpandPastEditions((v) => !v)}
+        accessibilityRole="button"
+        accessibilityLabel={`Expandir ou recolher peladas realizadas (${pastEditions.length})`}
+      >
+        <View style={styles.accordionTitleRow}>
+          <Text style={styles.sectionTitleNoMargin}>Peladas Realizadas</Text>
+          <View style={styles.countTag}>
+            <Text style={styles.countTagText}>{pastEditions.length}</Text>
+          </View>
+        </View>
+        <View style={styles.accordionRight}>
+          <Text style={styles.accordionChevron}>{expandPastEditions ? '▴' : '▾'}</Text>
+        </View>
+      </TouchableOpacity>
+
+      {expandPastEditions && (
+        <View style={styles.pastEditionsList}>
+          {pastEditions.length === 0 ? (
+            <Text style={styles.emptyListText}>
+              Nenhuma pelada anterior finalizada para esta série ainda.
+            </Text>
+          ) : (
+            pastEditions.map((edition) => {
+              const schedule = formatPeladaSchedule(edition.dateTime, edition.durationHours);
+              return (
+                <View key={edition.id} style={styles.pastEditionCard}>
+                  <View style={styles.pastEditionMain}>
+                    <View style={styles.pastEditionDateRow}>
+                      <Text style={styles.pastEditionDateText}>{schedule}</Text>
+                      {edition.votingStatus === 'CLOSED' ? (
+                        <View style={styles.pastStatusClosedTag}>
+                          <Text style={styles.pastStatusClosedText}>Concluída</Text>
+                        </View>
+                      ) : (
+                        <View style={styles.pastStatusOpenTag}>
+                          <Text style={styles.pastStatusOpenText}>Votação aberta</Text>
+                        </View>
+                      )}
+                    </View>
+
+                    <Text style={styles.pastEditionMeta}>
+                      {edition.matchesCount} {edition.matchesCount === 1 ? 'partida' : 'partidas'} •{' '}
+                      {edition.confirmedCount} presentes
+                    </Text>
+
+                    {(edition.mvpWinner || edition.mvp) && (
+                      <View style={styles.pastMvpPill}>
+                        <Text style={styles.pastMvpPillText} numberOfLines={1}>
+                          ★ MVP: {(edition.mvpWinner || edition.mvp)!.displayName} (
+                          {(edition.mvpWinner || edition.mvp)!.votes} voto
+                          {(edition.mvpWinner || edition.mvp)!.votes === 1 ? '' : 's'})
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+
+                  <View style={styles.pastEditionActions}>
+                    <TouchableOpacity
+                      style={styles.pastEditionSummaryBtn}
+                      onPress={() => setSelectedPastEditionForModal(edition)}
+                      accessibilityRole="button"
+                      accessibilityLabel="Ver súmula da edição"
+                    >
+                      <Text style={styles.pastEditionSummaryBtnText}>Súmula</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.pastEditionOpenBtn}
+                      onPress={() => navigation.push('PeladaDetails', { peladaId: edition.id })}
+                      accessibilityRole="button"
+                      accessibilityLabel="Abrir detalhes da edição"
+                    >
+                      <Text style={styles.pastEditionOpenBtnText}>Abrir →</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              );
+            })
+          )}
+        </View>
+      )}
+    </View>
+  );
+
   return (
     <View style={styles.container}>
       {/* Top Bar */}
@@ -930,6 +1057,7 @@ export function PeladaDetailsScreen({ navigation, route }: Props) {
                 </View>
                 <View style={styles.desktopRightCol}>
                   {rostersContent}
+                  {pastEditionsContent}
                 </View>
               </View>
             ) : (
@@ -940,6 +1068,7 @@ export function PeladaDetailsScreen({ navigation, route }: Props) {
                 {pixCardContent}
                 {rsvpCardContent}
                 {rostersContent}
+                {pastEditionsContent}
               </>
             )
           ) : (
@@ -947,6 +1076,7 @@ export function PeladaDetailsScreen({ navigation, route }: Props) {
               {headerCardContent}
               {lifecycleCardContent}
               {tabsBarContent}
+              {pastEditionsContent}
             </>
           )}
 
@@ -1188,6 +1318,143 @@ export function PeladaDetailsScreen({ navigation, route }: Props) {
           onClose={() => setShowConfigModal(false)}
           onSaved={(updated) => setPelada(updated)}
         />
+      )}
+
+      {selectedPastEditionForModal && (
+        <Modal
+          visible={Boolean(selectedPastEditionForModal)}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setSelectedPastEditionForModal(null)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalCard}>
+              <View style={styles.modalHeader}>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={styles.modalTitle}>Súmula da Edição</Text>
+                  <Text style={styles.modalSubtitle}>
+                    {formatPeladaSchedule(
+                      selectedPastEditionForModal.dateTime,
+                      selectedPastEditionForModal.durationHours
+                    )}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.modalCloseBtn}
+                  onPress={() => setSelectedPastEditionForModal(null)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Fechar súmula"
+                >
+                  <Text style={styles.modalCloseText}>✕</Text>
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView
+                showsVerticalScrollIndicator={false}
+                style={{ flexShrink: 1 }}
+                contentContainerStyle={{ paddingBottom: spacing.md }}
+              >
+                {(selectedPastEditionForModal.mvpWinner || selectedPastEditionForModal.mvp) && (
+                  <View style={styles.modalMvpBox}>
+                    <Text style={styles.modalMvpTag}>★ MVP DA EDIÇÃO</Text>
+                    <Text style={styles.modalMvpName}>
+                      {(selectedPastEditionForModal.mvpWinner || selectedPastEditionForModal.mvp)!.displayName}
+                    </Text>
+                    <Text style={styles.modalMvpVotes}>
+                      {(selectedPastEditionForModal.mvpWinner || selectedPastEditionForModal.mvp)!.votes} voto
+                      {(selectedPastEditionForModal.mvpWinner || selectedPastEditionForModal.mvp)!.votes === 1 ? '' : 's'} dos participantes
+                    </Text>
+                  </View>
+                )}
+
+                <Text style={styles.modalSectionTitle}>
+                  Partidas Realizadas ({selectedPastEditionForModal.matches.length})
+                </Text>
+
+                {selectedPastEditionForModal.matches.length === 0 ? (
+                  <Text style={styles.modalEmptyText}>
+                    Nenhuma partida registrada com placar nesta edição.
+                  </Text>
+                ) : (
+                  selectedPastEditionForModal.matches.map((m, idx) => (
+                    <View key={idx} style={styles.modalMatchRow}>
+                      <View style={styles.modalMatchHeader}>
+                        <Text style={styles.modalMatchNum}>Jogo {idx + 1}</Text>
+                        {m.leavingTeamName && (
+                          <Text style={styles.modalMatchLeaving}>
+                            Saiu: {m.leavingTeamName}
+                          </Text>
+                        )}
+                      </View>
+                      <View style={styles.modalScoreLine}>
+                        <Text
+                          style={[
+                            styles.modalScoreTeam,
+                            m.winner === m.teamAName && styles.modalScoreTeamWinner,
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {m.teamAName}
+                        </Text>
+                        <View style={styles.modalScoreBadge}>
+                          <Text style={styles.modalScoreText}>
+                            {m.scoreA} x {m.scoreB}
+                          </Text>
+                        </View>
+                        <Text
+                          style={[
+                            styles.modalScoreTeam,
+                            m.winner === m.teamBName && styles.modalScoreTeamWinner,
+                            { textAlign: 'right' },
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {m.teamBName}
+                        </Text>
+                      </View>
+                    </View>
+                  ))
+                )}
+
+                {selectedPastEditionForModal.teams && selectedPastEditionForModal.teams.length > 0 && (
+                  <>
+                    <Text style={[styles.modalSectionTitle, { marginTop: spacing.md }]}>
+                      Times Formados ({selectedPastEditionForModal.teams.length})
+                    </Text>
+                    <View style={styles.modalTeamsGrid}>
+                      {selectedPastEditionForModal.teams.map((t, idx) => (
+                        <View key={idx} style={styles.modalTeamCard}>
+                          <Text style={styles.modalTeamName}>{t.name}</Text>
+                          {t.players.map((p) => (
+                            <Text key={p.id} style={styles.modalTeamPlayer} numberOfLines={1}>
+                              • {p.name}{' '}
+                              {p.isGoalkeeper ? '(Goleiro)' : p.position ? `(${p.position})` : ''}
+                            </Text>
+                          ))}
+                        </View>
+                      ))}
+                    </View>
+                  </>
+                )}
+              </ScrollView>
+
+              <View style={styles.modalFooter}>
+                <TouchableOpacity
+                  style={[styles.primaryActionBtn, { width: '100%' }]}
+                  onPress={() => {
+                    const id = selectedPastEditionForModal.id;
+                    setSelectedPastEditionForModal(null);
+                    navigation.push('PeladaDetails', { peladaId: id });
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Abrir página completa desta edição"
+                >
+                  <Text style={styles.primaryActionText}>Abrir Página Desta Edição</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
       )}
     </View>
   );
@@ -1534,6 +1801,7 @@ const styles = StyleSheet.create({
   deadlineNotice: { color: colors.textMuted, fontSize: fonts.sizes.xs, marginBottom: spacing.md },
   positionPickerBlock: {
     marginBottom: spacing.md,
+    width: '100%',
   },
   positionPickerLabel: {
     color: colors.textSecondary,
@@ -1544,6 +1812,8 @@ const styles = StyleSheet.create({
   positionWrapGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
+    width: '100%',
+    alignItems: 'center',
     gap: 6,
   },
   positionChip: {
@@ -1552,11 +1822,18 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     borderRadius: borderRadius.full,
     paddingHorizontal: spacing.md,
-    paddingVertical: 6,
+    paddingVertical: 7,
+    marginRight: 2,
+    marginBottom: 4,
   },
   accordionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  accordionTitleRow: {
+    flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
   },
@@ -2077,6 +2354,353 @@ const styles = StyleSheet.create({
   lifecycleActionBtnText: {
     color: colors.textInverse,
     fontSize: fonts.sizes.sm + 1,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
+  nextGameBadge: {
+    backgroundColor: 'rgba(255, 107, 0, 0.16)',
+    borderColor: colors.primary,
+    borderWidth: 1,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
+    borderRadius: borderRadius.sm,
+  },
+  nextGameBadgeText: {
+    color: colors.primary,
+    fontSize: fonts.sizes.xs,
+    fontWeight: '800',
+  },
+  pastEditionWarningCard: {
+    backgroundColor: colors.surfaceLight,
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  pastEditionWarningTitle: {
+    color: colors.textPrimary,
+    fontSize: fonts.sizes.sm,
+    fontWeight: '800',
+  },
+  pastEditionWarningSubtitle: {
+    color: colors.textSecondary,
+    fontSize: fonts.sizes.xs,
+    lineHeight: 16,
+    marginTop: 2,
+  },
+  goToNextBtn: {
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    minHeight: 38,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  goToNextBtnText: {
+    color: colors.textInverse,
+    fontSize: fonts.sizes.xs,
+    fontWeight: '800',
+  },
+  pastEditionsList: {
+    marginTop: spacing.md,
+    gap: spacing.sm,
+  },
+  pastEditionCard: {
+    backgroundColor: colors.surfaceLight,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.md,
+    gap: spacing.sm,
+  },
+  pastEditionMain: {
+    gap: 4,
+  },
+  pastEditionDateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
+  pastEditionDateText: {
+    color: colors.textPrimary,
+    fontSize: fonts.sizes.sm,
+    fontWeight: '700',
+  },
+  pastStatusClosedTag: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+    borderRadius: borderRadius.sm,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  pastStatusClosedText: {
+    color: colors.textSecondary,
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  pastStatusOpenTag: {
+    backgroundColor: colors.successSoft,
+    borderWidth: 1,
+    borderColor: colors.success,
+    borderRadius: borderRadius.sm,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  pastStatusOpenText: {
+    color: colors.success,
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  pastEditionMeta: {
+    color: colors.textMuted,
+    fontSize: fonts.sizes.xs,
+  },
+  pastMvpPill: {
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(255, 179, 0, 0.12)',
+    borderWidth: 1,
+    borderColor: '#FFB300',
+    borderRadius: borderRadius.full,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    marginTop: 2,
+  },
+  pastMvpPillText: {
+    color: '#FFB300',
+    fontSize: fonts.sizes.xs,
+    fontWeight: '800',
+  },
+  pastEditionActions: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  pastEditionSummaryBtn: {
+    flex: 1,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
+    borderRadius: borderRadius.sm,
+    paddingVertical: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 36,
+  },
+  pastEditionSummaryBtnText: {
+    color: colors.textPrimary,
+    fontSize: fonts.sizes.xs,
+    fontWeight: '700',
+  },
+  pastEditionOpenBtn: {
+    flex: 1,
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.sm,
+    paddingVertical: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 36,
+  },
+  pastEditionOpenBtnText: {
+    color: colors.textInverse,
+    fontSize: fonts.sizes.xs,
+    fontWeight: '800',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.72)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: spacing.md,
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 520,
+    maxHeight: '88%',
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.xl,
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
+    padding: spacing.lg,
+    overflow: 'hidden',
+    ...shadows.card,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: spacing.md,
+    paddingBottom: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    gap: spacing.sm,
+  },
+  modalTitle: {
+    color: colors.textPrimary,
+    fontSize: fonts.sizes.lg,
+    fontWeight: '800',
+  },
+  modalSubtitle: {
+    color: colors.textSecondary,
+    fontSize: fonts.sizes.xs,
+    marginTop: 2,
+  },
+  modalCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.surfaceLight,
+    borderWidth: 1,
+    borderColor: colors.border,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalCloseText: {
+    color: colors.textSecondary,
+    fontSize: fonts.sizes.md,
+    fontWeight: '700',
+  },
+  modalMvpBox: {
+    backgroundColor: 'rgba(255, 179, 0, 0.1)',
+    borderWidth: 1,
+    borderColor: '#FFB300',
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    alignItems: 'center',
+    gap: 2,
+  },
+  modalMvpTag: {
+    color: '#FFB300',
+    fontSize: fonts.sizes.xs - 1,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+  },
+  modalMvpName: {
+    color: colors.textPrimary,
+    fontSize: fonts.sizes.md,
+    fontWeight: '800',
+    marginTop: 2,
+  },
+  modalMvpVotes: {
+    color: colors.textSecondary,
+    fontSize: fonts.sizes.xs,
+  },
+  modalSectionTitle: {
+    color: colors.textSecondary,
+    fontSize: fonts.sizes.xs,
+    fontWeight: '800',
+    letterSpacing: 0.6,
+    marginBottom: spacing.xs + 2,
+    textTransform: 'uppercase',
+  },
+  modalEmptyText: {
+    color: colors.textMuted,
+    fontSize: fonts.sizes.xs,
+    fontStyle: 'italic',
+    marginBottom: spacing.sm,
+  },
+  modalMatchRow: {
+    backgroundColor: colors.surfaceLight,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.sm + 2,
+    marginBottom: spacing.xs + 2,
+    gap: 4,
+  },
+  modalMatchHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  modalMatchNum: {
+    color: colors.textMuted,
+    fontSize: fonts.sizes.xs - 1,
+    fontWeight: '700',
+  },
+  modalMatchLeaving: {
+    color: colors.error,
+    fontSize: fonts.sizes.xs - 1,
+    fontWeight: '700',
+  },
+  modalScoreLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
+  modalScoreTeam: {
+    flex: 1,
+    color: colors.textPrimary,
+    fontSize: fonts.sizes.sm,
+    fontWeight: '600',
+  },
+  modalScoreTeamWinner: {
+    color: colors.primary,
+    fontWeight: '800',
+  },
+  modalScoreBadge: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
+    borderRadius: borderRadius.sm,
+    paddingHorizontal: spacing.sm + 2,
+    paddingVertical: 3,
+  },
+  modalScoreText: {
+    color: colors.textPrimary,
+    fontSize: fonts.sizes.sm,
+    fontWeight: '800',
+    fontVariant: ['tabular-nums'],
+  },
+  modalTeamsGrid: {
+    gap: spacing.xs + 2,
+    marginBottom: spacing.sm,
+  },
+  modalTeamCard: {
+    backgroundColor: colors.surfaceLight,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.sm + 2,
+    gap: 2,
+  },
+  modalTeamName: {
+    color: colors.textPrimary,
+    fontSize: fonts.sizes.xs + 1,
+    fontWeight: '800',
+    marginBottom: 2,
+  },
+  modalTeamPlayer: {
+    color: colors.textSecondary,
+    fontSize: fonts.sizes.xs,
+  },
+  modalFooter: {
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    marginTop: spacing.xs,
+  },
+  primaryActionBtn: {
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing.sm + 4,
+    paddingHorizontal: spacing.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 44,
+  },
+  primaryActionText: {
+    color: colors.textInverse,
+    fontSize: fonts.sizes.sm,
     fontWeight: '800',
     textAlign: 'center',
   },

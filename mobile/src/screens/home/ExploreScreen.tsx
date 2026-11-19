@@ -174,9 +174,20 @@ export function ExploreScreen({ navigation }: Props) {
                     <Text style={styles.cardTitle} numberOfLines={1}>
                       {item.title}
                     </Text>
-                    <Text style={styles.cardSport}>
-                      {item.sport} • #{item.inviteCode}
-                    </Text>
+                    <View style={styles.subMetaRow}>
+                      <Text style={styles.cardSport}>
+                        {item.sport} • #{item.inviteCode}
+                      </Text>
+                      {item.recurrenceDays && item.recurrenceDays.includes(',') ? (
+                        <View style={styles.recurringBadge}>
+                          <Text style={styles.recurringText}>2x/sem</Text>
+                        </View>
+                      ) : item.isRecurring ? (
+                        <View style={styles.recurringBadge}>
+                          <Text style={styles.recurringText}>Semanal</Text>
+                        </View>
+                      ) : null}
+                    </View>
                   </View>
                   <View style={styles.spotsBadge}>
                     <Text style={styles.spotsText}>{vagasLabel}</Text>
@@ -359,7 +370,21 @@ const styles = StyleSheet.create({
   sportMonogram: { fontSize: 11, fontWeight: '900', color: colors.primary, letterSpacing: 0.6 },
   sportEmoji: { fontSize: 20 },
   cardTitle: { fontSize: fonts.sizes.lg, fontWeight: '800', color: colors.textPrimary },
-  cardSport: { fontSize: fonts.sizes.xs, color: colors.primary, fontWeight: '700', marginTop: 2 },
+  subMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flexWrap: 'wrap',
+    marginTop: 2,
+  },
+  cardSport: { fontSize: fonts.sizes.xs, color: colors.primary, fontWeight: '700' },
+  recurringBadge: {
+    backgroundColor: colors.infoSoft,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 6,
+  },
+  recurringText: { fontSize: fonts.sizes.xs - 1, color: colors.info, fontWeight: '700' },
   spotsBadge: {
     backgroundColor: colors.infoSoft,
     paddingHorizontal: spacing.sm,

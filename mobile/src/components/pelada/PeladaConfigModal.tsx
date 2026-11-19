@@ -82,6 +82,8 @@ export function PeladaConfigModal({
   const [pixKey, setPixKey] = useState('');
   const [isPublic, setIsPublic] = useState(true);
   const [goalkeepersExempt, setGoalkeepersExempt] = useState(true);
+  const [recurrenceFreq, setRecurrenceFreq] = useState<'NONE' | '1X_WEEK' | '2X_WEEK'>('1X_WEEK');
+  const [selectedRecurrenceDays, setSelectedRecurrenceDays] = useState<string[]>(['QUI']);
 
   useEffect(() => {
     if (!visible || !pelada) return;
@@ -131,6 +133,16 @@ export function PeladaConfigModal({
     setPixKey(pelada.pixKey || '');
     setIsPublic(pelada.isPublic);
     setGoalkeepersExempt(pelada.goalkeepersExempt);
+
+    if (!pelada.isRecurring) {
+      setRecurrenceFreq('NONE');
+    } else if (pelada.recurrenceDays && pelada.recurrenceDays.includes(',')) {
+      setRecurrenceFreq('2X_WEEK');
+      setSelectedRecurrenceDays(pelada.recurrenceDays.split(','));
+    } else {
+      setRecurrenceFreq('1X_WEEK');
+      setSelectedRecurrenceDays(pelada.recurrenceDay ? [pelada.recurrenceDay] : ['QUI']);
+    }
   }, [visible, pelada, initialTab]);
 
   const displayedTeamCount = gameMode === 'WINNER_STAYS_QUEUE' ? 2 : fixedTeamsCount;
@@ -218,6 +230,14 @@ export function PeladaConfigModal({
         pixKey: pixKey.trim() || null,
         isPublic,
         goalkeepersExempt,
+        isRecurring: recurrenceFreq !== 'NONE',
+        recurrenceDay: recurrenceFreq !== 'NONE' ? selectedRecurrenceDays[0] || 'QUI' : null,
+        recurrenceDays:
+          recurrenceFreq === '2X_WEEK'
+            ? selectedRecurrenceDays.join(',')
+            : recurrenceFreq === '1X_WEEK'
+            ? selectedRecurrenceDays[0] || 'QUI'
+            : null,
       });
       onSaved(updated);
       onClose();
@@ -277,7 +297,7 @@ export function PeladaConfigModal({
             )}
           </View>
 
-          <ScrollView showsVerticalScrollIndicator keyboardShouldPersistTaps="handled">
+          <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
             {activeTab === 'rules' ? (
               <View style={styles.sectionStack}>
                 {/* Match Time */}
@@ -555,6 +575,96 @@ export function PeladaConfigModal({
                   </View>
                 ) : null}
 
+                {/* Recurrence Frequency */}
+                <View style={[styles.block, { marginVertical: spacing.sm }]}>
+                  <Text style={styles.blockTitle}>Frequência das Edições (Recorrência)</Text>
+                  <Text style={styles.radioDesc}>
+                    A pelada funciona como um grupo permanente. Defina com que frequência ocorrem as partidas:
+                  </Text>
+                  <View style={styles.pillsRow}>
+                    {[
+                      { key: '1X_WEEK', label: '1x por semana (Semanal)' },
+                      { key: '2X_WEEK', label: '2x por semana' },
+                      { key: 'NONE', label: 'Apenas esta data (Avulsa)' },
+                    ].map((opt) => {
+                      const active = recurrenceFreq === opt.key;
+                      return (
+                        <TouchableOpacity
+                          key={opt.key}
+                          style={[styles.pillChip, active && styles.pillChipActive]}
+                          onPress={() => setRecurrenceFreq(opt.key as any)}
+                        >
+                          <Text style={[styles.pillText, active && styles.pillTextActive]}>
+                            {opt.label}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+
+                  {recurrenceFreq !== 'NONE' && (
+                    <View style={{ marginTop: spacing.xs }}>
+                      <Text style={styles.subLabel}>
+                        {recurrenceFreq === '2X_WEEK'
+                          ? 'Selecione os 2 dias da semana:'
+                          : 'Dia da semana em que ocorre:'}
+                      </Text>
+                      <View style={styles.pillsRow}>
+                        {[
+                          { key: 'SEG', label: 'Seg' },
+                          { key: 'TER', label: 'Ter' },
+                          { key: 'QUA', label: 'Qua' },
+                          { key: 'QUI', label: 'Qui' },
+                          { key: 'SEX', label: 'Sex' },
+                          { key: 'SAB', label: 'Sáb' },
+                          { key: 'DOM', label: 'Dom' },
+                        ].map((day) => {
+                          const isSelected = selectedRecurrenceDays.includes(day.key);
+                          return (
+                            <TouchableOpacity
+                              key={day.key}
+                              style={[
+                                styles.pillChip,
+                                isSelected && styles.pillChipActive,
+                                { minWidth: 44, paddingHorizontal: 12 },
+                              ]}
+                              onPress={() => {
+                                if (recurrenceFreq === '2X_WEEK') {
+                                  if (isSelected) {
+                                    if (selectedRecurrenceDays.length > 1) {
+                                      setSelectedRecurrenceDays(
+                                        selectedRecurrenceDays.filter((d) => d !== day.key)
+                                      );
+                                    }
+                                  } else {
+                                    if (selectedRecurrenceDays.length >= 2) {
+                                      setSelectedRecurrenceDays([
+                                        selectedRecurrenceDays[1],
+                                        day.key,
+                                      ]);
+                                    } else {
+                                      setSelectedRecurrenceDays([
+                                        ...selectedRecurrenceDays,
+                                        day.key,
+                                      ]);
+                                    }
+                                  }
+                                } else {
+                                  setSelectedRecurrenceDays([day.key]);
+                                }
+                              }}
+                            >
+                              <Text style={[styles.pillText, isSelected && styles.pillTextActive]}>
+                                {day.label}
+                              </Text>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+                    </View>
+                  )}
+                </View>
+
                 <Input label="Local *" value={location} onChangeText={setLocation} />
                 <Input label="Endereço" value={locationAddress} onChangeText={setLocationAddress} />
 
@@ -638,7 +748,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     padding: spacing.lg,
-    maxHeight: '92%',
+    maxHeight: '90%',
+    overflow: 'hidden',
     ...shadows.card,
   },
   header: {
