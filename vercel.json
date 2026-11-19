@@ -1,0 +1,20 @@
+{
+  "installCommand": "node scripts/vercel-install.js",
+  "buildCommand": "npm run vercel-build",
+  "outputDirectory": "mobile/dist",
+  "functions": {
+    "api/index.ts": {
+      "includeFiles": "backend/prisma/**"
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/((?!api/).*)",
+      "destination": "/index.html"
+    }
+  ]
+}

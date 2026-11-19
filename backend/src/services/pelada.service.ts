@@ -1,5 +1,5 @@
 // src/services/pelada.service.ts
-import { PrismaClient } from '@prisma/client';
+import prisma from '../utils/prisma';
 import {
   AddGuestInput,
   CreatePeladaInput,
@@ -12,8 +12,6 @@ import {
   UpdatePeladaStatusInput,
   UpdateStatsInput,
 } from '../schemas/pelada.schema';
-
-const prisma = new PrismaClient();
 
 export interface DrawnTeamPlayer {
   id: string;

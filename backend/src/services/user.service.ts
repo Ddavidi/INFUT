@@ -1,8 +1,6 @@
 // src/services/user.service.ts
-import { PrismaClient } from '@prisma/client';
+import prisma from '../utils/prisma';
 import { UpdateProfileInput } from '../schemas/user.schema';
-
-const prisma = new PrismaClient();
 
 interface ParticipationSummary {
   id: string;

@@ -3,10 +3,23 @@ import axios from 'axios';
 import { Platform } from 'react-native';
 import { getToken } from '../utils/storage';
 
-// Use EXPO_PUBLIC_API_URL for physical device testing (e.g. http://192.168.x.x:3333/api)
-// For emulator/web, defaults to 10.0.2.2 (Android) or localhost (Web/iOS)
-const DEFAULT_HOST = Platform.OS === 'android' ? '10.0.2.2' : 'localhost';
-export const API_URL = process.env.EXPO_PUBLIC_API_URL || `http://${DEFAULT_HOST}:3333/api`;
+// Use EXPO_PUBLIC_API_URL for custom endpoints.
+// On Web outside localhost, automatically use the same origin (/api) so Vercel/production works seamlessly.
+function resolveApiUrl(): string {
+  if (process.env.EXPO_PUBLIC_API_URL) {
+    return process.env.EXPO_PUBLIC_API_URL;
+  }
+  if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location) {
+    const { hostname, origin } = window.location;
+    if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
+      return `${origin}/api`;
+    }
+  }
+  const defaultHost = Platform.OS === 'android' ? '10.0.2.2' : 'localhost';
+  return `http://${defaultHost}:3333/api`;
+}
+
+export const API_URL = resolveApiUrl();
 
 const api = axios.create({
   baseURL: API_URL,

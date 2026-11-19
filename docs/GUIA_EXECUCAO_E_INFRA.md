@@ -197,9 +197,9 @@ Este quadro acompanha onde cada parte do INFUT está hospedada hoje e o que falt
 
 | Componente | Ambiente Atual (Dev) | Destino em Produção (Go-Live) | Status |
 | :--- | :--- | :--- | :---: |
-| **Backend API** | Local (`localhost:3333`) | Railway / Render / Fly.io (HTTPS) | 🟡 Local |
-| **Banco de Dados** | SQLite (`backend/prisma/dev.db`) | PostgreSQL em Nuvem (Supabase / Neon) | 🟡 Local |
-| **Frontend Web** | Expo Web Local (`localhost:8081`) | Vercel / Netlify (`npx expo export -p web`) | 🟡 Local |
+| **Backend API** | Local (`localhost:3333`) e Vercel (`/api`) | Vercel Serverless (`api/index.ts`) | ✅ Configurado |
+| **Banco de Dados** | Neon PostgreSQL (`neon-infut`) | Neon Serverless PostgreSQL (`neondb`) | ✅ Em Produção |
+| **Frontend Web** | Expo Web Local (`localhost:8081`) e Vercel | Vercel (`mobile/dist` via `npm run vercel-build`) | ✅ Configurado |
 | **App Android** | Expo Go / Emulador Local | Google Play Store via **Expo EAS Build** (`.aab`) | 🟡 Local |
 
 ---

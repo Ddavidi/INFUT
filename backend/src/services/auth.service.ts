@@ -1,10 +1,8 @@
 // src/services/auth.service.ts
-import { PrismaClient } from '@prisma/client';
+import prisma from '../utils/prisma';
 import { hashPassword, comparePassword } from '../utils/password';
 import { generateToken } from '../utils/jwt';
 import { RegisterInput, LoginInput } from '../schemas/auth.schema';
-
-const prisma = new PrismaClient();
 
 export class AuthService {
   async register(data: RegisterInput) {

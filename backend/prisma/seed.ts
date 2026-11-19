@@ -1,8 +1,7 @@
 // prisma/seed.ts
-import { PrismaClient } from '@prisma/client';
+import 'dotenv/config';
 import bcrypt from 'bcryptjs';
-
-const prisma = new PrismaClient();
+import prisma from '../src/utils/prisma';
 
 const SEED_USERS = [
   { name: 'David Nunes', email: 'david@test.com', sport: 'Futebol', position: 'Meio-campista', region: 'Centro - Belo Horizonte' },

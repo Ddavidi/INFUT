@@ -1,9 +1,10 @@
-﻿# Node
+# Node
 node_modules/
 npm-debug.log*
 
 # Expo
 .expo/
+.vercel/
 dist/
 *.jks
 *.p8
@@ -36,3 +37,4 @@ backend/prisma/migrations/**/migration_lock.toml
 
 # Docker
 docker-compose.override.yml
+.vercel
