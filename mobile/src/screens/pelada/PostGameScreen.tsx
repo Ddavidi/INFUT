@@ -14,6 +14,7 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { AppStackParamList } from '../../navigation';
 import {
   getPeladaById,
+  startNextPeladaCycle,
   updatePeladaStatus,
   updatePlayerCheckin,
   voteGoalkeeper,
@@ -22,6 +23,8 @@ import {
 import { Pelada, PeladaPlayer } from '../../types';
 import { colors, fonts, spacing, borderRadius, shadows } from '../../constants/theme';
 import { showConfirm, showMessage } from '../../utils/alerts';
+import { formatPeladaSchedule } from '../../utils/dateTime';
+import { buildInviteUrl, shareOrCopyText } from '../../utils/inviteLink';
 import { useResponsive } from '../../hooks/useResponsive';
 
 type Props = NativeStackScreenProps<AppStackParamList, 'PostGame'>;
@@ -91,6 +94,93 @@ export function PostGameScreen({ navigation, route }: Props) {
         }
       },
       'Reabrir'
+    );
+  }
+
+  async function handleSharePostGameWhatsApp() {
+    if (!pelada) return;
+    const confirmed = pelada.players.filter((p) => p.status === 'CONFIRMED');
+    const ranked = [...confirmed].sort(
+      (a, b) =>
+        b.goals * 3 + b.assists * 2 + b.wins - (a.goals * 3 + a.assists * 2 + a.wins)
+    );
+    const highlights = ranked
+      .filter((p) => p.goals > 0 || p.assists > 0 || p.wins > 0)
+      .slice(0, 5);
+
+    const mvpLine =
+      pelada.mvpRanking.length > 0
+        ? `\n\n👑 *MVP da Pelada:* ${pelada.mvpRanking[0].displayName} (${pelada.mvpRanking[0].votes} voto(s))`
+        : '';
+    const gkLine =
+      pelada.goalkeeperRanking.length > 0
+        ? `\n🧤 *Goleiro Paredão:* ${pelada.goalkeeperRanking[0].displayName} (${pelada.goalkeeperRanking[0].votes} voto(s))`
+        : '';
+
+    const matchesBlock =
+      pelada.matches.length > 0
+        ? `\n\n⚽ *Placares da Rodada:*\n` +
+          pelada.matches
+            .map(
+              (m) =>
+                `• ${m.teamAName} ${m.scoreA} x ${m.scoreB} ${m.teamBName} (${
+                  m.winner === 'EMPATE' ? 'Empate' : `🏆 ${m.winner}`
+                })`
+            )
+            .join('\n')
+        : '';
+
+    const highlightsBlock =
+      highlights.length > 0
+        ? `\n\n🔥 *Destaques da Rodada:*\n` +
+          highlights
+            .map(
+              (p, idx) =>
+                `${idx + 1}º ${p.displayName} — ⚽ ${p.goals}G • 👟 ${p.assists}A • 🏆 ${p.wins}V`
+            )
+            .join('\n')
+        : '';
+
+    const message =
+      `🏁 *Resenha Pós-Jogo — ${pelada.title}*\n` +
+      `📅 ${formatPeladaSchedule(pelada.dateTime, pelada.durationHours)}` +
+      mvpLine +
+      gkLine +
+      matchesBlock +
+      highlightsBlock +
+      `\n\n🔗 Veja as estatísticas e vote no MVP: ${buildInviteUrl(pelada.inviteCode)}`;
+
+    await shareOrCopyText(
+      'Resenha copiada! 📲',
+      message,
+      'Resumo pós-jogo e MVP copiados para colar no grupo do WhatsApp!'
+    );
+  }
+
+  function handleStartNextCycle() {
+    if (!pelada) return;
+    showConfirm(
+      'Preparar Próxima Pelada (+7 dias)',
+      `Vamos abrir a pelada da próxima semana mantendo o código #${pelada.inviteCode} e os membros cadastrados (mensalistas já entram confirmados e com stats zerados). O histórico desta pelada e os votos de MVP continuam salvos!`,
+      async () => {
+        setActionLoading(true);
+        try {
+          const nextPelada = await startNextPeladaCycle(pelada.id);
+          showMessage(
+            'Próxima semana aberta! 🔄',
+            `Pelada criada para a próxima semana com o código #${nextPelada.inviteCode}.`
+          );
+          navigation.replace('PeladaDetails', { peladaId: nextPelada.id });
+        } catch (error: any) {
+          showMessage(
+            'Erro',
+            error.response?.data?.error || 'Não foi possível preparar a próxima pelada'
+          );
+        } finally {
+          setActionLoading(false);
+        }
+      },
+      'Criar Próxima Semana'
     );
   }
 
@@ -302,6 +392,17 @@ export function PostGameScreen({ navigation, route }: Props) {
             </View>
           ))
         )}
+
+        <TouchableOpacity
+          style={styles.whatsappShareBtn}
+          onPress={handleSharePostGameWhatsApp}
+          accessibilityRole="button"
+          accessibilityLabel="Compartilhar resenha pós-jogo e MVP no WhatsApp"
+        >
+          <Text style={styles.whatsappShareBtnText}>
+            📲 Compartilhar Resenha e MVP no WhatsApp
+          </Text>
+        </TouchableOpacity>
       </View>
 
       {/* 4. Organizer Only: Who Did Not Attend */}
@@ -368,7 +469,28 @@ export function PostGameScreen({ navigation, route }: Props) {
         </View>
       )}
 
-      {/* 5. Reopen Live Pelada (Organizer / Co-org) */}
+      {/* 5. Weekly Cycle + Reopen Live Pelada (Organizer / Co-org) */}
+      {canManage && (
+        <View style={styles.sectionCard}>
+          <Text style={styles.sectionTitle}>🔄 Ciclo Semanal da Pelada</Text>
+          <Text style={styles.helperText}>
+            Crie a pelada da próxima semana (+7 dias) mantendo o mesmo código #{pelada.inviteCode} e
+            os membros do grupo. O histórico e votos de MVP desta partida continuam salvos!
+          </Text>
+          <TouchableOpacity
+            style={styles.nextCycleBtn}
+            disabled={actionLoading}
+            onPress={handleStartNextCycle}
+            accessibilityRole="button"
+            accessibilityLabel="Preparar próxima pelada em 7 dias"
+          >
+            <Text style={styles.nextCycleBtnText}>
+              🔄 Preparar Próxima Pelada (+7 dias)
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       {canManage && (
         <TouchableOpacity
           style={styles.reopenBtn}
@@ -731,6 +853,39 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontSize: fonts.sizes.sm,
     fontWeight: '700',
+  },
+  whatsappShareBtn: {
+    marginTop: spacing.md,
+    backgroundColor: colors.successSoft,
+    borderWidth: 1,
+    borderColor: colors.success,
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing.sm + 4,
+    paddingHorizontal: spacing.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 46,
+  },
+  whatsappShareBtnText: {
+    color: colors.success,
+    fontSize: fonts.sizes.sm,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
+  nextCycleBtn: {
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing.sm + 6,
+    paddingHorizontal: spacing.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 48,
+  },
+  nextCycleBtnText: {
+    color: colors.textInverse,
+    fontSize: fonts.sizes.sm + 1,
+    fontWeight: '800',
+    textAlign: 'center',
   },
 });
 

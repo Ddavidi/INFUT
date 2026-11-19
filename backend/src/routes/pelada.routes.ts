@@ -46,6 +46,7 @@ router.patch('/:id/players/:playerId/stats', authMiddleware, validate(updateStat
 router.post('/:id/draw-teams', authMiddleware, validate(drawTeamsSchema), (req, res, next) => peladaController.drawTeams(req, res, next));
 router.put('/:id/teams', authMiddleware, validate(setManualTeamsSchema), (req, res, next) => peladaController.setManualTeams(req, res, next));
 router.patch('/:id/status', authMiddleware, validate(updatePeladaStatusSchema), (req, res, next) => peladaController.updateStatus(req, res, next));
+router.post('/:id/next-cycle', authMiddleware, (req, res, next) => peladaController.startNextCycle(req, res, next));
 router.post('/:id/matches', authMiddleware, validate(recordMatchSchema), (req, res, next) => peladaController.recordMatch(req, res, next));
 router.post('/:id/vote-mvp', authMiddleware, validate(voteMvpSchema), (req, res, next) => peladaController.voteMvp(req, res, next));
 router.post('/:id/vote-goalkeeper', authMiddleware, validate(voteGoalkeeperSchema), (req, res, next) => peladaController.voteGoalkeeper(req, res, next));

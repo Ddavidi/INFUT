@@ -1,10 +1,37 @@
-// Helpers for direct invite deep-links on Web (?code=QUINTA)
-import { Platform } from 'react-native';
+// Helpers for direct invite deep-links on Web (?code=QUINTA) and WhatsApp sharing
+import { Platform, Share } from 'react-native';
+import { showMessage } from './alerts';
 
 export const APP_WEB_URL = 'https://infut.vercel.app';
 
 export function buildInviteUrl(inviteCode: string): string {
   return `${APP_WEB_URL}/?code=${encodeURIComponent(inviteCode.trim().toUpperCase())}`;
+}
+
+export async function shareOrCopyText(
+  title: string,
+  message: string,
+  copiedToast = 'Texto copiado para colar no WhatsApp!'
+): Promise<void> {
+  if (Platform.OS === 'web') {
+    try {
+      if (typeof navigator !== 'undefined' && navigator.clipboard) {
+        await navigator.clipboard.writeText(message);
+        showMessage(title, copiedToast);
+        return;
+      }
+    } catch {
+      // Fallback below
+    }
+    showMessage(title, message);
+    return;
+  }
+
+  try {
+    await Share.share({ message });
+  } catch {
+    showMessage(title, message);
+  }
 }
 
 export function getInviteCodeFromUrl(): string | null {

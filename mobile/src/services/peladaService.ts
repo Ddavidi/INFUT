@@ -141,6 +141,11 @@ export async function updatePeladaStatus(
   return response.data;
 }
 
+export async function startNextPeladaCycle(peladaId: string): Promise<Pelada> {
+  const response = await api.post(`/peladas/${peladaId}/next-cycle`);
+  return response.data;
+}
+
 export async function recordPeladaMatch(
   peladaId: string,
   data: { teamAName: string; teamBName: string; scoreA: number; scoreB: number }

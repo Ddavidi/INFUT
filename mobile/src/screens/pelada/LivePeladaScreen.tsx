@@ -24,6 +24,7 @@ import {
 import { Pelada, PeladaPlayer } from '../../types';
 import { colors, fonts, spacing, borderRadius, shadows } from '../../constants/theme';
 import { showConfirm, showMessage } from '../../utils/alerts';
+import { buildInviteUrl, shareOrCopyText } from '../../utils/inviteLink';
 import { useResponsive } from '../../hooks/useResponsive';
 
 type Props = NativeStackScreenProps<AppStackParamList, 'LivePelada'>;
@@ -262,6 +263,53 @@ export function LivePeladaScreen({ navigation, route }: Props) {
         }
       },
       'Finalizar Pelada'
+    );
+  }
+
+  async function handleShareTeamsWhatsApp() {
+    if (!pelada || pelada.teams.length === 0) return;
+
+    const assignedIds = new Set(pelada.teams.flatMap((t) => t.players.map((p) => p.id)));
+    const unassigned = pelada.players.filter(
+      (p) => p.status === 'CONFIRMED' && !assignedIds.has(p.id)
+    );
+
+    const teamsBlock = pelada.teams
+      .map((team) => {
+        const playersLines = team.players
+          .map(
+            (tp, idx) =>
+              `${idx + 1}. ${tp.isGoalkeeper ? '🧤 ' : ''}${tp.name}${
+                tp.position ? ` (${tp.position})` : ''
+              }`
+          )
+          .join('\n');
+        return `👕 *${team.name}* (${team.players.length} atletas)\n${playersLines}`;
+      })
+      .join('\n\n');
+
+    const unassignedBlock =
+      unassigned.length > 0
+        ? `\n\n🔄 *Próximo / De fora* (${unassigned.length})\n` +
+          unassigned
+            .map(
+              (p) =>
+                `• ${p.isGoalkeeper ? '🧤 ' : ''}${p.displayName}${
+                  p.position ? ` (${p.position})` : ''
+                }`
+            )
+            .join('\n')
+        : '';
+
+    const message =
+      `⚽ *${pelada.title} — Escalação dos Times*\n\n` +
+      `${teamsBlock}${unassignedBlock}\n\n` +
+      `🔗 Acompanhe no INFUT: ${buildInviteUrl(pelada.inviteCode)}`;
+
+    await shareOrCopyText(
+      'Escalação copiada! 📲',
+      message,
+      'Escalação dos times copiada! Agora é só colar no grupo do WhatsApp.'
     );
   }
 
@@ -613,6 +661,15 @@ export function LivePeladaScreen({ navigation, route }: Props) {
               </View>
             );
           })()}
+
+          <TouchableOpacity
+            style={styles.whatsappShareBtn}
+            onPress={handleShareTeamsWhatsApp}
+            accessibilityRole="button"
+            accessibilityLabel="Enviar escalação dos times no WhatsApp"
+          >
+            <Text style={styles.whatsappShareBtnText}>📲 Enviar Escalação no WhatsApp</Text>
+          </TouchableOpacity>
         </View>
       )}
     </View>
@@ -1494,6 +1551,24 @@ const styles = StyleSheet.create({
   finishPeladaText: {
     color: colors.success,
     fontSize: fonts.sizes.md,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
+  whatsappShareBtn: {
+    marginTop: spacing.xs,
+    backgroundColor: colors.successSoft,
+    borderWidth: 1,
+    borderColor: colors.success,
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing.sm + 4,
+    paddingHorizontal: spacing.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 46,
+  },
+  whatsappShareBtnText: {
+    color: colors.success,
+    fontSize: fonts.sizes.sm,
     fontWeight: '800',
     textAlign: 'center',
   },

@@ -264,4 +264,17 @@ export class PeladaController {
       next(error);
     }
   }
+
+  async startNextCycle(req: Request, res: Response, next: NextFunction) {
+    try {
+      const userId = req.user!.userId;
+      const pelada = await peladaService.startNextCycle(
+        String(req.params.id),
+        userId
+      );
+      res.status(201).json(pelada);
+    } catch (error) {
+      next(error);
+    }
+  }
 }

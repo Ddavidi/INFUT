@@ -27,7 +27,7 @@ import { PaymentStatus, Pelada, PeladaPlayer } from '../../types';
 import { colors, fonts, spacing, borderRadius, shadows } from '../../constants/theme';
 import { showConfirm, showMessage } from '../../utils/alerts';
 import { formatPeladaSchedule } from '../../utils/dateTime';
-import { buildInviteUrl } from '../../utils/inviteLink';
+import { buildInviteUrl, shareOrCopyText } from '../../utils/inviteLink';
 import { getPositionsForSport } from '../../constants/sports';
 import { useResponsive } from '../../hooks/useResponsive';
 
@@ -118,25 +118,53 @@ export function PeladaDetailsScreen({ navigation, route }: Props) {
       `🔗 Entre direto pelo link: ${inviteUrl}\n` +
       `Ou digite o código no app INFUT: *${pelada.inviteCode}*`;
 
-    if (Platform.OS === 'web') {
-      try {
-        if (typeof navigator !== 'undefined' && navigator.clipboard) {
-          await navigator.clipboard.writeText(message);
-          showMessage('Convite copiado!', 'Texto do convite copiado para colar no WhatsApp.');
-          return;
-        }
-      } catch {
-        // Fallback below
-      }
-      showMessage('Compartilhar no WhatsApp', message);
+    await shareOrCopyText(
+      'Convite copiado!',
+      message,
+      'Texto do convite copiado para colar no WhatsApp.'
+    );
+  }
+
+  async function handleSharePendingPaymentsWhatsApp() {
+    if (!pelada) return;
+    const confirmed = pelada.players.filter((p) => p.status === 'CONFIRMED');
+    const pendingList = confirmed.filter((p) => p.paymentStatus === 'PENDING');
+    const waitingList = confirmed.filter((p) => p.paymentStatus === 'WAITING_CONFIRMATION');
+
+    if (pendingList.length === 0 && waitingList.length === 0) {
+      showMessage(
+        'Caixa 100% em dia! 🎉',
+        'Todos os jogadores confirmados já estão com pagamento quitado ou isento.'
+      );
       return;
     }
 
-    try {
-      await Share.share({ message });
-    } catch {
-      showMessage('Convite', message);
-    }
+    const pixLine = pelada.pixKey ? `\n🔑 *Chave Pix:* ${pelada.pixKey}` : '';
+    const pendingBlock =
+      pendingList.length > 0
+        ? `\n\n⏳ *Pendentes de pagamento (${pendingList.length}):*\n` +
+          pendingList.map((p) => `• ${p.displayName}`).join('\n')
+        : '';
+    const waitingBlock =
+      waitingList.length > 0
+        ? `\n\n🟡 *Em análise pelo organizador (${waitingList.length}):*\n` +
+          waitingList.map((p) => `• ${p.displayName}`).join('\n')
+        : '';
+
+    const message =
+      `💰 *Caixa da Pelada — ${pelada.title}*\n` +
+      `📅 ${formatPeladaSchedule(pelada.dateTime, pelada.durationHours)}\n` +
+      `💵 *Valor por atleta:* R$ ${(pelada.price || 0).toFixed(2)}` +
+      pixLine +
+      pendingBlock +
+      waitingBlock +
+      `\n\n🔗 Avise que pagou no app: ${buildInviteUrl(pelada.inviteCode)}`;
+
+    await shareOrCopyText(
+      'Cobrança copiada! 💸',
+      message,
+      'Lista de cobrança Pix copiada para colar no grupo do WhatsApp!'
+    );
   }
 
   async function handleCopyPix() {
@@ -828,6 +856,20 @@ export function PeladaDetailsScreen({ navigation, route }: Props) {
                   {pelada.financialSummary.pendingCount} • Isentos:{' '}
                   {pelada.financialSummary.exemptCount}
                 </Text>
+
+                {(pelada.financialSummary.pendingCount > 0 ||
+                  pelada.financialSummary.waitingCount > 0) && (
+                  <TouchableOpacity
+                    style={styles.whatsappGroupBtn}
+                    onPress={handleSharePendingPaymentsWhatsApp}
+                    accessibilityRole="button"
+                    accessibilityLabel="Copiar cobrança dos jogadores pendentes no WhatsApp"
+                  >
+                    <Text style={styles.whatsappGroupBtnText}>
+                      📲 Cobrar Pendentes no WhatsApp ({pelada.financialSummary.pendingCount + pelada.financialSummary.waitingCount})
+                    </Text>
+                  </TouchableOpacity>
+                )}
               </View>
 
               {/* Pix Card */}

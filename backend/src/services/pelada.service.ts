@@ -1035,6 +1035,128 @@ export class PeladaService {
     return this.getById(peladaId, actorUserId);
   }
 
+  async startNextCycle(peladaId: string, actorUserId: string) {
+    const pelada = await this.ensureCanManage(peladaId, actorUserId);
+
+    const nextDate = new Date(pelada.dateTime);
+    nextDate.setDate(nextDate.getDate() + 7);
+    while (nextDate.getTime() < Date.now() - 3600000) {
+      nextDate.setDate(nextDate.getDate() + 7);
+    }
+
+    const originalInviteCode = pelada.inviteCode;
+    const archivedCode = await this.generateUniqueInviteCode();
+    const isFree = !pelada.price || pelada.price <= 0;
+
+    const statusPriority = (p: any) => {
+      if (p.role === 'ORGANIZER' || p.role === 'CO_ORGANIZER' || p.memberType === 'MENSALISTA') {
+        return 0;
+      }
+      if (p.status === 'CONFIRMED') return 1;
+      if (p.status === 'WAITLIST') return 2;
+      return 3;
+    };
+
+    const registeredMembers = pelada.players
+      .filter((p) => Boolean(p.userId))
+      .sort((a, b) => {
+        const diff = statusPriority(a) - statusPriority(b);
+        if (diff !== 0) return diff;
+        return new Date(a.joinedAt).getTime() - new Date(b.joinedAt).getTime();
+      });
+
+    let fieldConfirmedCount = 0;
+    const newPlayersData = registeredMembers.map((p) => {
+      const isGk = Boolean(p.isGoalkeeper);
+      let nextStatus: 'CONFIRMED' | 'WAITLIST' = 'CONFIRMED';
+      if (!isGk && pelada.maxPlayers && fieldConfirmedCount >= pelada.maxPlayers) {
+        nextStatus = 'WAITLIST';
+      } else if (!isGk) {
+        fieldConfirmedCount += 1;
+      }
+
+      const paymentStatus =
+        isFree || (isGk && pelada.goalkeepersExempt)
+          ? 'EXEMPT'
+          : p.role === 'ORGANIZER' || p.memberType === 'MENSALISTA'
+          ? 'PAID'
+          : 'PENDING';
+
+      return {
+        userId: p.userId as string,
+        role: p.userId === pelada.organizerId ? 'ORGANIZER' : p.role,
+        status: nextStatus,
+        isGoalkeeper: isGk,
+        position: p.position,
+        paymentStatus,
+        attendanceStatus: 'PENDING',
+        memberType: p.memberType || 'DIARISTA',
+        goals: 0,
+        assists: 0,
+        wins: 0,
+        votedMvpForId: null,
+        votedGoalkeeperForId: null,
+      };
+    });
+
+    if (!newPlayersData.some((p) => p.userId === pelada.organizerId)) {
+      newPlayersData.unshift({
+        userId: pelada.organizerId,
+        role: 'ORGANIZER',
+        status: 'CONFIRMED',
+        isGoalkeeper: false,
+        position: null,
+        paymentStatus: isFree ? 'EXEMPT' : 'PAID',
+        attendanceStatus: 'PENDING',
+        memberType: 'MENSALISTA',
+        goals: 0,
+        assists: 0,
+        wins: 0,
+        votedMvpForId: null,
+        votedGoalkeeperForId: null,
+      });
+    }
+
+    const created = await prisma.$transaction(async (tx) => {
+      await tx.pelada.update({
+        where: { id: peladaId },
+        data: {
+          status: 'FINISHED',
+          inviteCode: archivedCode,
+        },
+      });
+
+      return tx.pelada.create({
+        data: {
+          title: pelada.title,
+          sport: pelada.sport,
+          dateTime: nextDate,
+          location: pelada.location,
+          locationAddress: pelada.locationAddress,
+          price: pelada.price,
+          isRecurring: pelada.isRecurring,
+          recurrenceDay: pelada.recurrenceDay,
+          maxPlayers: pelada.maxPlayers,
+          inviteCode: originalInviteCode,
+          isPublic: pelada.isPublic,
+          pixKey: pelada.pixKey,
+          goalkeepersExempt: pelada.goalkeepersExempt,
+          playersPerTeam: pelada.playersPerTeam,
+          cancelDeadlineHours: pelada.cancelDeadlineHours,
+          durationHours: pelada.durationHours ?? 2,
+          whatsappGroupUrl: pelada.whatsappGroupUrl,
+          organizerId: pelada.organizerId,
+          status: 'OPEN',
+          players: {
+            create: newPlayersData,
+          },
+        },
+      });
+    });
+
+    return this.getById(created.id, actorUserId);
+  }
+
   private async createRecurringInstances(
     basePelada: any,
     organizerPosition: string | null,
