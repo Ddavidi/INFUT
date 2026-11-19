@@ -151,12 +151,12 @@ export function PeladaDetailsScreen({ navigation, route }: Props) {
     const pendingBlock =
       pendingList.length > 0
         ? `\n\n⏳ *Pendentes de pagamento (${pendingList.length}):*\n` +
-          pendingList.map((p) => `• ${p.displayName}`).join('\n')
+        pendingList.map((p) => `• ${p.displayName}`).join('\n')
         : '';
     const waitingBlock =
       waitingList.length > 0
         ? `\n\n🟡 *Em análise pelo organizador (${waitingList.length}):*\n` +
-          waitingList.map((p) => `• ${p.displayName}`).join('\n')
+        waitingList.map((p) => `• ${p.displayName}`).join('\n')
         : '';
 
     const message =
@@ -298,11 +298,11 @@ export function PeladaDetailsScreen({ navigation, route }: Props) {
   const paymentProgressPct =
     pelada.financialSummary.totalExpected > 0
       ? Math.min(
-          100,
-          Math.round(
-            (pelada.financialSummary.totalPaid / pelada.financialSummary.totalExpected) * 100
-          )
+        100,
+        Math.round(
+          (pelada.financialSummary.totalPaid / pelada.financialSummary.totalExpected) * 100
         )
+      )
       : 100;
 
   const peladaStatus = pelada.status || 'OPEN';
@@ -322,11 +322,10 @@ export function PeladaDetailsScreen({ navigation, route }: Props) {
 
   const cfg = pelada.gameConfig;
   const rulesSummary = cfg
-    ? `${cfg.playersPerTeam} na linha • Partida de ${cfg.matchDurationMinutes} min • ${
-        cfg.gameMode === 'FIXED_TEAMS'
-          ? `${cfg.fixedTeamsCount} times fixos`
-          : '2 times + Fila'
-      }`
+    ? `${cfg.playersPerTeam} na linha • Partida de ${cfg.matchDurationMinutes} min • ${cfg.gameMode === 'FIXED_TEAMS'
+      ? `${cfg.fixedTeamsCount} times fixos`
+      : '2 times + Fila'
+    }`
     : `${pelada.playersPerTeam} na linha`;
 
   const headerCardContent = (
@@ -425,8 +424,8 @@ export function PeladaDetailsScreen({ navigation, route }: Props) {
                   peladaStatus === 'OPEN'
                     ? colors.primary
                     : peladaStatus === 'IN_PROGRESS'
-                    ? colors.error
-                    : colors.success,
+                      ? colors.error
+                      : colors.success,
               },
             ]}
           />
@@ -434,10 +433,10 @@ export function PeladaDetailsScreen({ navigation, route }: Props) {
             {peladaStatus === 'OPEN'
               ? 'Lista de presença aberta'
               : peladaStatus === 'IN_PROGRESS'
-              ? 'Pelada em andamento'
-              : pelada.votingStatus === 'CLOSED'
-              ? 'Finalizada — Resultado publicado'
-              : 'Finalizada — Votação de MVP aberta'}
+                ? 'Pelada em andamento'
+                : pelada.votingStatus === 'CLOSED'
+                  ? 'Finalizada — Resultado publicado'
+                  : 'Finalizada — Votação de MVP aberta'}
           </Text>
         </View>
         <Text style={styles.lifecycleSubtitle}>
@@ -446,10 +445,10 @@ export function PeladaDetailsScreen({ navigation, route }: Props) {
               ? 'Quando a galera chegar em quadra, inicie a pelada para fazer a chamada e sortear os times.'
               : 'Aguarde o organizador iniciar a pelada no horário do jogo.'
             : peladaStatus === 'IN_PROGRESS'
-            ? 'Entre na tela ao vivo para acompanhar times, fila de próximos, cronômetro e placar.'
-            : pelada.votingStatus === 'CLOSED'
-            ? 'Confira os vencedores de MVP, o goleiro destaque e as estatísticas completas.'
-            : 'Participe da votação aberta para eleger o MVP e o goleiro destaque da rodada.'}
+              ? 'Entre na tela ao vivo para acompanhar times, fila de próximos, cronômetro e placar.'
+              : pelada.votingStatus === 'CLOSED'
+                ? 'Confira os vencedores de MVP, o goleiro destaque e as estatísticas completas.'
+                : 'Participe da votação aberta para eleger o MVP e o goleiro destaque da rodada.'}
         </Text>
       </View>
 
@@ -602,10 +601,10 @@ export function PeladaDetailsScreen({ navigation, route }: Props) {
               ? 'Confirmado (Goleiro)'
               : 'Confirmado (Linha)'
             : pelada.myStatus === 'WAITLIST'
-            ? 'Na Lista de Espera'
-            : pelada.myStatus === 'DECLINED'
-            ? 'Não vou'
-            : 'Ainda não respondeu'}
+              ? 'Na Lista de Espera'
+              : pelada.myStatus === 'DECLINED'
+                ? 'Não vou'
+                : 'Ainda não respondeu'}
         </Text>
       </Text>
 
@@ -987,17 +986,17 @@ export function PeladaDetailsScreen({ navigation, route }: Props) {
 
                 {(pelada.financialSummary.pendingCount > 0 ||
                   pelada.financialSummary.waitingCount > 0) && (
-                  <TouchableOpacity
-                    style={styles.whatsappGroupBtn}
-                    onPress={handleSharePendingPaymentsWhatsApp}
-                    accessibilityRole="button"
-                    accessibilityLabel="Copiar cobrança dos jogadores pendentes no WhatsApp"
-                  >
-                    <Text style={styles.whatsappGroupBtnText}>
-                      Cobrar Pendentes no WhatsApp ({pelada.financialSummary.pendingCount + pelada.financialSummary.waitingCount})
-                    </Text>
-                  </TouchableOpacity>
-                )}
+                    <TouchableOpacity
+                      style={styles.whatsappGroupBtn}
+                      onPress={handleSharePendingPaymentsWhatsApp}
+                      accessibilityRole="button"
+                      accessibilityLabel="Copiar cobrança dos jogadores pendentes no WhatsApp"
+                    >
+                      <Text style={styles.whatsappGroupBtnText}>
+                        Cobrar Pendentes no WhatsApp ({pelada.financialSummary.pendingCount + pelada.financialSummary.waitingCount})
+                      </Text>
+                    </TouchableOpacity>
+                  )}
               </View>
 
               {/* Pix Card */}
@@ -1207,10 +1206,10 @@ function PlayerRow({
     player.role === 'ORGANIZER'
       ? 'Organizador'
       : player.role === 'CO_ORGANIZER'
-      ? 'Co-organizador'
-      : player.guestName
-      ? 'Convidado'
-      : null;
+        ? 'Co-organizador'
+        : player.guestName
+          ? 'Convidado'
+          : null;
 
   const initial = (player.displayName || 'J').charAt(0).toUpperCase();
   const paymentBadge = showPayment ? getPaymentLabel(player.paymentStatus) : null;

@@ -252,8 +252,8 @@ export function LivePeladaScreen({ navigation, route }: Props) {
       teamBIdx < pelada.teams.length && teamBIdx !== safeAIdx
         ? teamBIdx
         : safeAIdx === 0
-        ? 1
-        : 0;
+          ? 1
+          : 0;
     const teamA = pelada.teams[safeAIdx];
     const teamB = pelada.teams[safeBIdx];
     if (!teamA || !teamB || teamA.name === teamB.name) {
@@ -322,8 +322,7 @@ export function LivePeladaScreen({ navigation, route }: Props) {
         const playersLines = team.players
           .map(
             (tp, idx) =>
-              `${idx + 1}. ${tp.isGoalkeeper ? '[GOL] ' : ''}${tp.name}${
-                tp.position ? ` (${tp.position})` : ''
+              `${idx + 1}. ${tp.isGoalkeeper ? '[GOL] ' : ''}${tp.name}${tp.position ? ` (${tp.position})` : ''
               }`
           )
           .join('\n');
@@ -334,20 +333,19 @@ export function LivePeladaScreen({ navigation, route }: Props) {
     const queueBlock =
       waitingQueue.length > 0
         ? `\n\n*Fila de Próximos (${waitingQueue.length})*\n` +
-          waitingQueue
-            .map(
-              (p, idx) =>
-                `${idx + 1}. ${p.isGoalkeeper ? '[GOL] ' : ''}${p.name}${
-                  p.position ? ` (${p.position})` : ''
-                }`
-            )
-            .join('\n')
+        waitingQueue
+          .map(
+            (p, idx) =>
+              `${idx + 1}. ${p.isGoalkeeper ? '[GOL] ' : ''}${p.name}${p.position ? ` (${p.position})` : ''
+              }`
+          )
+          .join('\n')
         : '';
 
     const poolBlock =
       lastLoserPool.length > 0
         ? `\n\n*Sorteio das vagas faltantes (Perdedor anterior):*\n` +
-          lastLoserPool.map((p) => `- ${p.name}`).join('\n')
+        lastLoserPool.map((p) => `- ${p.name}`).join('\n')
         : '';
 
     const message =
@@ -412,8 +410,8 @@ export function LivePeladaScreen({ navigation, route }: Props) {
     cfg.drawMode === 'POSITION'
       ? 'Por Posição'
       : cfg.drawMode === 'RANDOM'
-      ? 'Aleatório'
-      : 'Manual';
+        ? 'Aleatório'
+        : 'Manual';
 
   // Integrated Timer + Scoreboard Match Card (compact, keeps timer & scoreboard above fold)
   const matchCardSection = (
@@ -453,8 +451,8 @@ export function LivePeladaScreen({ navigation, route }: Props) {
           teamBIdx < pelada.teams.length && teamBIdx !== safeAIdx
             ? teamBIdx
             : safeAIdx === 0
-            ? 1
-            : 0;
+              ? 1
+              : 0;
         const teamA = pelada.teams[safeAIdx];
         const teamB = pelada.teams[safeBIdx];
 
@@ -471,6 +469,12 @@ export function LivePeladaScreen({ navigation, route }: Props) {
                     {teamA.name}
                     {pelada.teams.length > 2 ? ' ↻' : ''}
                   </Text>
+                  {teamA.consecutiveWins && teamA.consecutiveWins > 0 ? (
+                    <Text style={styles.teamStreakLabel} numberOfLines={1}>
+                      {teamA.consecutiveWins}ª vitória seguida
+                      {cfg.maxConsecutiveWins && cfg.maxConsecutiveWins > 0 && teamA.consecutiveWins >= cfg.maxConsecutiveWins ? ' (limite)' : ''}
+                    </Text>
+                  ) : null}
                 </TouchableOpacity>
                 <View style={styles.scoreControls}>
                   <TouchableOpacity
@@ -501,6 +505,12 @@ export function LivePeladaScreen({ navigation, route }: Props) {
                     {teamB.name}
                     {pelada.teams.length > 2 ? ' ↻' : ''}
                   </Text>
+                  {teamB.consecutiveWins && teamB.consecutiveWins > 0 ? (
+                    <Text style={styles.teamStreakLabel} numberOfLines={1}>
+                      {teamB.consecutiveWins}ª vitória seguida
+                      {cfg.maxConsecutiveWins && cfg.maxConsecutiveWins > 0 && teamB.consecutiveWins >= cfg.maxConsecutiveWins ? ' (limite)' : ''}
+                    </Text>
+                  ) : null}
                 </TouchableOpacity>
                 <View style={styles.scoreControls}>
                   <TouchableOpacity
@@ -553,6 +563,32 @@ export function LivePeladaScreen({ navigation, route }: Props) {
                 </View>
               </View>
             )}
+
+            {isQueueMode && cfg.maxConsecutiveWins && cfg.maxConsecutiveWins > 0 ? (
+              (() => {
+                const nextA = (teamA.consecutiveWins || 0) + 1;
+                const nextB = (teamB.consecutiveWins || 0) + 1;
+                if (scoreA > scoreB && nextA >= cfg.maxConsecutiveWins) {
+                  return (
+                    <View style={styles.winLimitAlert}>
+                      <Text style={styles.winLimitAlertText}>
+                        Vitória do {teamA.name}: atingirá o limite de {cfg.maxConsecutiveWins} vitórias seguidas e rodará para a fila.
+                      </Text>
+                    </View>
+                  );
+                }
+                if (scoreB > scoreA && nextB >= cfg.maxConsecutiveWins) {
+                  return (
+                    <View style={styles.winLimitAlert}>
+                      <Text style={styles.winLimitAlertText}>
+                        Vitória do {teamB.name}: atingirá o limite de {cfg.maxConsecutiveWins} vitórias seguidas e rodará para a fila.
+                      </Text>
+                    </View>
+                  );
+                }
+                return null;
+              })()
+            ) : null}
 
             <TouchableOpacity
               style={[styles.primaryBtnFull, { marginTop: spacing.sm + 2 }]}
@@ -640,8 +676,8 @@ export function LivePeladaScreen({ navigation, route }: Props) {
               {cfg.drawMode === 'MANUAL'
                 ? 'Montar Times'
                 : pelada.teams.length > 0
-                ? 'Novo Sorteio'
-                : 'Sortear Times'}
+                  ? 'Novo Sorteio'
+                  : 'Sortear Times'}
             </Text>
           </TouchableOpacity>
         </View>
@@ -688,7 +724,16 @@ export function LivePeladaScreen({ navigation, route }: Props) {
                   <Text style={styles.teamTitle} numberOfLines={1}>
                     {team.name}
                   </Text>
-                  <Text style={styles.teamCountText}>{team.players.length}</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    {team.consecutiveWins && team.consecutiveWins > 0 ? (
+                      <View style={styles.streakPill}>
+                        <Text style={styles.streakPillText}>
+                          {team.consecutiveWins} {team.consecutiveWins === 1 ? 'vitória' : 'vitórias'}
+                        </Text>
+                      </View>
+                    ) : null}
+                    <Text style={styles.teamCountText}>{team.players.length}</Text>
+                  </View>
                 </View>
                 {team.players.map((tp) => (
                   <Text key={tp.id} style={styles.teamPlayerLine} numberOfLines={1}>
@@ -771,9 +816,9 @@ export function LivePeladaScreen({ navigation, route }: Props) {
             {activeStatsSummary.length === 0
               ? 'Nenhum gol ou assistência lançado ainda.'
               : activeStatsSummary
-                  .slice(0, 4)
-                  .map((p) => `${p.displayName} (${p.goals}G ${p.assists}A)`)
-                  .join(' • ')}
+                .slice(0, 4)
+                .map((p) => `${p.displayName} (${p.goals}G ${p.assists}A)`)
+                .join(' • ')}
           </Text>
         </View>
         {canManage && (
@@ -1727,6 +1772,40 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontSize: fonts.sizes.xs,
     fontWeight: '700',
+  },
+  streakPill: {
+    backgroundColor: 'rgba(255, 107, 0, 0.12)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: borderRadius.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 107, 0, 0.3)',
+  },
+  streakPillText: {
+    color: colors.primary,
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  teamStreakLabel: {
+    color: colors.primary,
+    fontSize: 10,
+    fontWeight: '700',
+    marginTop: 2,
+  },
+  winLimitAlert: {
+    marginTop: spacing.sm,
+    backgroundColor: 'rgba(255, 107, 0, 0.08)',
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 107, 0, 0.25)',
+    paddingHorizontal: spacing.sm + 2,
+    paddingVertical: spacing.xs + 2,
+  },
+  winLimitAlertText: {
+    color: colors.textPrimary,
+    fontSize: fonts.sizes.xs,
+    fontWeight: '600',
+    textAlign: 'center',
   },
   matchHistoryRow: {
     flexDirection: 'row',

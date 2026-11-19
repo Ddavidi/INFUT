@@ -62,6 +62,7 @@ export interface PeladaGameConfig {
   drawMode: PeladaDrawMode;
   fixedTeamsCount: number;
   teamNames: string[];
+  maxConsecutiveWins?: number;
 }
 
 export interface PeladaPlayer {
@@ -104,6 +105,7 @@ export interface DrawnTeamPlayer {
 export interface DrawnTeam {
   name: string;
   players: DrawnTeamPlayer[];
+  consecutiveWins?: number;
 }
 
 export interface MatchRecord {

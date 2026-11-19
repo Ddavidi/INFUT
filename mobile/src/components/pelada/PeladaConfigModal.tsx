@@ -61,6 +61,7 @@ export function PeladaConfigModal({
   const [gameMode, setGameMode] = useState<PeladaGameMode>('WINNER_STAYS_QUEUE');
   const [drawMode, setDrawMode] = useState<PeladaDrawMode>('POSITION');
   const [fixedTeamsCount, setFixedTeamsCount] = useState(3);
+  const [maxConsecutiveWins, setMaxConsecutiveWins] = useState<number>(0);
   const [teamNames, setTeamNames] = useState<string[]>([
     'Time Amarelo',
     'Time Azul',
@@ -100,6 +101,7 @@ export function PeladaConfigModal({
     setGameMode(cfg.gameMode || 'WINNER_STAYS_QUEUE');
     setDrawMode(cfg.drawMode || 'POSITION');
     setFixedTeamsCount(cfg.fixedTeamsCount || 3);
+    setMaxConsecutiveWins(cfg.maxConsecutiveWins || 0);
     setTeamNames(
       cfg.teamNames && cfg.teamNames.length >= 2
         ? [...cfg.teamNames]
@@ -164,6 +166,7 @@ export function PeladaConfigModal({
         drawMode,
         fixedTeamsCount: gameMode === 'FIXED_TEAMS' ? fixedTeamsCount : 2,
         teamNames: finalNames,
+        maxConsecutiveWins,
       });
       onSaved(updated);
       onClose();
@@ -408,6 +411,36 @@ export function PeladaConfigModal({
                       </View>
                     </View>
                   )}
+                </View>
+
+                {/* Consecutive win limit */}
+                <View style={styles.block}>
+                  <Text style={styles.blockTitle}>Limite de vitórias seguidas por time</Text>
+                  <Text style={styles.radioDesc}>
+                    Evita que o mesmo time domine a quadra a pelada inteira. Ao atingir o limite, o vencedor roda para a fila e dá lugar aos próximos.
+                  </Text>
+                  <View style={styles.pillsRow}>
+                    {[
+                      { val: 0, label: 'Sem limite' },
+                      { val: 2, label: '2 vitórias' },
+                      { val: 3, label: '3 vitórias' },
+                      { val: 4, label: '4 vitórias' },
+                      { val: 5, label: '5 vitórias' },
+                    ].map((opt) => {
+                      const active = maxConsecutiveWins === opt.val;
+                      return (
+                        <TouchableOpacity
+                          key={opt.val}
+                          style={[styles.pillChip, active && styles.pillChipActive]}
+                          onPress={() => setMaxConsecutiveWins(opt.val)}
+                        >
+                          <Text style={[styles.pillText, active && styles.pillTextActive]}>
+                            {opt.label}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
                 </View>
 
                 {/* Draw mode */}

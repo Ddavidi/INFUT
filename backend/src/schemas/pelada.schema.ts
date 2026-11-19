@@ -63,6 +63,7 @@ export const updateGameConfigSchema = z.object({
   drawMode: z.enum(['POSITION', 'RANDOM', 'MANUAL']).optional(),
   fixedTeamsCount: z.number().int().min(2).max(8).optional(),
   teamNames: z.array(z.string().min(1).max(60)).min(2).max(8).optional(),
+  maxConsecutiveWins: z.number().int().min(0).max(20).optional(),
 });
 
 export const updateVotingStatusSchema = z.object({
@@ -97,6 +98,7 @@ export const drawTeamsSchema = z.object({
   gameMode: z.enum(['FIXED_TEAMS', 'WINNER_STAYS_QUEUE']).optional(),
   drawMode: z.enum(['POSITION', 'RANDOM', 'MANUAL']).optional(),
   fixedTeamsCount: z.number().int().min(2).max(8).optional(),
+  maxConsecutiveWins: z.number().int().min(0).max(20).optional(),
 });
 
 export const updatePeladaStatusSchema = z.object({

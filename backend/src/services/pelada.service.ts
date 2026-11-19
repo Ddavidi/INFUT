@@ -26,6 +26,7 @@ export interface PeladaGameConfig {
   drawMode: PeladaDrawMode;
   fixedTeamsCount: number;
   teamNames: string[];
+  maxConsecutiveWins?: number;
 }
 
 export interface DrawnTeamPlayer {
@@ -38,6 +39,7 @@ export interface DrawnTeamPlayer {
 export interface DrawnTeam {
   name: string;
   players: DrawnTeamPlayer[];
+  consecutiveWins?: number;
 }
 
 export interface StoredTeamsEnvelope {
@@ -202,6 +204,7 @@ export class PeladaService {
       drawMode: 'POSITION',
       fixedTeamsCount: 3,
       teamNames: ['Time Amarelo', 'Time Azul', 'Time Vermelho'],
+      maxConsecutiveWins: 0,
     };
   }
 
@@ -277,6 +280,10 @@ export class PeladaService {
             ? parsedConfig.fixedTeamsCount
             : defaultConfig.fixedTeamsCount,
         teamNames: mergedTeamNames,
+        maxConsecutiveWins:
+          typeof parsedConfig.maxConsecutiveWins === 'number'
+            ? parsedConfig.maxConsecutiveWins
+            : defaultConfig.maxConsecutiveWins || 0,
       },
       votingStatus: parsed.votingStatus === 'CLOSED' ? 'CLOSED' : 'OPEN',
     };
@@ -927,6 +934,9 @@ export class PeladaService {
       ...(input.teamNames !== undefined && input.teamNames.length >= 2 && {
         teamNames: input.teamNames.map((n, i) => n.trim() || `Time ${i + 1}`),
       }),
+      ...(input.maxConsecutiveWins !== undefined && {
+        maxConsecutiveWins: input.maxConsecutiveWins,
+      }),
     };
 
     const minNamesNeeded =
@@ -1094,6 +1104,7 @@ export class PeladaService {
     const envelope = this.parseTeamsEnvelope(pelada);
     const teams = envelope.teams;
     const matches = this.safeJsonParse<MatchRecord[]>(pelada.matchesJson, []);
+    const maxWins = envelope.config.maxConsecutiveWins || 0;
 
     const winner =
       data.scoreA > data.scoreB
@@ -1101,6 +1112,8 @@ export class PeladaService {
         : data.scoreB > data.scoreA
         ? data.teamBName
         : 'EMPATE';
+
+    let winnerHitLimit = false;
 
     if (winner !== 'EMPATE') {
       const winningTeam = teams.find((t) => t.name === winner);
@@ -1110,7 +1123,24 @@ export class PeladaService {
           where: { id: { in: winningIds }, peladaId },
           data: { wins: { increment: 1 } },
         });
+
+        winningTeam.consecutiveWins = (winningTeam.consecutiveWins || 0) + 1;
+        if (maxWins > 0 && winningTeam.consecutiveWins >= maxWins) {
+          winnerHitLimit = true;
+        }
       }
+
+      const losingTeamObj = teams.find(
+        (t) => (t.name === data.teamAName || t.name === data.teamBName) && t.name !== winner
+      );
+      if (losingTeamObj) {
+        losingTeamObj.consecutiveWins = 0;
+      }
+    } else {
+      const teamAObj = teams.find((t) => t.name === data.teamAName);
+      const teamBObj = teams.find((t) => t.name === data.teamBName);
+      if (teamAObj) teamAObj.consecutiveWins = 0;
+      if (teamBObj) teamBObj.consecutiveWins = 0;
     }
 
     const newMatch: MatchRecord = {
@@ -1207,8 +1237,8 @@ export class PeladaService {
         }
 
         envelope.teams = [
-          { name: team0.name, players: [...gk0, ...nextLine0] },
-          { name: team1.name, players: [...gk1, ...nextLine1] },
+          { name: team0.name, players: [...gk0, ...nextLine0], consecutiveWins: 0 },
+          { name: team1.name, players: [...gk1, ...nextLine1], consecutiveWins: 0 },
         ];
         envelope.waitingQueue = [...newWaitingLine, ...newOutGks];
         envelope.lastLoserPool = newLastLoserLine;
@@ -1223,7 +1253,10 @@ export class PeladaService {
         envelope.lastRotationSummary = `Empate: saíram ambos os times! Novos ${team0.name} e ${team1.name} em quadra — ${parts.join(' • ')}.`;
       } else {
         let leavingIdx = -1;
-        if (winner !== 'EMPATE') {
+        if (winnerHitLimit) {
+          // Winning team reached max consecutive wins limit: rotates out!
+          leavingIdx = teams.findIndex((t) => t.name === winner);
+        } else if (winner !== 'EMPATE') {
           leavingIdx = teams.findIndex(
             (t) =>
               (t.name === data.teamAName || t.name === data.teamBName) &&
@@ -1239,6 +1272,7 @@ export class PeladaService {
         const stayingIdx = leavingIdx === 0 ? 1 : 0;
         const stayingTeam = teams[stayingIdx];
         const losingTeam = teams[leavingIdx];
+        losingTeam.consecutiveWins = 0;
         const losingTeamLine = losingTeam.players.filter((p) => !p.isGoalkeeper);
         const losingTeamGks = losingTeam.players.filter((p) => p.isGoalkeeper);
 
@@ -1284,6 +1318,7 @@ export class PeladaService {
         const newChallengingTeam: DrawnTeam = {
           name: losingTeam.name,
           players: [...nextGks, ...nextLine],
+          consecutiveWins: 0,
         };
 
         const nextTeams =
@@ -1308,10 +1343,22 @@ export class PeladaService {
               .join(', ')}`
           );
         }
-        envelope.lastRotationSummary = `${stayingTeam.name} permanece. Entraram em ${newChallengingTeam.name} — ${parts.join(
-          ' • '
-        )}.`;
+        if (winnerHitLimit) {
+          envelope.lastRotationSummary = `${losingTeam.name} atingiu o limite de ${maxWins} ${maxWins === 1 ? 'vitória' : 'vitórias'} seguidas e rodou para a fila! ${stayingTeam.name} permaneceu em quadra. Entraram em ${newChallengingTeam.name} — ${parts.join(
+            ' • '
+          )}.`;
+        } else if (winner !== 'EMPATE') {
+          envelope.lastRotationSummary = `${stayingTeam.name} venceu (${stayingTeam.consecutiveWins || 1}ª vitória seguida) e permanece. Entraram em ${newChallengingTeam.name} — ${parts.join(
+            ' • '
+          )}.`;
+        } else {
+          envelope.lastRotationSummary = `${stayingTeam.name} permaneceu após empate. Entraram em ${newChallengingTeam.name} — ${parts.join(
+            ' • '
+          )}.`;
+        }
       }
+    } else if (winnerHitLimit) {
+      envelope.lastRotationSummary = `${winner} atingiu o limite de ${maxWins} ${maxWins === 1 ? 'vitória' : 'vitórias'} seguidas!`;
     }
 
     await prisma.pelada.update({
@@ -1449,6 +1496,9 @@ export class PeladaService {
       ...(input.teamNames && input.teamNames.length >= 2 && {
         teamNames: input.teamNames.map((n, i) => n.trim() || `Time ${i + 1}`),
       }),
+      ...(input.maxConsecutiveWins !== undefined && {
+        maxConsecutiveWins: input.maxConsecutiveWins,
+      }),
     };
 
     const presentPlayers = await prisma.peladaPlayer.findMany({
@@ -1497,6 +1547,7 @@ export class PeladaService {
     const teams: DrawnTeam[] = Array.from({ length: numTeams }, (_, i) => ({
       name: nextConfig.teamNames[i] || `Time ${i + 1}`,
       players: [],
+      consecutiveWins: 0,
     }));
 
     // Goalkeepers: max 1 per active team, excess goes to waitingQueue
@@ -1576,6 +1627,7 @@ export class PeladaService {
       return {
         name: team.name.trim(),
         players,
+        consecutiveWins: 0,
       };
     });
 
