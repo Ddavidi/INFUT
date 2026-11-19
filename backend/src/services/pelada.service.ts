@@ -686,7 +686,12 @@ export class PeladaService {
     });
 
     let finalStatus = 'CONFIRMED';
-    if (!isGoalkeeper && pelada.maxPlayers && confirmedFieldOthers >= pelada.maxPlayers) {
+    if (
+      !isOwner &&
+      !isGoalkeeper &&
+      pelada.maxPlayers &&
+      confirmedFieldOthers >= pelada.maxPlayers
+    ) {
       finalStatus = 'WAITLIST';
     }
 
@@ -1250,12 +1255,31 @@ export class PeladaService {
       throw this.createHttpError('A votação desta pelada já foi encerrada.', 400);
     }
 
-    const voter = await prisma.peladaPlayer.findUnique({
+    let voter = await prisma.peladaPlayer.findUnique({
       where: { peladaId_userId: { peladaId, userId: voterUserId } },
     });
 
-    if (!voter || voter.status !== 'CONFIRMED') {
-      throw this.createHttpError(`Apenas jogadores confirmados podem votar no ${awardLabel}`, 403);
+    const isOwner = pelada.organizerId === voterUserId;
+
+    if (!voter && isOwner) {
+      voter = await prisma.peladaPlayer.create({
+        data: {
+          peladaId,
+          userId: voterUserId,
+          role: 'ORGANIZER',
+          status: 'CONFIRMED',
+          attendanceStatus: 'PRESENT',
+          paymentStatus: !pelada.price || pelada.price <= 0 ? 'EXEMPT' : 'PAID',
+        },
+      });
+    }
+
+    if (!voter || (voter.status === 'DECLINED' && !isOwner)) {
+      throw this.createHttpError(`Apenas participantes desta pelada podem votar no ${awardLabel}`, 403);
+    }
+
+    if (voter.attendanceStatus === 'NO_SHOW' && !isOwner) {
+      throw this.createHttpError(`Apenas participantes que compareceram podem votar no ${awardLabel}`, 403);
     }
 
     const target = await prisma.peladaPlayer.findUnique({
@@ -1268,7 +1292,10 @@ export class PeladaService {
 
     await prisma.peladaPlayer.update({
       where: { id: voter.id },
-      data: { [field]: targetPlayerId },
+      data: {
+        [field]: targetPlayerId,
+        ...(isOwner && voter.status !== 'CONFIRMED' && { status: 'CONFIRMED' }),
+      },
     });
 
     // Auto-close voting when all eligible confirmed players have cast their MVP vote

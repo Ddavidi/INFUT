@@ -249,7 +249,12 @@ export function PostGameScreen({ navigation, route }: Props) {
 
   const votingStatus = pelada.votingStatus || 'OPEN';
   const isVotingOpen = votingStatus === 'OPEN';
-  const canVote = pelada.myStatus === 'CONFIRMED' && pelada.myPlayer?.attendanceStatus !== 'NO_SHOW';
+  const canVote = Boolean(
+    (pelada.myPlayer &&
+      pelada.myStatus !== 'DECLINED' &&
+      pelada.myPlayer.attendanceStatus !== 'NO_SHOW') ||
+      canManage
+  );
   const hasVotedMvp = Boolean(pelada.myPlayer?.votedMvpForId);
   const myMvpTarget = allConfirmed.find((p) => p.id === pelada.myPlayer?.votedMvpForId);
   const myGkTarget = allConfirmed.find((p) => p.id === pelada.myPlayer?.votedGoalkeeperForId);
