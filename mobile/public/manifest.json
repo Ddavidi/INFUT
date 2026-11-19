@@ -1,0 +1,25 @@
+{
+  "name": "INFUT — Organize suas peladas",
+  "short_name": "INFUT",
+  "description": "Organize peladas, confirme presença, sorteie times equilibrados e controle o Pix em um só lugar.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#070B12",
+  "theme_color": "#FE7F2D",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

@@ -1,7 +1,9 @@
-// Axios instance with JWT interceptor
+// Axios instance with JWT interceptor and automatic fallback for Web
 import axios from 'axios';
 import { Platform } from 'react-native';
-import { getToken } from '../utils/storage';
+import { clearAll, getToken } from '../utils/storage';
+
+const PRODUCTION_API_URL = 'https://infut.vercel.app/api';
 
 // Use EXPO_PUBLIC_API_URL for custom endpoints.
 // On Web outside localhost, automatically use the same origin (/api) so Vercel/production works seamlessly.
@@ -41,12 +43,27 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// Response interceptor - handle errors
+// Response interceptor - fallback to production API if local backend is offline, and clear invalid session on 401
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
+  async (error) => {
+    const config = error.config as any;
+
+    if (
+      !error.response &&
+      config &&
+      !config._retriedProduction &&
+      !process.env.EXPO_PUBLIC_API_URL &&
+      String(api.defaults.baseURL || '').includes('localhost:3333')
+    ) {
+      config._retriedProduction = true;
+      api.defaults.baseURL = PRODUCTION_API_URL;
+      config.baseURL = PRODUCTION_API_URL;
+      return api.request(config);
+    }
+
     if (error.response?.status === 401) {
-      // Token expired or invalid — could trigger logout here
+      await clearAll();
       console.warn('Token expired or invalid');
     }
     return Promise.reject(error);

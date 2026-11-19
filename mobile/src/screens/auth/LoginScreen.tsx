@@ -1,5 +1,5 @@
 // Login Screen (with Guest Invite Preview Modal)
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -20,6 +20,7 @@ import { getPublicPeladaByCode } from '../../services/peladaService';
 import { Pelada } from '../../types';
 import { colors, fonts, spacing, borderRadius, layout, shadows } from '../../constants/theme';
 import { showMessage } from '../../utils/alerts';
+import { getInviteCodeFromUrl } from '../../utils/inviteLink';
 import { useResponsive } from '../../hooks/useResponsive';
 
 type Props = {
@@ -36,6 +37,19 @@ export function LoginScreen({ navigation }: Props) {
   const [inviteCode, setInviteCode] = useState('');
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewPelada, setPreviewPelada] = useState<Pelada | null>(null);
+
+  useEffect(() => {
+    const codeFromUrl = getInviteCodeFromUrl();
+    if (!codeFromUrl) return;
+    setInviteCode(codeFromUrl);
+    setPreviewLoading(true);
+    getPublicPeladaByCode(codeFromUrl)
+      .then((pelada) => setPreviewPelada(pelada))
+      .catch(() => {
+        // Silently ignore invalid code in URL on initial load
+      })
+      .finally(() => setPreviewLoading(false));
+  }, []);
 
   async function handleLogin() {
     if (!email.trim() || !password.trim()) {

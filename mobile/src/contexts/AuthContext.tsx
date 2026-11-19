@@ -23,7 +23,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Load saved session on app start
+  // Load saved session on app start and sync profile with backend
   useEffect(() => {
     async function loadStoredSession() {
       try {
@@ -33,6 +33,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (storedToken && storedUser) {
           setToken(storedToken);
           setUser(storedUser);
+          try {
+            const freshUser = await getProfile();
+            setUser(freshUser);
+            await saveUser(freshUser);
+          } catch (err: any) {
+            if (err?.response?.status === 401) {
+              setToken(null);
+              setUser(null);
+              await clearAll();
+            }
+          }
         }
       } catch (error) {
         console.error('Error loading session:', error);

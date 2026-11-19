@@ -1,5 +1,5 @@
 // Feed Screen - Pelada listing and quick join by invite code
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -17,6 +17,7 @@ import { Pelada } from '../../types';
 import { colors, fonts, spacing, borderRadius, shadows } from '../../constants/theme';
 import { showMessage } from '../../utils/alerts';
 import { formatPeladaSchedule } from '../../utils/dateTime';
+import { clearInviteCodeFromUrl, getInviteCodeFromUrl } from '../../utils/inviteLink';
 import { useResponsive } from '../../hooks/useResponsive';
 
 type Props = {
@@ -174,6 +175,23 @@ export function FeedScreen({ navigation }: Props) {
       loadPeladas();
     }, [loadPeladas])
   );
+
+  useEffect(() => {
+    const codeFromUrl = getInviteCodeFromUrl();
+    if (!codeFromUrl) return;
+    clearInviteCodeFromUrl();
+    setJoining(true);
+    joinPeladaByCode(codeFromUrl)
+      .then(async (pelada) => {
+        await loadPeladas();
+        navigation.navigate('PeladaDetails', { peladaId: pelada.id });
+      })
+      .catch((error: any) => {
+        const msg = error.response?.data?.error || 'Não foi possível entrar pelo link de convite';
+        showMessage('Convite', msg);
+      })
+      .finally(() => setJoining(false));
+  }, [loadPeladas, navigation]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);

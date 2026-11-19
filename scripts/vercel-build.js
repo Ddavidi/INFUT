@@ -60,3 +60,27 @@ execSync('npx expo export --platform web', {
     EXPO_NO_TELEMETRY: '1',
   },
 });
+
+const indexHtmlPath = path.join(mobileDir, 'dist', 'index.html');
+if (fs.existsSync(indexHtmlPath)) {
+  let html = fs.readFileSync(indexHtmlPath, 'utf8');
+  if (!html.includes('rel="manifest"')) {
+    const pwaTags = [
+      '<link rel="manifest" href="/manifest.json" />',
+      '<link rel="apple-touch-icon" href="/apple-touch-icon.png" />',
+      '<meta name="apple-mobile-web-app-capable" content="yes" />',
+      '<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />',
+      '<meta name="apple-mobile-web-app-title" content="INFUT" />',
+      '<meta name="mobile-web-app-capable" content="yes" />',
+      '<meta name="theme-color" content="#FE7F2D" />',
+      '<meta property="og:type" content="website" />',
+      '<meta property="og:title" content="INFUT — Organize suas peladas sem bagunça" />',
+      '<meta property="og:description" content="Confirme presença, copie a chave Pix, veja o sorteio de times e vote no MVP da pelada." />',
+      '<meta property="og:url" content="https://infut.vercel.app" />',
+      '<meta property="og:image" content="https://infut.vercel.app/icon-512.png" />',
+    ].join('\n    ');
+    html = html.replace('</head>', `    ${pwaTags}\n  </head>`);
+    fs.writeFileSync(indexHtmlPath, html, 'utf8');
+    console.log('5. Injected PWA & OpenGraph tags into mobile/dist/index.html.');
+  }
+}

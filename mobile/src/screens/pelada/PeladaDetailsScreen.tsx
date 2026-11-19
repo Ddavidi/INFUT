@@ -27,6 +27,7 @@ import { PaymentStatus, Pelada, PeladaPlayer } from '../../types';
 import { colors, fonts, spacing, borderRadius, shadows } from '../../constants/theme';
 import { showConfirm, showMessage } from '../../utils/alerts';
 import { formatPeladaSchedule } from '../../utils/dateTime';
+import { buildInviteUrl } from '../../utils/inviteLink';
 import { useResponsive } from '../../hooks/useResponsive';
 
 type Props = NativeStackScreenProps<AppStackParamList, 'PeladaDetails'>;
@@ -103,12 +104,14 @@ export function PeladaDetailsScreen({ navigation, route }: Props) {
     const whatsappLine = pelada.whatsappGroupUrl
       ? `\n💬 Grupo WhatsApp: ${pelada.whatsappGroupUrl}`
       : '';
+    const inviteUrl = buildInviteUrl(pelada.inviteCode);
     const message =
       `⚽ *${pelada.title}* (${pelada.sport})\n` +
       `📅 ${formatPeladaSchedule(pelada.dateTime, pelada.durationHours)}\n` +
       `📍 ${pelada.location}${pelada.locationAddress ? ` - ${pelada.locationAddress}` : ''}\n` +
       `💰 ${priceInfo}${whatsappLine}\n\n` +
-      `Entre no app INFUT e digite o codigo: *${pelada.inviteCode}*`;
+      `🔗 Entre direto pelo link: ${inviteUrl}\n` +
+      `Ou digite o código no app INFUT: *${pelada.inviteCode}*`;
 
     if (Platform.OS === 'web') {
       try {
