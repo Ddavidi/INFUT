@@ -28,6 +28,7 @@ import { colors, fonts, spacing, borderRadius, shadows } from '../../constants/t
 import { showConfirm, showMessage } from '../../utils/alerts';
 import { formatPeladaSchedule } from '../../utils/dateTime';
 import { buildInviteUrl } from '../../utils/inviteLink';
+import { getPositionsForSport } from '../../constants/sports';
 import { useResponsive } from '../../hooks/useResponsive';
 
 type Props = NativeStackScreenProps<AppStackParamList, 'PeladaDetails'>;
@@ -59,11 +60,15 @@ export function PeladaDetailsScreen({ navigation, route }: Props) {
   const [actionLoading, setActionLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<DetailTab>('attendance');
   const [showEditModal, setShowEditModal] = useState(false);
+  const [rsvpPosition, setRsvpPosition] = useState<string>('');
 
   const loadPelada = useCallback(async () => {
     try {
       const data = await getPeladaById(peladaId);
       setPelada(data);
+      if (data.myPlayer?.position) {
+        setRsvpPosition(data.myPlayer.position);
+      }
     } catch (error: any) {
       const msg = error.response?.data?.error || 'Erro ao carregar pelada';
       showMessage('Erro', msg);
@@ -521,13 +526,69 @@ export function PeladaDetailsScreen({ navigation, route }: Props) {
             ⏰ Cancelamento sem falta até {pelada.cancelDeadlineHours}h antes do jogo
           </Text>
 
+          {(() => {
+            const linePositions = getPositionsForSport(pelada.sport).filter(
+              (pos) => !pos.toLowerCase().includes('goleir')
+            );
+            if (linePositions.length === 0) return null;
+            return (
+              <View style={styles.positionPickerBlock}>
+                <Text style={styles.positionPickerLabel}>Posição nesta pelada (opcional):</Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  style={styles.positionScroll}
+                >
+                  {linePositions.map((pos) => {
+                    const selected = rsvpPosition === pos;
+                    return (
+                      <TouchableOpacity
+                        key={pos}
+                        style={[styles.positionChip, selected && styles.positionChipSelected]}
+                        disabled={actionLoading}
+                        onPress={() => {
+                          setRsvpPosition(pos);
+                          if (pelada.myStatus === 'CONFIRMED' && !pelada.myPlayer?.isGoalkeeper) {
+                            runAction(() =>
+                              rsvpPelada(pelada.id, {
+                                status: 'CONFIRMED',
+                                isGoalkeeper: false,
+                                position: pos,
+                              })
+                            );
+                          }
+                        }}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Selecionar posição ${pos}`}
+                        accessibilityState={{ selected }}
+                      >
+                        <Text
+                          style={[
+                            styles.positionChipText,
+                            selected && styles.positionChipTextSelected,
+                          ]}
+                        >
+                          {pos}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+            );
+          })()}
+
           <View style={styles.rsvpRow}>
             <TouchableOpacity
               style={[styles.rsvpBtn, { backgroundColor: colors.primary }]}
               disabled={actionLoading}
               onPress={() =>
                 runAction(() =>
-                  rsvpPelada(pelada.id, { status: 'CONFIRMED', isGoalkeeper: false })
+                  rsvpPelada(pelada.id, {
+                    status: 'CONFIRMED',
+                    isGoalkeeper: false,
+                    ...(rsvpPosition ? { position: rsvpPosition } : {}),
+                  })
                 )
               }
             >
@@ -1209,6 +1270,40 @@ const styles = StyleSheet.create({
   },
   myStatusText: { color: colors.textSecondary, fontSize: fonts.sizes.sm, marginBottom: 4 },
   deadlineNotice: { color: colors.textMuted, fontSize: fonts.sizes.xs, marginBottom: spacing.md },
+  positionPickerBlock: {
+    marginBottom: spacing.md,
+  },
+  positionPickerLabel: {
+    color: colors.textSecondary,
+    fontSize: fonts.sizes.xs,
+    fontWeight: '700',
+    marginBottom: spacing.xs + 2,
+  },
+  positionScroll: {
+    flexGrow: 0,
+  },
+  positionChip: {
+    backgroundColor: colors.surfaceLight,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: borderRadius.full,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 6,
+    marginRight: spacing.xs + 2,
+  },
+  positionChipSelected: {
+    backgroundColor: colors.primarySoft,
+    borderColor: colors.primary,
+  },
+  positionChipText: {
+    color: colors.textSecondary,
+    fontSize: fonts.sizes.xs,
+    fontWeight: '700',
+  },
+  positionChipTextSelected: {
+    color: colors.primary,
+    fontWeight: '800',
+  },
   rsvpRow: { flexDirection: 'row', gap: spacing.xs + 2, flexWrap: 'wrap' },
   rsvpBtn: {
     flex: 1,

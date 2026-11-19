@@ -9,6 +9,7 @@ import {
   RefreshControl,
   TextInput,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -157,6 +158,43 @@ export function FeedScreen({ navigation }: Props) {
   const [refreshing, setRefreshing] = useState(false);
   const [inviteCode, setInviteCode] = useState('');
   const [joining, setJoining] = useState(false);
+  const [installPrompt, setInstallPrompt] = useState<any>(null);
+  const [isStandalonePwa, setIsStandalonePwa] = useState(false);
+
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+    const standalone =
+      window.matchMedia?.('(display-mode: standalone)')?.matches ||
+      Boolean((window.navigator as any).standalone);
+    setIsStandalonePwa(standalone);
+
+    const handleBeforeInstall = (e: any) => {
+      e.preventDefault();
+      setInstallPrompt(e);
+    };
+    window.addEventListener('beforeinstallprompt', handleBeforeInstall);
+    return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstall);
+  }, []);
+
+  async function handleInstallApp() {
+    if (installPrompt) {
+      try {
+        installPrompt.prompt();
+        const choice = await installPrompt.userChoice;
+        if (choice?.outcome === 'accepted') {
+          setInstallPrompt(null);
+          setIsStandalonePwa(true);
+        }
+        return;
+      } catch {
+        // Fallback to manual instructions below
+      }
+    }
+    showMessage(
+      'Instalar INFUT no Celular',
+      'No iPhone (Safari): toque em Compartilhar (↑) e depois em "Adicionar à Tela de Início".\n\nNo Android (Chrome): toque no menu (⋮) no canto superior e escolha "Instalar aplicativo".'
+    );
+  }
 
   const loadPeladas = useCallback(async () => {
     try {
@@ -237,8 +275,20 @@ export function FeedScreen({ navigation }: Props) {
               <Text style={styles.headerTitle}>INFUT</Text>
               <Text style={styles.headerSubtitle}>Minhas peladas e convites</Text>
             </View>
-            <View style={styles.countPill}>
-              <Text style={styles.countPillText}>{peladas.length} jogos</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
+              {Platform.OS === 'web' && !isStandalonePwa && (
+                <TouchableOpacity
+                  style={styles.installAppPill}
+                  onPress={handleInstallApp}
+                  accessibilityRole="button"
+                  accessibilityLabel="Instalar aplicativo INFUT na tela inicial"
+                >
+                  <Text style={styles.installAppPillText}>📲 Instalar App</Text>
+                </TouchableOpacity>
+              )}
+              <View style={styles.countPill}>
+                <Text style={styles.countPillText}>{peladas.length} jogos</Text>
+              </View>
             </View>
           </View>
 
@@ -358,6 +408,7 @@ const styles = StyleSheet.create({
   },
   headerTopRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: spacing.md,
@@ -387,6 +438,19 @@ const styles = StyleSheet.create({
     fontSize: fonts.sizes.xs,
     fontWeight: '700',
     fontVariant: ['tabular-nums'],
+  },
+  installAppPill: {
+    backgroundColor: colors.primarySoft,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    borderRadius: borderRadius.full,
+    paddingHorizontal: spacing.sm + 4,
+    paddingVertical: 6,
+  },
+  installAppPillText: {
+    color: colors.primary,
+    fontSize: fonts.sizes.xs,
+    fontWeight: '800',
   },
   joinCard: {
     backgroundColor: colors.card,

@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '../../hooks/useAuth';
-import { updateProfile, deleteAccount } from '../../services/userService';
+import { updateProfile, changeUserPassword, deleteAccount } from '../../services/userService';
 import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
 import { LegalModal } from '../../components/ui/LegalModal';
@@ -28,6 +28,9 @@ export function EditProfileScreen() {
   const [selectedSport, setSelectedSport] = useState('');
   const [selectedPosition, setSelectedPosition] = useState('');
   const [loading, setLoading] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [changingPassword, setChangingPassword] = useState(false);
   const [positions, setPositions] = useState<string[]>([]);
   const [showLegal, setShowLegal] = useState(false);
 
@@ -75,6 +78,30 @@ export function EditProfileScreen() {
       showMessage('Erro', msg);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleChangePassword() {
+    if (!currentPassword || !newPassword) {
+      showMessage('Campos obrigatórios', 'Informe sua senha atual e a nova senha.');
+      return;
+    }
+    if (newPassword.length < 6) {
+      showMessage('Senha curta', 'A nova senha deve ter pelo menos 6 caracteres.');
+      return;
+    }
+
+    setChangingPassword(true);
+    try {
+      await changeUserPassword({ currentPassword, newPassword });
+      setCurrentPassword('');
+      setNewPassword('');
+      showMessage('Pronto!', 'Sua senha foi atualizada com sucesso.');
+    } catch (error: any) {
+      const msg = error.response?.data?.error || 'Não foi possível alterar a senha';
+      showMessage('Erro', msg);
+    } finally {
+      setChangingPassword(false);
     }
   }
 
@@ -243,6 +270,32 @@ export function EditProfileScreen() {
           onPress={handleSave}
           loading={loading}
           style={{ marginTop: spacing.lg }}
+        />
+      </View>
+
+      {/* Alteração de Senha */}
+      <View style={styles.formCard}>
+        <Text style={styles.cardSectionHeading}>SEGURANÇA — ALTERAR SENHA</Text>
+        <Input
+          label="Senha Atual"
+          placeholder="Digite sua senha atual"
+          value={currentPassword}
+          onChangeText={setCurrentPassword}
+          secureTextEntry
+        />
+        <Input
+          label="Nova Senha"
+          placeholder="Mínimo 6 caracteres"
+          value={newPassword}
+          onChangeText={setNewPassword}
+          secureTextEntry
+        />
+        <Button
+          title="Atualizar Senha"
+          onPress={handleChangePassword}
+          loading={changingPassword}
+          variant="outline"
+          style={{ marginTop: spacing.xs }}
         />
       </View>
 

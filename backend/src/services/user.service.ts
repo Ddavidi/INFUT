@@ -1,6 +1,7 @@
 // src/services/user.service.ts
 import prisma from '../utils/prisma';
-import { UpdateProfileInput } from '../schemas/user.schema';
+import { ChangePasswordInput, UpdateProfileInput } from '../schemas/user.schema';
+import { comparePassword, hashPassword } from '../utils/password';
 
 interface ParticipationSummary {
   id: string;
@@ -192,6 +193,34 @@ export class UserService {
     });
 
     return this.getProfile(userId);
+  }
+
+  async changePassword(userId: string, data: ChangePasswordInput) {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, passwordHash: true },
+    });
+
+    if (!user) {
+      const error: any = new Error('Usuario nao encontrado');
+      error.statusCode = 404;
+      throw error;
+    }
+
+    const isValid = await comparePassword(data.currentPassword, user.passwordHash);
+    if (!isValid) {
+      const error: any = new Error('Senha atual incorreta');
+      error.statusCode = 400;
+      throw error;
+    }
+
+    const newHash = await hashPassword(data.newPassword);
+    await prisma.user.update({
+      where: { id: userId },
+      data: { passwordHash: newHash },
+    });
+
+    return { message: 'Senha atualizada com sucesso' };
   }
 
   async deleteAccount(userId: string) {

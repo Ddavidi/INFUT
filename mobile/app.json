@@ -8,9 +8,12 @@
     "userInterfaceStyle": "dark",
     "backgroundColor": "#070B12",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.infut.app"
     },
     "android": {
+      "package": "com.infut.app",
+      "versionCode": 1,
       "adaptiveIcon": {
         "backgroundColor": "#070B12",
         "foregroundImage": "./assets/android-icon-foreground.png",

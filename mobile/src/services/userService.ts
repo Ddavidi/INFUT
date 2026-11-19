@@ -17,6 +17,13 @@ export async function updateProfile(data: UpdateProfileInput): Promise<User> {
   return response.data;
 }
 
+export async function changeUserPassword(data: {
+  currentPassword: string;
+  newPassword: string;
+}): Promise<void> {
+  await api.put('/users/me/password', data);
+}
+
 export async function deleteAccount(): Promise<void> {
   await api.delete('/users/me');
 }

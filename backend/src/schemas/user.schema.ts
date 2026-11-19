@@ -10,3 +10,10 @@ export const updateProfileSchema = z.object({
 });
 
 export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
+
+export const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1, 'Senha atual e obrigatoria'),
+  newPassword: z.string().min(6, 'A nova senha deve ter pelo menos 6 caracteres'),
+});
+
+export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;

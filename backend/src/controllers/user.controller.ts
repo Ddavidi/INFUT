@@ -34,6 +34,16 @@ export class UserController {
     }
   }
 
+  async changePassword(req: Request, res: Response, next: NextFunction) {
+    try {
+      const userId = req.user!.userId;
+      const result = await userService.changePassword(userId, req.body);
+      res.status(200).json(result);
+    } catch (error) {
+      next(error);
+    }
+  }
+
   async deleteAccount(req: Request, res: Response, next: NextFunction) {
     try {
       const userId = req.user!.userId;
