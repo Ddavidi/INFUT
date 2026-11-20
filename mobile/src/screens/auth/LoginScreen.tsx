@@ -22,6 +22,7 @@ import { colors, fonts, spacing, borderRadius, layout, shadows } from '../../con
 import { showMessage } from '../../utils/alerts';
 import { getInviteCodeFromUrl } from '../../utils/inviteLink';
 import { useResponsive } from '../../hooks/useResponsive';
+import { Ionicons } from '@expo/vector-icons';
 
 type Props = {
   navigation: NativeStackNavigationProp<any>;
@@ -216,7 +217,7 @@ export function LoginScreen({ navigation }: Props) {
                     accessibilityRole="button"
                     accessibilityLabel="Fechar prévia do convite"
                   >
-                    <Text style={styles.closeBtn}>✕</Text>
+                    <Ionicons name="close" size={18} color={colors.textSecondary} />
                   </TouchableOpacity>
                 </View>
 

@@ -31,6 +31,8 @@ import { formatPeladaSchedule } from '../../utils/dateTime';
 import { buildInviteUrl, shareOrCopyText } from '../../utils/inviteLink';
 import { getPositionsForSport } from '../../constants/sports';
 import { useResponsive } from '../../hooks/useResponsive';
+import { Ionicons } from '@expo/vector-icons';
+import { FadeInView, PulseDot } from '../../components/ui/Motion';
 
 type Props = NativeStackScreenProps<AppStackParamList, 'PeladaDetails'>;
 
@@ -361,7 +363,8 @@ export function PeladaDetailsScreen({ navigation, route }: Props) {
         </View>
         {pelada.isLatestEdition !== false && (
           <View style={styles.nextGameBadge}>
-            <Text style={styles.nextGameBadgeText}>★ Próxima Pelada</Text>
+            <Ionicons name="sparkles" size={12} color={colors.primary} />
+            <Text style={styles.nextGameBadgeText}>Próxima Pelada</Text>
           </View>
         )}
         {pelada.recurrenceDays && pelada.recurrenceDays.includes(',') ? (
@@ -420,30 +423,33 @@ export function PeladaDetailsScreen({ navigation, route }: Props) {
 
       <View style={styles.headerActionRow}>
         <TouchableOpacity
-          style={[styles.secondaryActionBtn, styles.headerBtnBase, { flex: 1 }]}
+          style={[styles.secondaryActionBtn, styles.headerBtnBase, { flex: 1, flexDirection: 'row', gap: 6 }]}
           onPress={handleShareInvite}
           accessibilityRole="button"
           accessibilityLabel="Compartilhar convite no WhatsApp"
         >
+          <Ionicons name="share-social-outline" size={15} color={colors.textPrimary} />
           <Text style={styles.secondaryActionText}>Compartilhar Convite</Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={styles.mapsBtn}
+          style={[styles.mapsBtn, { flexDirection: 'row', gap: 6 }]}
           onPress={handleOpenMaps}
           accessibilityRole="button"
           accessibilityLabel="Abrir endereço no Google Maps"
         >
-          <Text style={styles.mapsBtnText}>Abrir Maps</Text>
+          <Ionicons name="navigate-outline" size={15} color={colors.textPrimary} />
+          <Text style={styles.mapsBtnText}>Maps</Text>
         </TouchableOpacity>
       </View>
 
       {pelada.whatsappGroupUrl ? (
         <TouchableOpacity
-          style={styles.whatsappGroupBtn}
+          style={[styles.whatsappGroupBtn, { flexDirection: 'row', gap: 8 }]}
           onPress={handleOpenWhatsAppGroup}
           accessibilityRole="button"
           accessibilityLabel="Entrar no grupo do WhatsApp da pelada"
         >
+          <Ionicons name="logo-whatsapp" size={16} color={colors.primary} />
           <Text style={styles.whatsappGroupBtnText}>Grupo do WhatsApp</Text>
         </TouchableOpacity>
       ) : null}
@@ -454,19 +460,21 @@ export function PeladaDetailsScreen({ navigation, route }: Props) {
     <View style={styles.lifecycleCard}>
       <View style={styles.lifecycleHeader}>
         <View style={styles.lifecycleTitleRow}>
-          <View
-            style={[
-              styles.statusDot,
-              {
-                backgroundColor:
-                  peladaStatus === 'OPEN'
-                    ? colors.primary
-                    : peladaStatus === 'IN_PROGRESS'
-                      ? colors.error
+          {peladaStatus === 'IN_PROGRESS' ? (
+            <PulseDot color={colors.error} size={8} />
+          ) : (
+            <View
+              style={[
+                styles.statusDot,
+                {
+                  backgroundColor:
+                    peladaStatus === 'OPEN'
+                      ? colors.primary
                       : colors.success,
-              },
-            ]}
-          />
+                },
+              ]}
+            />
+          )}
           <Text style={styles.lifecycleTitle}>
             {peladaStatus === 'OPEN'
               ? 'Lista de presença aberta'
@@ -943,8 +951,9 @@ export function PeladaDetailsScreen({ navigation, route }: Props) {
 
                     {(edition.mvpWinner || edition.mvp) && (
                       <View style={styles.pastMvpPill}>
+                        <Ionicons name="trophy" size={12} color={colors.gold} />
                         <Text style={styles.pastMvpPillText} numberOfLines={1}>
-                          ★ MVP: {(edition.mvpWinner || edition.mvp)!.displayName} (
+                          MVP: {(edition.mvpWinner || edition.mvp)!.displayName} (
                           {(edition.mvpWinner || edition.mvp)!.votes} voto
                           {(edition.mvpWinner || edition.mvp)!.votes === 1 ? '' : 's'})
                         </Text>
@@ -994,20 +1003,22 @@ export function PeladaDetailsScreen({ navigation, route }: Props) {
       >
         <TouchableOpacity
           onPress={() => navigation.goBack()}
-          style={styles.backBtn}
+          style={[styles.backBtn, { flexDirection: 'row', alignItems: 'center', gap: 5 }]}
           accessibilityRole="button"
           accessibilityLabel="Voltar para a lista anterior"
         >
-          <Text style={styles.backBtnText}>← Voltar</Text>
+          <Ionicons name="arrow-back" size={16} color={colors.textPrimary} />
+          <Text style={styles.backBtnText}>Voltar</Text>
         </TouchableOpacity>
         <View style={styles.topBarRight}>
           {canManage && (
             <TouchableOpacity
-              style={styles.membersTopBtn}
+              style={[styles.membersTopBtn, { flexDirection: 'row', alignItems: 'center', gap: 5 }]}
               onPress={() => navigation.navigate('ManageMembers', { peladaId: pelada.id })}
               accessibilityRole="button"
               accessibilityLabel="Configurar membros da pelada"
             >
+              <Ionicons name="people-outline" size={14} color={colors.textPrimary} />
               <Text style={styles.membersTopBtnText}>Membros</Text>
             </TouchableOpacity>
           )}
@@ -1021,7 +1032,7 @@ export function PeladaDetailsScreen({ navigation, route }: Props) {
               accessibilityRole="button"
               accessibilityLabel="Configurar regras de jogo, sorteio e dados da pelada"
             >
-              <Text style={styles.gearTopBtnText}>⚙</Text>
+              <Ionicons name="settings-outline" size={18} color={colors.textPrimary} />
             </TouchableOpacity>
           )}
           <View style={styles.codePill}>
@@ -1044,7 +1055,7 @@ export function PeladaDetailsScreen({ navigation, route }: Props) {
           />
         }
       >
-        <View style={[styles.pageContainer, { maxWidth: containerMaxWidth }]}>
+        <FadeInView duration={220} offsetY={8} style={[styles.pageContainer, { maxWidth: containerMaxWidth }]}>
           {effectiveTab === 'attendance' ? (
             isDesktop ? (
               <View style={styles.desktopColumns}>
@@ -1307,7 +1318,7 @@ export function PeladaDetailsScreen({ navigation, route }: Props) {
               <Text style={styles.deletePeladaText}>Cancelar / Excluir Pelada</Text>
             </TouchableOpacity>
           )}
-        </View>
+        </FadeInView>
       </ScrollView>
 
       {canManage && (
@@ -1345,7 +1356,7 @@ export function PeladaDetailsScreen({ navigation, route }: Props) {
                   accessibilityRole="button"
                   accessibilityLabel="Fechar súmula"
                 >
-                  <Text style={styles.modalCloseText}>✕</Text>
+                  <Ionicons name="close" size={18} color={colors.textSecondary} />
                 </TouchableOpacity>
               </View>
 
@@ -1356,7 +1367,10 @@ export function PeladaDetailsScreen({ navigation, route }: Props) {
               >
                 {(selectedPastEditionForModal.mvpWinner || selectedPastEditionForModal.mvp) && (
                   <View style={styles.modalMvpBox}>
-                    <Text style={styles.modalMvpTag}>★ MVP DA EDIÇÃO</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                      <Ionicons name="trophy" size={13} color={colors.gold} />
+                      <Text style={styles.modalMvpTag}>MVP DA EDIÇÃO</Text>
+                    </View>
                     <Text style={styles.modalMvpName}>
                       {(selectedPastEditionForModal.mvpWinner || selectedPastEditionForModal.mvp)!.displayName}
                     </Text>
@@ -2358,12 +2372,15 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   nextGameBadge: {
-    backgroundColor: 'rgba(255, 107, 0, 0.16)',
-    borderColor: colors.primary,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: colors.primarySoft,
+    borderColor: colors.primaryBorder,
     borderWidth: 1,
-    paddingHorizontal: spacing.sm,
+    paddingHorizontal: spacing.sm + 2,
     paddingVertical: 3,
-    borderRadius: borderRadius.sm,
+    borderRadius: borderRadius.full,
   },
   nextGameBadgeText: {
     color: colors.primary,
@@ -2463,17 +2480,20 @@ const styles = StyleSheet.create({
     fontSize: fonts.sizes.xs,
   },
   pastMvpPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
     alignSelf: 'flex-start',
-    backgroundColor: 'rgba(255, 179, 0, 0.12)',
+    backgroundColor: colors.goldSoft,
     borderWidth: 1,
-    borderColor: '#FFB300',
+    borderColor: colors.goldBorder,
     borderRadius: borderRadius.full,
-    paddingHorizontal: 8,
+    paddingHorizontal: 9,
     paddingVertical: 3,
     marginTop: 2,
   },
   pastMvpPillText: {
-    color: '#FFB300',
+    color: colors.gold,
     fontSize: fonts.sizes.xs,
     fontWeight: '800',
   },
@@ -2568,9 +2588,9 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   modalMvpBox: {
-    backgroundColor: 'rgba(255, 179, 0, 0.1)',
+    backgroundColor: colors.goldSoft,
     borderWidth: 1,
-    borderColor: '#FFB300',
+    borderColor: colors.goldBorder,
     borderRadius: borderRadius.md,
     padding: spacing.md,
     marginBottom: spacing.md,
@@ -2578,7 +2598,7 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   modalMvpTag: {
-    color: '#FFB300',
+    color: colors.gold,
     fontSize: fonts.sizes.xs - 1,
     fontWeight: '800',
     letterSpacing: 0.8,

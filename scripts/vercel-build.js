@@ -66,13 +66,16 @@ if (fs.existsSync(indexHtmlPath)) {
   let html = fs.readFileSync(indexHtmlPath, 'utf8');
   if (!html.includes('rel="manifest"')) {
     const pwaTags = [
+      '<link rel="preconnect" href="https://fonts.googleapis.com" />',
+      '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />',
+      '<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />',
       '<link rel="manifest" href="/manifest.json" />',
       '<link rel="apple-touch-icon" href="/apple-touch-icon.png" />',
       '<meta name="apple-mobile-web-app-capable" content="yes" />',
       '<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />',
       '<meta name="apple-mobile-web-app-title" content="INFUT" />',
       '<meta name="mobile-web-app-capable" content="yes" />',
-      '<meta name="theme-color" content="#FE7F2D" />',
+      '<meta name="theme-color" content="#070A0D" />',
       '<meta property="og:type" content="website" />',
       '<meta property="og:title" content="INFUT — Organize suas peladas sem bagunça" />',
       '<meta property="og:description" content="Confirme presença, copie a chave Pix, veja o sorteio de times e vote no MVP da pelada." />',

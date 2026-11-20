@@ -1,7 +1,8 @@
-// Main Tabs Navigator
+// Main Tabs Navigator — Night Pitch Design System with Vector Icons
 import React from 'react';
-import { Text } from 'react-native';
+import { Platform, View, StyleSheet } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { Ionicons } from '@expo/vector-icons';
 import { FeedScreen } from '../screens/home/FeedScreen';
 import { ExploreScreen } from '../screens/home/ExploreScreen';
 import { RankingScreen } from '../screens/home/RankingScreen';
@@ -19,46 +20,51 @@ export function MainTabs() {
     <Tab.Navigator
       screenOptions={{
         headerShown: false,
+        sceneStyle: { backgroundColor: colors.background },
         tabBarPosition: isDesktop ? 'left' : 'bottom',
         tabBarLabelPosition: isDesktop ? 'beside-icon' : 'below-icon',
         tabBarStyle: isDesktop
           ? {
-              width: 220,
+              width: 236,
               backgroundColor: colors.surface,
-              borderRightColor: colors.borderLight,
+              borderRightColor: colors.border,
               borderRightWidth: 1,
               borderTopWidth: 0,
               paddingTop: spacing.xl,
               paddingBottom: spacing.lg,
-              paddingHorizontal: spacing.sm,
+              paddingHorizontal: spacing.md - 4,
             }
           : {
               backgroundColor: colors.surface,
-              borderTopColor: colors.borderLight,
+              borderTopColor: colors.border,
               borderTopWidth: 1,
-              height: 66,
-              paddingTop: 6,
-              paddingBottom: 10,
+              height: Platform.OS === 'ios' ? 82 : 68,
+              paddingTop: 8,
+              paddingBottom: Platform.OS === 'ios' ? 22 : 10,
             },
         tabBarItemStyle: isDesktop
           ? {
               borderRadius: borderRadius.md,
               marginBottom: spacing.xs + 2,
-              paddingHorizontal: spacing.sm,
+              paddingHorizontal: spacing.sm + 4,
               minHeight: 48,
               justifyContent: 'flex-start',
             }
-          : undefined,
+          : {
+              borderRadius: borderRadius.md,
+            },
         tabBarLabelStyle: isDesktop
           ? {
               fontSize: fonts.sizes.sm,
               fontWeight: '700',
-              marginLeft: spacing.sm,
+              marginLeft: spacing.sm + 2,
+              letterSpacing: -0.1,
             }
           : {
               fontSize: 11,
               fontWeight: '700',
-              letterSpacing: 0.2,
+              letterSpacing: 0.1,
+              marginTop: 2,
             },
         tabBarActiveBackgroundColor: isDesktop ? colors.primarySoft : undefined,
         tabBarActiveTintColor: colors.primary,
@@ -71,7 +77,11 @@ export function MainTabs() {
         options={{
           title: 'Peladas',
           tabBarIcon: ({ color, focused }) => (
-            <Text style={{ fontSize: fonts.sizes.md, fontWeight: '800', color, opacity: focused ? 1 : 0.7 }}>◈</Text>
+            <Ionicons
+              name={focused ? 'football' : 'football-outline'}
+              size={22}
+              color={color}
+            />
           ),
         }}
       />
@@ -81,7 +91,11 @@ export function MainTabs() {
         options={{
           title: 'Explorar',
           tabBarIcon: ({ color, focused }) => (
-            <Text style={{ fontSize: fonts.sizes.md, fontWeight: '800', color, opacity: focused ? 1 : 0.7 }}>◎</Text>
+            <Ionicons
+              name={focused ? 'compass' : 'compass-outline'}
+              size={22}
+              color={color}
+            />
           ),
         }}
       />
@@ -91,7 +105,13 @@ export function MainTabs() {
         options={{
           title: 'Criar',
           tabBarIcon: ({ color, focused }) => (
-            <Text style={{ fontSize: fonts.sizes.lg, fontWeight: '800', color, opacity: focused ? 1 : 0.7 }}>+</Text>
+            <View style={[styles.createIconWrap, focused && styles.createIconWrapActive]}>
+              <Ionicons
+                name="add"
+                size={20}
+                color={focused ? colors.textInverse : color}
+              />
+            </View>
           ),
         }}
       />
@@ -101,7 +121,11 @@ export function MainTabs() {
         options={{
           title: 'Ranking',
           tabBarIcon: ({ color, focused }) => (
-            <Text style={{ fontSize: fonts.sizes.md, fontWeight: '800', color, opacity: focused ? 1 : 0.7 }}>▲</Text>
+            <Ionicons
+              name={focused ? 'trophy' : 'trophy-outline'}
+              size={21}
+              color={color}
+            />
           ),
         }}
       />
@@ -111,10 +135,31 @@ export function MainTabs() {
         options={{
           title: 'Perfil',
           tabBarIcon: ({ color, focused }) => (
-            <Text style={{ fontSize: fonts.sizes.md, fontWeight: '800', color, opacity: focused ? 1 : 0.7 }}>●</Text>
+            <Ionicons
+              name={focused ? 'person' : 'person-outline'}
+              size={21}
+              color={color}
+            />
           ),
         }}
       />
     </Tab.Navigator>
   );
 }
+
+const styles = StyleSheet.create({
+  createIconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 9,
+    borderWidth: 1.5,
+    borderColor: colors.borderStrong,
+    backgroundColor: colors.surfaceLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  createIconWrapActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+});

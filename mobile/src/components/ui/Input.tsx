@@ -1,4 +1,4 @@
-// Reusable Input component
+// Reusable Input component — Night Pitch Recessed Field
 import React, { useState } from 'react';
 import { View, TextInput, Text, StyleSheet, TextInputProps } from 'react-native';
 import { colors, fonts, spacing, borderRadius } from '../../constants/theme';
@@ -49,25 +49,25 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     marginBottom: 6,
     fontWeight: '700',
-    letterSpacing: 0.4,
+    letterSpacing: 0.5,
     textTransform: 'uppercase',
   },
   labelFocused: {
     color: colors.primary,
   },
   input: {
-    backgroundColor: colors.surfaceLight,
+    backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.borderStrong,
     borderRadius: borderRadius.md,
     paddingHorizontal: spacing.md,
-    paddingVertical: 13,
+    paddingVertical: 14,
     color: colors.textPrimary,
     fontSize: fonts.sizes.md,
   },
   inputFocused: {
     borderColor: colors.primary,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.card,
   },
   inputError: {
     borderColor: colors.error,

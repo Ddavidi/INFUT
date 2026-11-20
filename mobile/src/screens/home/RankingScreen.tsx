@@ -1,27 +1,32 @@
-// Ranking Screen - Global leaderboard for Goals, Wins, Assists, and MVP Awards
+// Ranking Screen — Night Pitch Redesign with Championship Gold Podium & Vector Icons
 import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
   FlatList,
   StyleSheet,
-  TouchableOpacity,
   RefreshControl,
   ActivityIndicator,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
 import { getRanking } from '../../services/userService';
 import { RankingPlayer } from '../../types';
 import { colors, fonts, spacing, borderRadius, shadows } from '../../constants/theme';
 import { useResponsive } from '../../hooks/useResponsive';
+import { FadeInView, ScalePressable } from '../../components/ui/Motion';
 
 type RankingCategory = 'goals' | 'wins' | 'assists' | 'mvp';
 
-const CATEGORIES: { key: RankingCategory; label: string }[] = [
-  { key: 'goals', label: 'Artilharia' },
-  { key: 'wins', label: 'Vitórias' },
-  { key: 'assists', label: 'Assist.' },
-  { key: 'mvp', label: 'MVP' },
+const CATEGORIES: {
+  key: RankingCategory;
+  label: string;
+  icon: keyof typeof Ionicons.glyphMap;
+}[] = [
+  { key: 'goals', label: 'Artilharia', icon: 'football-outline' },
+  { key: 'wins', label: 'Vitórias', icon: 'flame-outline' },
+  { key: 'assists', label: 'Assist.', icon: 'git-compare-outline' },
+  { key: 'mvp', label: 'MVP', icon: 'trophy-outline' },
 ];
 
 export function RankingScreen() {
@@ -94,13 +99,13 @@ export function RankingScreen() {
         ]}
       >
         <Text style={styles.headerTitle}>Ranking INFUT</Text>
-        <Text style={styles.headerSubtitle}>Destaques da temporada e assiduidade</Text>
+        <Text style={styles.headerSubtitle}>Destaques da temporada e assiduidade em quadra</Text>
 
         <View style={styles.categoryRow}>
           {CATEGORIES.map((c) => {
             const active = category === c.key;
             return (
-              <TouchableOpacity
+              <ScalePressable
                 key={c.key}
                 style={[styles.categoryChip, active && styles.categoryChipActive]}
                 onPress={() => setCategory(c.key)}
@@ -108,10 +113,15 @@ export function RankingScreen() {
                 accessibilityLabel={c.label}
                 accessibilityState={{ selected: active }}
               >
+                <Ionicons
+                  name={c.icon}
+                  size={15}
+                  color={active ? colors.textInverse : colors.textSecondary}
+                />
                 <Text style={[styles.categoryText, active && styles.categoryTextActive]}>
                   {c.label}
                 </Text>
-              </TouchableOpacity>
+              </ScalePressable>
             );
           })}
         </View>
@@ -136,12 +146,13 @@ export function RankingScreen() {
           numColumns={numColumns}
           columnWrapperStyle={numColumns > 1 ? styles.gridRow : undefined}
           keyExtractor={(item) => item.id}
+          showsVerticalScrollIndicator={false}
           contentContainerStyle={[
             styles.list,
             {
               maxWidth: containerMaxWidth,
               paddingHorizontal: pagePadding,
-              paddingBottom: isDesktop ? spacing.xxl : 100,
+              paddingBottom: isDesktop ? spacing.xxl : 104,
             },
           ]}
           refreshControl={
@@ -157,52 +168,91 @@ export function RankingScreen() {
           renderItem={({ item, index }) => {
             const rankNum = String(index + 1).padStart(2, '0');
             const isLeader = index === 0;
+            const isSecond = index === 1;
+            const isThird = index === 2;
             const isTop3 = index < 3;
+            const initial = (item.name || 'J').charAt(0).toUpperCase();
+
+            const medalColor = isLeader
+              ? colors.gold
+              : isSecond
+                ? '#CBD5E1'
+                : isThird
+                  ? '#D97706'
+                  : colors.textMuted;
 
             return (
-              <View
-                style={[
-                  styles.card,
-                  isLeader && styles.leaderCard,
-                  numColumns > 1 && styles.cardGrid,
-                ]}
+              <FadeInView
+                delay={Math.min(index * 40, 220)}
+                style={[styles.cardMotionWrap, numColumns > 1 && styles.cardGrid]}
               >
-                <View style={[styles.rankBadge, isTop3 && styles.rankBadgeTop]}>
-                  <Text style={[styles.rankPos, isTop3 && { color: colors.primary }]}>{rankNum}</Text>
-                </View>
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text style={styles.playerName} numberOfLines={1}>
-                    {item.name}
-                  </Text>
-                  <Text style={styles.playerMeta} numberOfLines={1}>
-                    {item.sport || 'Multi-esportes'}
-                    {item.position ? ` • ${item.position}` : ''}
-                  </Text>
-                  <View style={styles.subMetaRow}>
-                    <Text style={styles.gamesCount}>{item.totalGames} jogo(s)</Text>
-                    <View style={styles.attendancePill}>
-                      <Text style={styles.attendanceText}>
-                        Assiduidade {item.attendanceRate}%
+                <View
+                  style={[
+                    styles.card,
+                    isLeader && styles.cardLeader,
+                  ]}
+                >
+                  <View
+                    style={[
+                      styles.rankBadge,
+                      isLeader && styles.rankBadgeLeader,
+                      isTop3 && !isLeader && { borderColor: medalColor },
+                    ]}
+                  >
+                    {isLeader ? (
+                      <Ionicons name="trophy" size={16} color={colors.gold} />
+                    ) : (
+                      <Text
+                        style={[
+                          styles.rankBadgeText,
+                          isTop3 && { color: medalColor },
+                        ]}
+                      >
+                        {rankNum}
                       </Text>
-                    </View>
+                    )}
+                  </View>
+
+                  <View style={[styles.avatar, isLeader && styles.avatarLeader]}>
+                    <Text style={[styles.avatarText, isLeader && { color: colors.gold }]}>
+                      {initial}
+                    </Text>
+                  </View>
+
+                  <View style={styles.info}>
+                    <Text style={styles.name} numberOfLines={1}>
+                      {item.name}
+                    </Text>
+                    <Text style={styles.subInfo} numberOfLines={1}>
+                      {item.position || 'Linha'} • {item.totalGames} jogos • {item.attendanceRate}% pres.
+                    </Text>
+                  </View>
+
+                  <View style={styles.metricCol}>
+                    <Text
+                      style={[
+                        styles.metricValue,
+                        isLeader && { color: colors.gold },
+                      ]}
+                    >
+                      {getMetricValue(item)}
+                    </Text>
+                    <Text style={styles.metricLabel}>{getMetricLabel()}</Text>
                   </View>
                 </View>
-                <View style={styles.scoreBox}>
-                  <Text style={[styles.scoreValue, isLeader && { color: colors.primaryLight }]}>
-                    {getMetricValue(item)}
-                  </Text>
-                  <Text style={styles.scoreLabel}>{getMetricLabel()}</Text>
-                </View>
-              </View>
+              </FadeInView>
             );
           }}
           ListEmptyComponent={
-            <View style={styles.emptyCard}>
+            <FadeInView style={styles.emptyCard}>
+              <View style={styles.emptyIconCircle}>
+                <Ionicons name="trophy-outline" size={28} color={colors.gold} />
+              </View>
               <Text style={styles.emptyTitle}>Ranking ainda vazio</Text>
               <Text style={styles.emptySubtitle}>
-                Participe de peladas, registre gols e assistências na súmula e vote nos destaques para pontuar aqui.
+                Finalize uma pelada e registre gols, vitórias e votos de MVP para inaugurar o ranking geral.
               </Text>
-            </View>
+            </FadeInView>
           }
         />
       )}
@@ -215,51 +265,58 @@ const styles = StyleSheet.create({
   headerWrapper: {
     width: '100%',
     alignSelf: 'center',
-    paddingBottom: spacing.sm,
+    paddingBottom: spacing.sm + 4,
   },
-  headerTitle: { fontSize: fonts.sizes.xxl, fontWeight: '900', color: colors.textPrimary },
+  headerTitle: {
+    fontSize: fonts.sizes.xxl,
+    fontWeight: '800',
+    color: colors.textPrimary,
+    letterSpacing: -0.5,
+  },
   headerSubtitle: {
     fontSize: fonts.sizes.sm,
-    color: colors.textSecondary,
-    marginTop: 2,
+    color: colors.textMuted,
+    marginTop: 4,
     marginBottom: spacing.md,
   },
   categoryRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    backgroundColor: colors.surface,
-    padding: 4,
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    gap: 4,
+    gap: 8,
   },
   categoryChip: {
-    flex: 1,
-    minWidth: 72,
-    minHeight: 40,
-    borderRadius: borderRadius.sm,
-    paddingVertical: 9,
-    paddingHorizontal: 4,
-    justifyContent: 'center',
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 6,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: borderRadius.full,
+    paddingHorizontal: spacing.md,
+    minHeight: 38,
   },
   categoryChipActive: {
-    backgroundColor: colors.primarySoft,
-    borderWidth: 1,
+    backgroundColor: colors.primary,
     borderColor: colors.primary,
   },
-  categoryText: { color: colors.textSecondary, fontSize: fonts.sizes.xs, fontWeight: '700' },
-  categoryTextActive: { color: colors.primary, fontWeight: '800' },
+  categoryText: {
+    color: colors.textSecondary,
+    fontSize: fonts.sizes.xs + 1,
+    fontWeight: '700',
+  },
+  categoryTextActive: {
+    color: colors.textInverse,
+    fontWeight: '800',
+  },
   loadingContainer: {
     flex: 1,
     width: '100%',
     alignSelf: 'center',
-    paddingTop: spacing.lg,
+    paddingTop: spacing.xl,
   },
   loadingCard: {
     backgroundColor: colors.card,
-    borderRadius: borderRadius.xl,
+    borderRadius: borderRadius.lg,
     padding: spacing.xl,
     alignItems: 'center',
     borderWidth: 1,
@@ -280,110 +337,126 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     alignItems: 'stretch',
   },
-  card: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    backgroundColor: colors.card,
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    marginBottom: spacing.sm + 4,
-    borderWidth: 1,
-    borderColor: colors.border,
-    gap: spacing.md,
-    ...shadows.card,
+  cardMotionWrap: {
+    marginBottom: spacing.sm + 2,
   },
   cardGrid: {
     flex: 1,
     maxWidth: '49%',
   },
-  leaderCard: {
-    borderColor: colors.primary,
-    backgroundColor: colors.surfaceElevated,
+  card: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    gap: spacing.sm + 4,
+    ...shadows.card,
+  },
+  cardLeader: {
+    borderColor: colors.goldBorder,
+    backgroundColor: '#161B22',
   },
   rankBadge: {
-    width: 42,
-    height: 42,
-    borderRadius: 12,
+    width: 34,
+    height: 34,
+    borderRadius: 10,
     backgroundColor: colors.surfaceLight,
+    borderWidth: 1,
+    borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: colors.borderLight,
-    flexShrink: 0,
   },
-  rankBadgeTop: {
-    backgroundColor: colors.primarySoft,
-    borderColor: colors.primary,
+  rankBadgeLeader: {
+    backgroundColor: colors.goldSoft,
+    borderColor: colors.goldBorder,
   },
-  rankPos: {
-    fontSize: fonts.sizes.lg,
-    fontWeight: '900',
-    color: colors.textPrimary,
-    fontVariant: ['tabular-nums'],
-  },
-  playerName: { fontSize: fonts.sizes.md, fontWeight: '800', color: colors.textPrimary },
-  playerMeta: { fontSize: fonts.sizes.xs, color: colors.textSecondary, marginTop: 2 },
-  subMetaRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginTop: 6,
-  },
-  gamesCount: {
-    fontSize: fonts.sizes.xs,
+  rankBadgeText: {
     color: colors.textMuted,
-    fontWeight: '600',
-    fontVariant: ['tabular-nums'],
-  },
-  attendancePill: {
-    backgroundColor: colors.successSoft,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  attendanceText: {
-    fontSize: fonts.sizes.xs,
-    color: colors.success,
+    fontSize: fonts.sizes.xs + 1,
     fontWeight: '800',
     fontVariant: ['tabular-nums'],
   },
-  scoreBox: {
-    alignItems: 'center',
-    minWidth: 66,
-    backgroundColor: colors.surface,
-    paddingVertical: spacing.xs + 2,
-    paddingHorizontal: spacing.sm,
-    borderRadius: borderRadius.md,
+  avatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.primarySoft,
     borderWidth: 1,
-    borderColor: colors.borderLight,
-    flexShrink: 0,
+    borderColor: colors.primaryBorder,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  scoreValue: {
-    fontSize: fonts.sizes.xxl,
-    fontWeight: '900',
+  avatarLeader: {
+    backgroundColor: colors.goldSoft,
+    borderColor: colors.goldBorder,
+  },
+  avatarText: {
     color: colors.primary,
+    fontSize: fonts.sizes.md,
+    fontWeight: '800',
+  },
+  info: { flex: 1, minWidth: 0 },
+  name: {
+    color: colors.textPrimary,
+    fontSize: fonts.sizes.md,
+    fontWeight: '800',
+    letterSpacing: -0.2,
+  },
+  subInfo: {
+    color: colors.textMuted,
+    fontSize: fonts.sizes.xs,
+    marginTop: 2,
     fontVariant: ['tabular-nums'],
   },
-  scoreLabel: { fontSize: fonts.sizes.xs, color: colors.textMuted, fontWeight: '700' },
+  metricCol: {
+    alignItems: 'flex-end',
+    minWidth: 58,
+  },
+  metricValue: {
+    color: colors.primary,
+    fontSize: fonts.sizes.xl,
+    fontWeight: '800',
+    fontVariant: ['tabular-nums'],
+  },
+  metricLabel: {
+    color: colors.textMuted,
+    fontSize: 11,
+    fontWeight: '600',
+  },
   emptyCard: {
     backgroundColor: colors.card,
     borderRadius: borderRadius.xl,
     padding: spacing.xl,
-    alignItems: 'center',
     borderWidth: 1,
     borderColor: colors.border,
-    marginTop: spacing.md,
-    ...shadows.card,
+    alignItems: 'center',
+    marginTop: spacing.lg,
   },
-  emptyEmoji: { fontSize: 52, marginBottom: spacing.md },
-  emptyTitle: { fontSize: fonts.sizes.lg, fontWeight: '800', color: colors.textPrimary, textAlign: 'center' },
+  emptyIconCircle: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: colors.goldSoft,
+    borderWidth: 1,
+    borderColor: colors.goldBorder,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.md,
+  },
+  emptyTitle: {
+    color: colors.textPrimary,
+    fontSize: fonts.sizes.lg,
+    fontWeight: '800',
+    marginBottom: spacing.xs + 2,
+  },
   emptySubtitle: {
-    fontSize: fonts.sizes.sm,
     color: colors.textSecondary,
+    fontSize: fonts.sizes.sm,
     textAlign: 'center',
-    marginTop: spacing.xs,
     lineHeight: 21,
+    maxWidth: 380,
   },
 });

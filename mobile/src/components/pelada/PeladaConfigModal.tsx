@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { Input } from '../ui/Input';
 import { Button } from '../ui/Button';
+import { Ionicons } from '@expo/vector-icons';
 import { updatePelada, updatePeladaGameConfig } from '../../services/peladaService';
 import { Pelada, PeladaDrawMode, PeladaGameMode } from '../../types';
 import { colors, fonts, spacing, borderRadius, layout, shadows } from '../../constants/theme';
@@ -268,7 +269,7 @@ export function PeladaConfigModal({
               accessibilityRole="button"
               accessibilityLabel="Fechar configurações"
             >
-              <Text style={styles.closeBtn}>✕</Text>
+              <Ionicons name="close" size={18} color={colors.textSecondary} />
             </TouchableOpacity>
           </View>
 

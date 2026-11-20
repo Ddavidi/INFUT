@@ -1,6 +1,6 @@
-// Root Navigator
+// Root Navigator — Night Pitch Dark Theme & Smooth Transitions
 import React from 'react';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, DarkTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useAuth } from '../hooks/useAuth';
 import { AuthStack } from './AuthStack';
@@ -22,14 +22,49 @@ export type AppStackParamList = {
 
 const AppStack = createNativeStackNavigator<AppStackParamList>();
 
+const InfutNavTheme = {
+  ...DarkTheme,
+  colors: {
+    ...DarkTheme.colors,
+    primary: colors.primary,
+    background: colors.background,
+    card: colors.surface,
+    text: colors.textPrimary,
+    border: colors.border,
+    notification: colors.primary,
+  },
+};
+
 function AuthenticatedStack() {
   return (
-    <AppStack.Navigator screenOptions={{ headerShown: false }}>
+    <AppStack.Navigator
+      screenOptions={{
+        headerShown: false,
+        contentStyle: { backgroundColor: colors.background },
+        animation: 'fade_from_bottom',
+      }}
+    >
       <AppStack.Screen name="MainTabs" component={MainTabs} />
-      <AppStack.Screen name="PeladaDetails" component={PeladaDetailsScreen} />
-      <AppStack.Screen name="ManageMembers" component={ManageMembersScreen} />
-      <AppStack.Screen name="LivePelada" component={LivePeladaScreen} />
-      <AppStack.Screen name="PostGame" component={PostGameScreen} />
+      <AppStack.Screen
+        name="PeladaDetails"
+        component={PeladaDetailsScreen}
+        options={{ animation: 'slide_from_right' }}
+      />
+      <AppStack.Screen
+        name="ManageMembers"
+        component={ManageMembersScreen}
+        options={{ animation: 'slide_from_right' }}
+      />
+      <AppStack.Screen
+        name="LivePelada"
+        component={LivePeladaScreen}
+        options={{ animation: 'fade_from_bottom' }}
+      />
+      <AppStack.Screen
+        name="PostGame"
+        component={PostGameScreen}
+        options={{ animation: 'fade_from_bottom' }}
+      />
     </AppStack.Navigator>
   );
 }
@@ -53,7 +88,7 @@ export function RootNavigator() {
   }
 
   return (
-    <NavigationContainer>
+    <NavigationContainer theme={InfutNavTheme}>
       {isAuthenticated ? <AuthenticatedStack /> : <AuthStack />}
     </NavigationContainer>
   );

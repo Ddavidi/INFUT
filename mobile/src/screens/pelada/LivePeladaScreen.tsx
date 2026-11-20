@@ -30,6 +30,8 @@ import { colors, fonts, spacing, borderRadius, shadows, layout } from '../../con
 import { showConfirm, showMessage } from '../../utils/alerts';
 import { buildInviteUrl, shareOrCopyText } from '../../utils/inviteLink';
 import { useResponsive } from '../../hooks/useResponsive';
+import { Ionicons } from '@expo/vector-icons';
+import { FadeInView, PulseDot } from '../../components/ui/Motion';
 
 type Props = NativeStackScreenProps<AppStackParamList, 'LivePelada'>;
 type TieDecision = 'TEAM_A' | 'TEAM_B' | 'BOTH';
@@ -877,18 +879,19 @@ export function LivePeladaScreen({ navigation, route }: Props) {
         >
           <TouchableOpacity
             onPress={() => navigation.goBack()}
-            style={styles.backBtn}
+            style={[styles.backBtn, { flexDirection: 'row', alignItems: 'center', gap: 5 }]}
             accessibilityRole="button"
             accessibilityLabel="Voltar para detalhes da pelada"
           >
-            <Text style={styles.backBtnText}>← Voltar</Text>
+            <Ionicons name="arrow-back" size={16} color={colors.textPrimary} />
+            <Text style={styles.backBtnText}>Voltar</Text>
           </TouchableOpacity>
           <Text style={styles.topTitle} numberOfLines={1}>
             {pelada.title}
           </Text>
           <View style={styles.topBarRight}>
             <View style={styles.livePill}>
-              <View style={styles.liveDot} />
+              <PulseDot color={colors.error} size={7} />
               <Text style={styles.livePillText}>AO VIVO</Text>
             </View>
             {canManage && (
@@ -898,7 +901,7 @@ export function LivePeladaScreen({ navigation, route }: Props) {
                 accessibilityRole="button"
                 accessibilityLabel="Abrir configurações e regras da pelada"
               >
-                <Text style={styles.gearBtnText}>⚙</Text>
+                <Ionicons name="settings-outline" size={18} color={colors.textPrimary} />
               </TouchableOpacity>
             )}
           </View>
@@ -965,7 +968,7 @@ export function LivePeladaScreen({ navigation, route }: Props) {
                   style={styles.modalCloseBtn}
                   onPress={() => setShowCallModal(false)}
                 >
-                  <Text style={styles.modalCloseText}>✕</Text>
+                <Ionicons name="close" size={18} color={colors.textSecondary} />
                 </TouchableOpacity>
               </View>
 
@@ -1086,7 +1089,7 @@ export function LivePeladaScreen({ navigation, route }: Props) {
                   style={styles.modalCloseBtn}
                   onPress={() => setShowManualModal(false)}
                 >
-                  <Text style={styles.modalCloseText}>✕</Text>
+                <Ionicons name="close" size={18} color={colors.textSecondary} />
                 </TouchableOpacity>
               </View>
 
@@ -1167,7 +1170,7 @@ export function LivePeladaScreen({ navigation, route }: Props) {
                   style={styles.modalCloseBtn}
                   onPress={() => setShowStatsModal(false)}
                 >
-                  <Text style={styles.modalCloseText}>✕</Text>
+                <Ionicons name="close" size={18} color={colors.textSecondary} />
                 </TouchableOpacity>
               </View>
 
@@ -1705,9 +1708,9 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   scoreStepBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 46,
+    height: 46,
+    borderRadius: 14,
     backgroundColor: colors.surfaceElevated,
     borderWidth: 1,
     borderColor: colors.borderStrong,
@@ -1716,14 +1719,14 @@ const styles = StyleSheet.create({
   },
   scoreStepText: {
     color: colors.textPrimary,
-    fontSize: fonts.sizes.md,
+    fontSize: fonts.sizes.lg,
     fontWeight: '800',
   },
   scoreNumber: {
     color: colors.primary,
-    fontSize: 28,
+    fontSize: 36,
     fontWeight: '800',
-    minWidth: 28,
+    minWidth: 34,
     textAlign: 'center',
     fontVariant: ['tabular-nums'],
   },
@@ -1774,32 +1777,32 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   streakPill: {
-    backgroundColor: 'rgba(255, 107, 0, 0.12)',
-    paddingHorizontal: 6,
+    backgroundColor: colors.primarySoft,
+    paddingHorizontal: 7,
     paddingVertical: 2,
-    borderRadius: borderRadius.sm,
+    borderRadius: borderRadius.full,
     borderWidth: 1,
-    borderColor: 'rgba(255, 107, 0, 0.3)',
+    borderColor: colors.primaryBorder,
   },
   streakPillText: {
     color: colors.primary,
     fontSize: 10,
-    fontWeight: '700',
+    fontWeight: '800',
   },
   teamStreakLabel: {
     color: colors.primary,
     fontSize: 10,
-    fontWeight: '700',
+    fontWeight: '800',
     marginTop: 2,
   },
   winLimitAlert: {
     marginTop: spacing.sm,
-    backgroundColor: 'rgba(255, 107, 0, 0.08)',
+    backgroundColor: colors.primarySoft,
     borderRadius: borderRadius.md,
     borderWidth: 1,
-    borderColor: 'rgba(255, 107, 0, 0.25)',
+    borderColor: colors.primaryBorder,
     paddingHorizontal: spacing.sm + 2,
-    paddingVertical: spacing.xs + 2,
+    paddingVertical: spacing.xs + 3,
   },
   winLimitAlertText: {
     color: colors.textPrimary,

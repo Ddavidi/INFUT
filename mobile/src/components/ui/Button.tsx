@@ -1,7 +1,8 @@
-// Reusable Button component
+// Reusable Button component — Night Pitch Tactile Design
 import React from 'react';
-import { TouchableOpacity, Text, StyleSheet, ActivityIndicator, ViewStyle } from 'react-native';
-import { colors, fonts, spacing, borderRadius } from '../../constants/theme';
+import { Text, StyleSheet, ActivityIndicator, ViewStyle, StyleProp } from 'react-native';
+import { colors, fonts, spacing, borderRadius, shadows } from '../../constants/theme';
+import { ScalePressable } from './Motion';
 
 interface ButtonProps {
   title: string;
@@ -9,14 +10,14 @@ interface ButtonProps {
   variant?: 'primary' | 'outline' | 'ghost';
   loading?: boolean;
   disabled?: boolean;
-  style?: ViewStyle;
+  style?: StyleProp<ViewStyle>;
 }
 
 export function Button({ title, onPress, variant = 'primary', loading, disabled, style }: ButtonProps) {
   const isDisabled = disabled || loading;
 
   return (
-    <TouchableOpacity
+    <ScalePressable
       style={[
         styles.base,
         variant === 'primary' && styles.primary,
@@ -27,7 +28,6 @@ export function Button({ title, onPress, variant = 'primary', loading, disabled,
       ]}
       onPress={onPress}
       disabled={isDisabled}
-      activeOpacity={0.82}
       accessibilityRole="button"
       accessibilityLabel={title}
       accessibilityState={{ disabled: !!isDisabled, busy: !!loading }}
@@ -46,13 +46,13 @@ export function Button({ title, onPress, variant = 'primary', loading, disabled,
           {title}
         </Text>
       )}
-    </TouchableOpacity>
+    </ScalePressable>
   );
 }
 
 const styles = StyleSheet.create({
   base: {
-    paddingVertical: 13,
+    paddingVertical: 14,
     paddingHorizontal: spacing.lg,
     borderRadius: borderRadius.md,
     alignItems: 'center',
@@ -61,24 +61,25 @@ const styles = StyleSheet.create({
   },
   primary: {
     backgroundColor: colors.primary,
+    ...shadows.primaryGlow,
   },
   outline: {
     backgroundColor: colors.primarySoft,
-    borderWidth: 1.5,
-    borderColor: colors.primary,
+    borderWidth: 1,
+    borderColor: colors.primaryBorder,
   },
   ghost: {
     backgroundColor: 'transparent',
-    minHeight: 42,
+    minHeight: 44,
     paddingVertical: spacing.sm,
   },
   disabled: {
-    opacity: 0.5,
+    opacity: 0.48,
   },
   text: {
     fontSize: fonts.sizes.md,
-    fontWeight: '700',
-    letterSpacing: 0.3,
+    fontWeight: '800',
+    letterSpacing: -0.1,
   },
   textPrimary: {
     color: colors.textInverse,
@@ -89,5 +90,6 @@ const styles = StyleSheet.create({
   textGhost: {
     color: colors.primary,
     fontSize: fonts.sizes.sm,
+    fontWeight: '700',
   },
 });

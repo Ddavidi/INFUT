@@ -28,6 +28,7 @@ import { showConfirm, showMessage } from '../../utils/alerts';
 import { formatPeladaSchedule } from '../../utils/dateTime';
 import { buildInviteUrl, shareOrCopyText } from '../../utils/inviteLink';
 import { useResponsive } from '../../hooks/useResponsive';
+import { Ionicons } from '@expo/vector-icons';
 
 type Props = NativeStackScreenProps<AppStackParamList, 'PostGame'>;
 
@@ -553,11 +554,12 @@ export function PostGameScreen({ navigation, route }: Props) {
         >
           <TouchableOpacity
             onPress={() => navigation.goBack()}
-            style={styles.backBtn}
+            style={[styles.backBtn, { flexDirection: 'row', alignItems: 'center', gap: 5 }]}
             accessibilityRole="button"
             accessibilityLabel="Voltar para detalhes da pelada"
           >
-            <Text style={styles.backBtnText}>← Voltar</Text>
+            <Ionicons name="arrow-back" size={16} color={colors.textPrimary} />
+            <Text style={styles.backBtnText}>Voltar</Text>
           </TouchableOpacity>
           <Text style={styles.topTitle} numberOfLines={1}>
             {pelada.title}
@@ -628,7 +630,7 @@ export function PostGameScreen({ navigation, route }: Props) {
                 accessibilityRole="button"
                 accessibilityLabel="Fechar votação de MVP"
               >
-                <Text style={styles.modalCloseText}>✕</Text>
+                <Ionicons name="close" size={18} color={colors.textSecondary} />
               </TouchableOpacity>
             </View>
 
@@ -708,7 +710,7 @@ export function PostGameScreen({ navigation, route }: Props) {
                   accessibilityRole="button"
                   accessibilityLabel="Fechar controle de faltas"
                 >
-                  <Text style={styles.modalCloseText}>✕</Text>
+                  <Ionicons name="close" size={18} color={colors.textSecondary} />
                 </TouchableOpacity>
               </View>
 
@@ -1024,17 +1026,17 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   winnerBadge: {
-    paddingHorizontal: spacing.sm + 2,
-    paddingVertical: 6,
-    borderRadius: borderRadius.sm,
+    paddingHorizontal: spacing.sm + 4,
+    paddingVertical: 8,
+    borderRadius: borderRadius.md,
     borderWidth: 1,
-    borderColor: colors.primary,
-    backgroundColor: colors.primarySoft,
-    minWidth: 48,
+    borderColor: colors.goldBorder,
+    backgroundColor: colors.goldSoft,
+    minWidth: 54,
     alignItems: 'center',
   },
   winnerBadgeText: {
-    color: colors.primary,
+    color: colors.gold,
     fontSize: fonts.sizes.xs,
     fontWeight: '800',
   },
