@@ -1,0 +1,812 @@
+//! JS: lib/staleness-deep.mjs (Tier 2, doctor only)
+
+use crate::context::{extract_platform, TargetCandidate};
+use crate::design_parser::parse_design_md;
+use crate::jsp;
+use crate::staleness::{check_native_platform_evidence, finding, js_truthy, to_relative, unique_roots, Finding};
+use crate::util::{exists, js_trim, read_json, safe_read};
+use once_cell::sync::Lazy;
+use regex::Regex;
+use serde_json::{Map, Value};
+
+const LEGACY_LIVE_PATHS: [&str; 2] = [".impeccable-live.json", ".impeccable-live"];
+
+/// Stylesheets a DESIGN.md can map; a script or JSON file counts only when its name says it holds tokens.
+const STYLE_EXTENSIONS: [&str; 4] = ["css", "scss", "sass", "less"];
+const TOKEN_SCRIPT_EXTENSIONS: [&str; 6] = ["json", "js", "ts", "mjs", "cjs", "mts"];
+const TOKEN_NAMES: [&str; 4] = ["token", "theme", "tailwind", "design"];
+
+/// A file whose values DESIGN.md's colours should be found in.
+pub(crate) fn is_token_file(p: &str) -> bool {
+    let lower = p.to_ascii_lowercase();
+    let name = lower.rsplit('/').next().unwrap_or(&lower);
+    let ext = name.rsplit('.').next().unwrap_or("");
+    STYLE_EXTENSIONS.contains(&ext) || (TOKEN_SCRIPT_EXTENSIONS.contains(&ext) && TOKEN_NAMES.iter().any(|t| name.contains(t)))
+}
+
+/// A colour value as written either way: lower case, no spaces, no leading zero (`oklch(14% 0.018 95)` is
+/// `oklch(14%.018 95)`), and short hex spelled out (`#fff` is `#ffffff`).
+fn colour_key(v: &str) -> String {
+    static LEADING_ZERO: Lazy<Regex> = Lazy::new(|| Regex::new(r"(^|[^0-9])0\.").unwrap());
+    static SHORT_HEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"#([0-9a-f])([0-9a-f])([0-9a-f])([0-9a-f])?\b").unwrap());
+    let lower = v.to_ascii_lowercase();
+    let long = SHORT_HEX.replace_all(&lower, |c: &regex::Captures| {
+        let a = c.get(4).map(|m| m.as_str().repeat(2)).unwrap_or_default();
+        format!("#{0}{0}{1}{1}{2}{2}{a}", &c[1], &c[2], &c[3])
+    });
+    LEADING_ZERO.replace_all(&long, "$1.").chars().filter(|c| !c.is_whitespace()).collect()
+}
+/// At most this many names per finding; the rest are counted.
+const NAMED: usize = 5;
+
+/// The files DESIGN.md names (backticked paths and link targets with a `/`, not globs; a link's `#…` or `?…` cut off),
+/// resolved beside DESIGN.md as the map that `context` prints resolves them (design_map.rs `map`): (live, dead).
+fn named_files(design: &str, design_path: &str) -> (std::path::PathBuf, Vec<String>, Vec<String>) {
+    let root = std::path::Path::new(design_path).parent().map(std::path::Path::to_path_buf).unwrap_or_default();
+    let mut named: Vec<String> = Vec::new();
+    for line in design.lines() {
+        for p in crate::design_map::path_mentions(line) {
+            let p = p.split(['#', '?']).next().unwrap_or_default().to_string();
+            if p.contains('/') && crate::design_map::is_relative_path(&p) && !p.contains('*') && !named.contains(&p) {
+                named.push(p);
+            }
+        }
+    }
+    let (live, dead) = named.into_iter().partition(|p| root.join(p).exists());
+    (root, live, dead)
+}
+
+/// Files DESIGN.md names that are gone (REN-2129): a contradiction, not a suspicion. Cheap enough for every boot: it
+/// reads nothing but checks that paths exist, on the DESIGN.md text already loaded.
+pub fn check_design_dead_paths(design: Option<&str>, design_path: Option<&str>, project_root: &str) -> Vec<Finding> {
+    let (Some(design), Some(design_path)) = (design, design_path) else { return vec![] };
+    if project_root.is_empty() {
+        return vec![];
+    }
+    let rel_design = to_relative(Some(design_path), project_root).unwrap_or_else(|| "DESIGN.md".to_string());
+    let (_, _, dead) = named_files(design, design_path);
+    if dead.is_empty() {
+        return vec![];
+    }
+    vec![finding(
+        "design-md-dead-path",
+        "DESIGN.md",
+        Some(rel_design.clone()),
+        "route",
+        format!("{} names {} that no longer {}: {}.", rel_design, if dead.len() == 1 { "a file" } else { "files" }, if dead.len() == 1 { "exists" } else { "exist" }, listed(&dead)),
+        "Point each line at where its file lives now, or drop it. `document` regenerates DESIGN.md from the code.".to_string(),
+    )]
+}
+
+/// Colours DESIGN.md's frontmatter declares that none of the token files it names still contain (doctor only: it reads
+/// those files). Said only when at least one declared colour is found, so a palette written in another notation
+/// (hex over `rgb()`) is silent rather than flagged whole.
+pub fn check_design_colour_drift(design: Option<&str>, design_path: Option<&str>, project_root: &str) -> Vec<Finding> {
+    let (Some(design), Some(design_path)) = (design, design_path) else { return vec![] };
+    if project_root.is_empty() {
+        return vec![];
+    }
+    let rel_design = to_relative(Some(design_path), project_root).unwrap_or_else(|| "DESIGN.md".to_string());
+    let (root, live, _) = named_files(design, design_path);
+    let tokens: String = live
+        .iter()
+        .filter(|p| is_token_file(p))
+        .filter_map(|p| safe_read(&root.join(p).to_string_lossy()))
+        .map(|t| colour_key(&t))
+        .collect::<Vec<_>>()
+        .join("\n");
+    if tokens.is_empty() {
+        return vec![];
+    }
+    let fm = parse_design_md(design).frontmatter.unwrap_or_default();
+    let declared: Vec<(&String, &str)> = fm
+        .get("colors")
+        .and_then(Value::as_object)
+        .map(|colors| colors.iter().filter_map(|(name, v)| v.as_str().map(|v| (name, v.trim()))).filter(|(_, v)| !v.is_empty()).collect())
+        .unwrap_or_default();
+    let (found, missing): (Vec<_>, Vec<_>) = declared.iter().partition(|(_, v)| tokens.contains(&colour_key(v)));
+    if found.is_empty() || missing.is_empty() {
+        return vec![];
+    }
+    let missing: Vec<String> = missing.iter().map(|(name, v)| format!("{name} {v}")).collect();
+    vec![finding(
+        "design-md-color-drift",
+        "DESIGN.md",
+        Some(rel_design.clone()),
+        "route",
+        format!("{} declares {} the token files it names no longer contain: {}.", rel_design.clone(), if missing.len() == 1 { "a colour" } else { "colours" }, listed(&missing)),
+        "If the palette moved, `document` regenerates DESIGN.md from the code; if DESIGN.md is right, the code has drifted from it.".to_string(),
+    )]
+}
+
+/// Names in backticks, the first few, then how many more.
+fn listed(names: &[String]) -> String {
+    let shown: Vec<String> = names.iter().take(NAMED).map(|n| format!("`{n}`")).collect();
+    let more = names.len().saturating_sub(NAMED);
+    if more > 0 { format!("{} and {} more", shown.join(", "), more) } else { shown.join(", ") }
+}
+
+fn has_coverage_value(v: Option<&Value>) -> bool {
+    match v {
+        None | Some(Value::Null) => false,
+        Some(Value::Array(a)) => a.iter().any(|x| has_coverage_value(Some(x))),
+        Some(Value::Object(o)) => o.values().any(|x| has_coverage_value(Some(x))),
+        Some(Value::String(s)) => {
+            let t = js_trim(s);
+            if t.is_empty() {
+                return false;
+            }
+            // /^(?:\[\s*\]|\{\s*\})$/
+            let inner_empty = |open: char, close: char| -> bool {
+                t.starts_with(open) && t.ends_with(close) && t.len() >= 2 && t[1..t.len() - 1].chars().all(|c| c.is_whitespace())
+            };
+            !(inner_empty('[', ']') || inner_empty('{', '}'))
+        }
+        _ => false,
+    }
+}
+
+const SEED_MARKER_TAIL: &str = "impeccable document once there's code to capture the actual tokens and components. -->";
+
+/// JS: checkDesignCoverage
+pub fn check_design_coverage(design: Option<&str>, design_path: Option<&str>) -> Vec<Finding> {
+    let Some(design) = design.filter(|d| !d.is_empty()) else { return vec![] };
+    let model = parse_design_md(design);
+    let is_seed = ["/", "$"].iter().any(|p| {
+        design.contains(&format!("<!-- SEED: established with the user before implementation; re-run {}{}", p, SEED_MARKER_TAIL))
+    });
+    let required: Vec<&str> = if is_seed { vec!["colors", "typography"] } else { vec!["colors", "typography", "components"] };
+    let missing: Vec<&str> = required
+        .into_iter()
+        .filter(|s| !model.has_section(s) && !has_coverage_value(model.frontmatter.as_ref().and_then(|f| f.get(*s))))
+        .collect();
+    if missing.is_empty() {
+        return vec![];
+    }
+    vec![finding(
+        "design-md-coverage",
+        "DESIGN.md",
+        design_path.map(|s| s.to_string()),
+        "mention",
+        format!(
+            "{} has no {} section. Agents generating new screens get no normative guidance for those, and the live design panel renders generic approximations in their place.",
+            design_path.filter(|p| !p.is_empty()).unwrap_or("DESIGN.md"),
+            missing.join(", ")
+        ),
+        "Ask whether the section never applied or was never written. `document` fills it from the code if the project has the answer in its CSS.".to_string(),
+    )]
+}
+
+fn wrap_ticks(items: &[String]) -> String {
+    items.iter().map(|k| format!("`{}`", k)).collect::<Vec<_>>().join(", ")
+}
+
+/// JS String(x) for config list entries.
+fn js_string(v: &Value) -> String {
+    match v {
+        Value::Null => "null".to_string(),
+        Value::String(s) => s.clone(),
+        other => crate::critique_storage::js_string_value(other),
+    }
+}
+
+/// JS: checkDetectorIgnores
+pub fn check_detector_ignores(project_root: &str, known_rule_ids: Option<&[String]>) -> Vec<Finding> {
+    let mut out = Vec::new();
+    if project_root.is_empty() {
+        return out;
+    }
+    for name in ["config.json", "config.local.json"] {
+        let fp = jsp::join(&[project_root, ".impeccable", name]);
+        let Some(raw) = read_json(&fp) else { continue };
+        let Some(detector) = raw.get("detector") else { continue };
+        if !js_truthy(detector) || !(detector.is_object() || detector.is_array()) {
+            continue;
+        }
+        let rel = to_relative(Some(&fp), project_root).unwrap();
+        if let (Some(known), Some(rules)) = (known_rule_ids, detector.get("ignoreRules").and_then(|v| v.as_array())) {
+            let unknown: Vec<String> = rules
+                .iter()
+                .map(|r| js_trim(&js_string_or_empty(r)).to_lowercase())
+                .filter(|r| !r.is_empty() && r != "*" && !known.contains(r))
+                .collect();
+            if !unknown.is_empty() {
+                out.push(finding(
+                    "detector-ignore-rules-unknown",
+                    "config.json",
+                    Some(rel.clone()),
+                    "mention",
+                    format!(
+                        "{} ignores rule id(s) the detector does not have: {}. Either the rule was renamed or removed, or the id was mistyped and has never suppressed anything.",
+                        rel,
+                        wrap_ticks(&unknown)
+                    ),
+                    "Report the exact ids. Removing them is safe; keeping a dead ignore hides that the rule is gone.".to_string(),
+                ));
+            }
+        }
+        if let Some(files) = detector.get("ignoreFiles").and_then(|v| v.as_array()) {
+            let missing: Vec<String> = files
+                .iter()
+                .map(|e| js_trim(&js_string_or_empty(e)).to_string())
+                .filter(|e| !e.is_empty() && !e.contains('*') && !exists(&jsp::join(&[project_root, e])))
+                .collect();
+            if !missing.is_empty() {
+                out.push(finding(
+                    "detector-ignore-files-missing",
+                    "config.json",
+                    Some(rel.clone()),
+                    "mention",
+                    format!("{} ignores file path(s) that no longer exist: {}.", rel, wrap_ticks(&missing)),
+                    "Ask whether the file moved (repoint the entry) or was deleted (drop it). A stale entry silently stops covering the file that replaced it.".to_string(),
+                ));
+            }
+        }
+    }
+    out
+}
+
+/// `String(rule || '')`
+fn js_string_or_empty(v: &Value) -> String {
+    if js_truthy(v) {
+        js_string(v)
+    } else {
+        String::new()
+    }
+}
+
+fn collect_hook_commands(v: &Value, out: &mut Vec<String>) {
+    match v {
+        Value::String(s) => {
+            if crate::hook_markers::is_design_hook_command(s) {
+                out.push(s.clone());
+            }
+        }
+        Value::Array(a) => {
+            for e in a {
+                collect_hook_commands(e, out);
+            }
+        }
+        Value::Object(o) => {
+            for e in o.values() {
+                collect_hook_commands(e, out);
+            }
+        }
+        _ => {}
+    }
+}
+
+static PLACEHOLDER: Lazy<Regex> = Lazy::new(|| Regex::new(r"\$\{[^}]*\}|\$[A-Za-z_]").unwrap());
+
+/// The `.mjs` script (JS-era manifests) or the launcher (binary-era
+/// manifests) a hook command runs; see `hook_markers`.
+fn hook_script_token_from(command: &str) -> Option<String> {
+    crate::hook_markers::hook_program_token(command)
+}
+
+fn resolve_hook_script_path(token: &str, root: &str) -> Option<String> {
+    if token.is_empty() {
+        return None;
+    }
+    if token.contains("$(") || token.contains('`') {
+        return None;
+    }
+    let expanded = token.replace("${CLAUDE_PROJECT_DIR}", root);
+    if PLACEHOLDER.is_match(&expanded) {
+        return None;
+    }
+    Some(if jsp::is_absolute(&expanded) { expanded } else { jsp::join(&[root, &expanded]) })
+}
+
+/// JS: checkHookInstallation
+pub fn check_hook_installation(
+    project_root: &str,
+    repo_root: Option<&str>,
+    provider_id: &str,
+    user_manifest: Option<&str>,
+) -> Vec<Finding> {
+    let mut out = Vec::new();
+    let manifests = crate::context_cli::hook_manifests_for(provider_id);
+    if manifests.is_empty() {
+        return out;
+    }
+    let project_roots = unique_roots(project_root, repo_root);
+    let mut entries: Vec<(&str, String, bool)> = Vec::new();
+    for root in &project_roots {
+        for rel in manifests {
+            entries.push((root, jsp::join(&[root, rel]), false));
+        }
+    }
+    if let Some(mp) = user_manifest {
+        let mp = jsp::resolve(mp, &[]);
+        if !entries.iter().any(|(_, existing, _)| *existing == mp) {
+            entries.push((project_root, mp, true));
+        }
+    }
+    let mut installed_at: Option<String> = None;
+    for (root, mp, is_user) in &entries {
+        let Some(raw) = read_json(mp) else { continue };
+        let Some(hooks) = crate::hook_markers::active_manifest_hook_subtree(&raw) else { continue };
+        if !js_truthy(&hooks) {
+            continue;
+        }
+        let mut commands = Vec::new();
+        collect_hook_commands(&hooks, &mut commands);
+        if commands.is_empty() {
+            continue;
+        }
+        let base = if project_root.is_empty() { *root } else { project_root };
+        installed_at = to_relative(Some(mp), base);
+        let broken: Vec<&String> = commands
+            .iter()
+            .filter(|c| {
+                let Some(token) = hook_script_token_from(c) else { return false };
+                // Antigravity runs each hook command from the directory that
+                // holds its `hooks.json`, so a relative launcher resolves there.
+                let base = if provider_id == "antigravity" { jsp::dirname(mp) } else { root.to_string() };
+                let Some(abs) = resolve_hook_script_path(&token, &base) else { return false };
+                !exists(&abs)
+            })
+            .collect();
+        if provider_id == "cursor" && crate::hook_markers::cursor_manifest_has_retired_gate(&raw) {
+            let ia = installed_at.clone().unwrap();
+            out.push(finding(
+                "cursor-hook-pre-edit-gate",
+                "hook manifest",
+                Some(ia.clone()),
+                "auto",
+                format!(
+                    "{} still runs the design hook as Cursor's `preToolUse` write gate, which is retired. Cursor now runs it after each edit on `postToolUse` and hands the findings to the agent as context.",
+                    ia
+                ),
+                "Move the entry to `postToolUse`: `impeccable doctor --fix`, `impeccable hooks on`, or the next `impeccable update` does it.".to_string(),
+            ));
+        }
+        if !broken.is_empty() {
+            let ia = installed_at.clone().unwrap();
+            out.push(finding(
+                "hook-script-missing",
+                "hook manifest",
+                Some(ia.clone()),
+                "mention",
+                format!(
+                    "{} installs the design hook, but its script path does not exist: {}. The hook runs as a no-op, so UI edits have been going unscanned while the project looks covered.",
+                    ia,
+                    broken.iter().map(|c| format!("`{}`", c)).collect::<Vec<_>>().join(", ")
+                ),
+                // `update --user` rewrites only Claude's user manifest; other
+                // providers get project hooks, and a launcher entry in their
+                // home file is never repointed.
+                if *is_user && matches!(provider_id, "claude-code" | "antigravity") {
+                    "Reinstall with `impeccable update --user`, which rewrites this user-level manifest against the skill's current location."
+                } else if *is_user {
+                    "Edit this user-level manifest by hand: point the command at the installed skill's launcher, or remove the Impeccable entry. `impeccable update --user` installs project hooks and does not repoint this file."
+                } else {
+                    "Reinstall with `impeccable hooks on`, which rewrites the manifest against the skill's current location."
+                }
+                .to_string(),
+            ));
+        }
+    }
+    if let Some(ia) = installed_at {
+        for root in &project_roots {
+            for name in ["config.json", "config.local.json"] {
+                let cp = jsp::join(&[root, ".impeccable", name]);
+                let Some(raw) = read_json(&cp) else { continue };
+                let Some(hook) = raw.get("hook") else { continue };
+                if js_truthy(hook) && hook.get("enabled") == Some(&Value::Bool(false)) {
+                    let base = if project_root.is_empty() { root.as_str() } else { project_root };
+                    out.push(finding(
+                        "hook-enabled-conflict",
+                        "config.json",
+                        to_relative(Some(&cp), base),
+                        "mention",
+                        format!(
+                            "{} installs the design hook while this config sets `hook.enabled: false`, so the hook fires and then declines to scan.",
+                            ia
+                        ),
+                        "Ask which was intended: `impeccable hooks on` to enable, or `impeccable hooks off` to uninstall the manifest entry as well.".to_string(),
+                    ));
+                    return out;
+                }
+            }
+        }
+    }
+    out
+}
+
+/// JS: checkLegacyLiveState
+pub fn check_legacy_live_state(project_root: &str) -> Vec<Finding> {
+    if project_root.is_empty() {
+        return vec![];
+    }
+    let present: Vec<&str> = LEGACY_LIVE_PATHS.iter().copied().filter(|rel| exists(&jsp::join(&[project_root, rel]))).collect();
+    if present.is_empty() {
+        return vec![];
+    }
+    vec![finding(
+        "legacy-live-state",
+        "live state",
+        Some(present.join(", ")),
+        "auto",
+        format!(
+            "Live-mode state sits in retired location(s): {}. Current live mode writes under `.impeccable/live/`.",
+            present.iter().map(|r| format!("`{}`", r)).collect::<Vec<_>>().join(", ")
+        ),
+        "These are read only through backward-compatible fallbacks and are safe to delete once no live session is running. No user decision is needed.".to_string(),
+    )]
+}
+
+/// What is still on disk of the rejected comps, gate diffs, and captures
+/// `build-phase finish --disposition ship` recorded as spent (`finish.spent`).
+/// The build phase decides what a re-ship still reads; this only reports.
+pub fn check_spent_build_artifacts(project_root: &str) -> Vec<Finding> {
+    if project_root.is_empty() {
+        return vec![];
+    }
+    let Some(state) = read_json(&jsp::join(&[project_root, ".impeccable", "build", "state.json"])) else {
+        return vec![];
+    };
+    let spent: Vec<&str> = state
+        .pointer("/finish/spent")
+        .and_then(Value::as_array)
+        // The list sits in an editable project file and the finding says to delete what it names.
+        .map(|files| {
+            files
+                .iter()
+                .filter_map(Value::as_str)
+                .filter(|f| (f.starts_with(".impeccable/mocks/") || f.starts_with(".impeccable/review/")) && !f.split('/').any(|p| p == ".."))
+                .filter(|f| exists(&jsp::join(&[project_root, f])))
+                .collect()
+        })
+        .unwrap_or_default();
+    if spent.is_empty() {
+        return vec![];
+    }
+    let dirs: Vec<&str> = [".impeccable/mocks", ".impeccable/review"].into_iter().filter(|d| spent.iter().any(|f| f.starts_with(&format!("{d}/")))).collect();
+    let named = spent.iter().take(5).map(|f| format!("`{}`", f)).collect::<Vec<_>>().join(", ");
+    let more = if spent.len() > 5 { format!(" and {} more", spent.len() - 5) } else { String::new() };
+    vec![finding(
+        "spent-build-artifacts",
+        "build output",
+        Some(dirs.join(", ")),
+        "mention",
+        format!("The last build shipped and left {} rejected comp, gate diff, or capture file(s) that nothing reads any more: {}{}.", spent.len(), named, more),
+        "Delete those files to reclaim the space; the next gate run recaptures what it needs. Leave the rest of both directories: a re-ship reads the approved comp, its sidecar, `review/hero.json`, and `review/native/` (`build-phase restore-comp` recovers a lost approved comp). Doctor never deletes files.".to_string(),
+    )]
+}
+
+pub struct WorkspaceRow {
+    pub name: String,
+    pub path: String,
+    pub product_status: &'static str,
+    pub product_path: Option<String>,
+    pub design_status: &'static str,
+    pub design_path: Option<String>,
+    pub platform: Option<String>,
+}
+
+impl WorkspaceRow {
+    pub fn to_value(&self) -> Value {
+        let mut m = Map::new();
+        m.insert("name".into(), Value::String(self.name.clone()));
+        m.insert("path".into(), Value::String(self.path.clone()));
+        m.insert("productStatus".into(), Value::String(self.product_status.to_string()));
+        m.insert("productPath".into(), self.product_path.clone().map(Value::String).unwrap_or(Value::Null));
+        m.insert("designStatus".into(), Value::String(self.design_status.to_string()));
+        m.insert("designPath".into(), self.design_path.clone().map(Value::String).unwrap_or(Value::Null));
+        m.insert("platform".into(), self.platform.clone().map(Value::String).unwrap_or(Value::Null));
+        Value::Object(m)
+    }
+}
+
+/// JS: checkWorkspaces
+pub fn check_workspaces(repo_root: &str, candidates: &[TargetCandidate]) -> (Vec<Finding>, Vec<WorkspaceRow>) {
+    if repo_root.is_empty() || candidates.is_empty() {
+        return (vec![], vec![]);
+    }
+    let mut findings = Vec::new();
+    let mut workspaces = Vec::new();
+    for c in candidates {
+        let workspace_root = jsp::join(&[repo_root, &c.path]);
+        let product_path = c.product_path.as_deref().map(|p| jsp::join(&[repo_root, p]));
+        let product = product_path.as_deref().and_then(safe_read);
+        let platform = extract_platform(product.as_deref());
+        workspaces.push(WorkspaceRow {
+            name: c.name.clone(),
+            path: c.path.clone(),
+            product_status: c.product_status,
+            product_path: c.product_path.clone(),
+            design_status: c.design_status,
+            design_path: c.design_path.clone(),
+            platform: platform.clone().or_else(|| {
+                if product.as_deref().map(|p| !p.is_empty()).unwrap_or(false) {
+                    Some("web (default)".to_string())
+                } else {
+                    None
+                }
+            }),
+        });
+        let native = check_native_platform_evidence(&workspace_root, platform.as_deref(), product.as_deref(), c.product_path.as_deref());
+        for entry in native {
+            let inherited = c.product_status == "inherited";
+            findings.push(finding(
+                "workspace-platform-native-evidence",
+                "PRODUCT.md",
+                Some(c.product_path.clone().unwrap_or_else(|| format!("{}/PRODUCT.md", c.path))),
+                "mention",
+                format!(
+                    "Workspace `{}` {} that resolves to web, but the workspace itself carries native build files. {}",
+                    c.path,
+                    if inherited { "inherits the repo-root PRODUCT.md" } else { "has a PRODUCT.md" },
+                    entry.summary
+                ),
+                if inherited {
+                    format!(
+                        "Give `{}` its own PRODUCT.md with the right `## Platform`. An inherited record cannot describe two platforms at once.",
+                        c.path
+                    )
+                } else {
+                    entry.fix
+                },
+            ));
+        }
+    }
+    let inherited: Vec<&WorkspaceRow> = workspaces.iter().filter(|w| w.product_status == "inherited").collect();
+    if !inherited.is_empty() {
+        findings.push(finding(
+            "workspace-context-inherited",
+            "PRODUCT.md",
+            None,
+            "mention",
+            format!(
+                "{} of {} workspace(s) inherit the repo-root PRODUCT.md: {}. Inheritance is intended; whether one record truthfully describes these apps is not something this check can tell.",
+                inherited.len(),
+                workspaces.len(),
+                inherited.iter().map(|w| format!("`{}`", w.path)).collect::<Vec<_>>().join(", ")
+            ),
+            "Ask the user whether the inherited record describes each app. Where it does not, `init` in that workspace writes a child PRODUCT.md that overrides it.".to_string(),
+        ));
+    }
+    (findings, workspaces)
+}
+
+/// JS: loadKnownRuleIds -> the bundled registry, lowercased ids.
+pub fn load_known_rule_ids() -> Option<Vec<String>> {
+    Some(impeccable_core::registry::ANTIPATTERNS.iter().map(|r| r.id.to_lowercase()).collect())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{check_hook_installation, check_spent_build_artifacts};
+
+    static TMP_SEQ: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+    fn tmp() -> String {
+        let base = std::env::temp_dir().join(format!(
+            "impeccable-doctor-hook-{}-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos(),
+            // A per-process counter: Windows' clock is coarse enough that two
+            // parallel tests can share a nanosecond stamp and then delete each
+            // other's directories.
+            TMP_SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+        ));
+        std::fs::create_dir_all(&base).unwrap();
+        // Like Node's `realpathSync`: on Windows, `canonicalize` yields a
+        // `\\?\` verbatim path, which the kernel takes literally, so the `/`
+        // separators a hook command appends would not resolve under it.
+        let real = std::fs::canonicalize(&base).unwrap().to_string_lossy().into_owned();
+        real.strip_prefix(r"\\?\").map(str::to_string).unwrap_or(real)
+    }
+
+    fn write(root: &str, rel: &str, body: &str) {
+        let p = std::path::Path::new(root).join(rel);
+        std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+        std::fs::write(p, body).unwrap();
+    }
+
+    /// Catches drift reported from a count of commits instead of what DESIGN.md contradicts: a named file that is gone
+    /// (a link's fragment is not part of its name), a declared colour no named token file still contains (short hex is
+    /// the same colour), silence when the palette is written in another notation throughout, and none once it holds.
+    #[test]
+    fn design_drift_names_dead_paths_and_colours_the_token_files_lost() {
+        use super::{check_design_colour_drift, check_design_dead_paths};
+        let root = tmp();
+        write(&root, "styles/tokens.css", ":root { --brand: #C8552B; --paper: #fff; --ink: oklch(20% 0 0); --mist: oklch(96%  .012 95); }\n");
+        write(&root, "src/Button.tsx", "export {};\n");
+        // A script named for something else is no token file: its values are never searched.
+        write(&root, "src/live.js", "const gold = '#d4af37';\n");
+        let design = "---\ncolors:\n  brand: \"#c8552b\"\n  paper: \"#FFFFFF\"\n  ink: \"oklch(20% 0 0)\"\n  mist: \"oklch(96% 0.012 95)\"\n  gold: \"#d4af37\"\n---\n# D\n\nTokens live in `styles/tokens.css` ([colours](styles/tokens.css#colors)); buttons in `src/Button.tsx`; the overlay in `src/live.js`.\nCards were in `src/Card.tsx` and [the nav](src/nav/Nav.astro).\nGlobs like `src/**/*.tsx` and words like `e.g.` are not files.\n";
+        let path = format!("{root}/DESIGN.md");
+        let dead = check_design_dead_paths(Some(design), Some(&path), &root);
+        assert_eq!(dead.iter().map(|f| f.summary.as_str()).collect::<Vec<_>>(), ["DESIGN.md names files that no longer exist: `src/Card.tsx`, `src/nav/Nav.astro`."]);
+        let colours = check_design_colour_drift(Some(design), Some(&path), &root);
+        assert_eq!(colours.iter().map(|f| f.summary.as_str()).collect::<Vec<_>>(), ["DESIGN.md declares a colour the token files it names no longer contain: `gold #d4af37`."]);
+        // Written another way throughout (hex declared, rgb() and lab() in the tokens): no colour is found, so nothing is said.
+        write(&root, "styles/tokens.css", ":root { --brand: rgb(200 85 43); --paper: rgb(255 255 255); --ink: lab(20 0 0); --mist: lab(96 1 2); }\n");
+        assert!(check_design_colour_drift(Some(design), Some(&path), &root).is_empty());
+        // The map holds: no finding.
+        write(&root, "src/Card.tsx", "export {};\n");
+        write(&root, "src/nav/Nav.astro", "");
+        write(&root, "styles/tokens.css", ":root { --brand: #c8552b; --paper: #fff; --ink: oklch(20% 0 0); --mist: oklch(96% .012 95); --gold: #D4AF37; }\n");
+        assert!(check_design_dead_paths(Some(design), Some(&path), &root).is_empty());
+        assert!(check_design_colour_drift(Some(design), Some(&path), &root).is_empty());
+    }
+
+    #[test]
+    fn hook_script_missing_resolves_launcher_and_legacy_forms() {
+        let root = tmp();
+        // Launcher form pointing at a launcher that exists: no finding.
+        write(&root, ".claude/skills/impeccable/scripts/impeccable", "#!/bin/sh\n");
+        write(
+            &root,
+            ".claude/settings.local.json",
+            r#"{"hooks":{"PostToolUse":[{"hooks":[{"type":"command","command":"\"${CLAUDE_PROJECT_DIR}/.claude/skills/impeccable/scripts/impeccable\" hook"}]}]}}"#,
+        );
+        assert!(check_hook_installation(&root, None, "claude-code", None).is_empty());
+
+        // Launcher form pointing at a missing launcher: reported.
+        write(
+            &root,
+            ".claude/settings.local.json",
+            r#"{"hooks":{"PostToolUse":[{"hooks":[{"type":"command","command":"\"${CLAUDE_PROJECT_DIR}/.other/skills/impeccable/scripts/impeccable\" hook"}]}]}}"#,
+        );
+        let f = check_hook_installation(&root, None, "claude-code", None);
+        assert_eq!(f.len(), 1, "{f:?}");
+        assert_eq!(f[0].id, "hook-script-missing");
+
+        // Legacy .mjs form is still resolved: reported when the script is gone.
+        write(
+            &root,
+            ".claude/settings.local.json",
+            r#"{"hooks":{"PostToolUse":[{"hooks":[{"type":"command","command":"node \"${CLAUDE_PROJECT_DIR}/.claude/skills/impeccable/scripts/hook.mjs\""}]}]}}"#,
+        );
+        let f = check_hook_installation(&root, None, "claude-code", None);
+        assert_eq!(f.len(), 1, "{f:?}");
+        write(&root, ".claude/skills/impeccable/scripts/hook.mjs", "");
+        assert!(check_hook_installation(&root, None, "claude-code", None).is_empty());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn spent_build_artifacts_report_what_is_left_of_the_recorded_list() {
+        let root = tmp();
+        let rm = |rel: &str| std::fs::remove_file(std::path::Path::new(&root).join(rel)).unwrap();
+        // A comp from a later round is on disk but was never recorded as spent.
+        for rel in [".impeccable/mocks/comp-2.png", ".impeccable/review/diff/hero/side-by-side.png", ".impeccable/mocks/decision/next.png"] {
+            write(&root, rel, "x");
+        }
+        assert!(check_spent_build_artifacts(&root).is_empty(), "no state");
+        write(&root, ".impeccable/build/state.json", r#"{"finish":{"disposition":"fix"}}"#);
+        assert!(check_spent_build_artifacts(&root).is_empty(), "no recorded ship");
+        // Entries outside the two runtime directories are never named, even when they exist.
+        write(&root, "src/app.css", "x");
+        write(&root, ".impeccable/build/state.json", r#"{"finish":{"disposition":"ship","spent":["src/app.css",".impeccable/mocks/../../src/app.css"]}}"#);
+        assert!(check_spent_build_artifacts(&root).is_empty(), "outside paths");
+        write(&root, ".impeccable/build/state.json", r#"{"finish":{"disposition":"ship","spent":[".impeccable/mocks/comp-2.png",".impeccable/mocks/comp-3.png",".impeccable/review/diff/hero/side-by-side.png"]}}"#);
+        let f = check_spent_build_artifacts(&root);
+        assert_eq!(f.len(), 1, "{f:?}");
+        assert_eq!((f[0].id.as_str(), f[0].severity), ("spent-build-artifacts", "mention"));
+        assert_eq!(f[0].path.as_deref(), Some(".impeccable/mocks, .impeccable/review"));
+        assert!(f[0].summary.ends_with(" 2 rejected comp, gate diff, or capture file(s) that nothing reads any more: `.impeccable/mocks/comp-2.png`, `.impeccable/review/diff/hero/side-by-side.png`."), "{}", f[0].summary);
+        rm(".impeccable/mocks/comp-2.png");
+        rm(".impeccable/review/diff/hero/side-by-side.png");
+        assert!(check_spent_build_artifacts(&root).is_empty(), "all deleted");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn cursor_gate_is_an_auto_finding_and_the_post_edit_hook_is_not() {
+        let root = tmp();
+        write(&root, ".cursor/skills/impeccable/scripts/impeccable", "#!/bin/sh\n");
+        write(&root, ".cursor/hooks.json", r#"{"version":1,"hooks":{"preToolUse":[{"command":"\".cursor/skills/impeccable/scripts/impeccable\" hook-before-edit","timeout":5}]}}"#);
+        let f = check_hook_installation(&root, None, "cursor", None);
+        assert_eq!(f.len(), 1, "{:?}", f.iter().map(|x| &x.id).collect::<Vec<_>>());
+        assert_eq!(f[0].id, "cursor-hook-pre-edit-gate");
+        assert_eq!(f[0].severity, "auto");
+        write(&root, ".cursor/hooks.json", r#"{"version":1,"hooks":{"postToolUse":[{"command":"\".cursor/skills/impeccable/scripts/impeccable\" hook","matcher":"^Write$","timeout":5}]}}"#);
+        assert!(check_hook_installation(&root, None, "cursor", None).is_empty());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn user_scope_claude_hook_is_checked_from_home() {
+        let root = tmp();
+        let project = crate::jsp::join(&[&root, "project"]);
+        let home = crate::jsp::join(&[&root, "home"]);
+        std::fs::create_dir_all(&project).unwrap();
+        let launcher = crate::jsp::join(&[
+            &home,
+            ".claude",
+            "skills",
+            "impeccable",
+            "scripts",
+            "impeccable",
+        ]);
+        let manifest = crate::jsp::join(&[&home, ".claude", "settings.json"]);
+        write(&home, ".claude/skills/impeccable/scripts/impeccable", "#!/bin/sh\n");
+        write(
+            &home,
+            ".claude/settings.json",
+            &serde_json::json!({
+                "hooks": {
+                    "PostToolUse": [{
+                        "hooks": [{
+                            "type": "command",
+                            "command": format!("\"{launcher}\" hook"),
+                        }],
+                    }],
+                },
+            })
+            .to_string(),
+        );
+        write(
+            &home,
+            ".claude/settings.local.json",
+            r#"{"hooks":{"PostToolUse":[{"hooks":[{"type":"command","command":"\"/missing/user-local/impeccable\" hook"}]}]}}"#,
+        );
+        assert!(check_hook_installation(&project, None, "claude-code", Some(&manifest)).is_empty());
+
+        std::fs::remove_file(&launcher).unwrap();
+        let findings = check_hook_installation(&project, None, "claude-code", Some(&manifest));
+        assert_eq!(findings.len(), 1, "{findings:?}");
+        assert_eq!(findings[0].id, "hook-script-missing");
+        assert!(findings[0].fix.starts_with("Reinstall with `impeccable update --user`"), "{:?}", findings[0].fix);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn antigravity_named_hook_resolves_relative_launcher_from_manifest_dir() {
+        let root = tmp();
+        write(&root, ".agent/skills/impeccable/scripts/impeccable", "#!/bin/sh\n");
+        let cmd = "\"../.agent/skills/impeccable/scripts/impeccable\" hook";
+        write(
+            &root,
+            ".agents/hooks.json",
+            &serde_json::json!({"impeccable": {"Stop": [{"type": "command", "command": cmd}]}}).to_string(),
+        );
+        // The launcher exists one level up from `.agents/`, where Antigravity
+        // runs the command; resolving it from the project root would miss it.
+        assert!(check_hook_installation(&root, None, "antigravity", None).is_empty());
+        std::fs::remove_file(crate::jsp::join(&[&root, ".agent/skills/impeccable/scripts/impeccable"])).unwrap();
+        let findings = check_hook_installation(&root, None, "antigravity", None);
+        assert_eq!(findings.len(), 1, "{findings:?}");
+        assert_eq!(findings[0].id, "hook-script-missing");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn user_scope_codex_hook_is_checked_from_codex_home() {
+        let root = tmp();
+        let project = crate::jsp::join(&[&root, "project"]);
+        let home = crate::jsp::join(&[&root, "home"]);
+        std::fs::create_dir_all(&project).unwrap();
+        let launcher = crate::jsp::join(&[&home, ".agents", "skills", "impeccable", "scripts", "impeccable"]);
+        let manifest = crate::jsp::join(&[&root, "codex-home", "hooks.json"]);
+        write(&home, ".agents/skills/impeccable/scripts/impeccable", "#!/bin/sh\n");
+        write(
+            &root,
+            "codex-home/hooks.json",
+            &serde_json::json!({
+                "hooks": {
+                    "Stop": [{
+                        "hooks": [{
+                            "type": "command",
+                            "command": format!("[ ! -f '{launcher}' ] || '{launcher}' hook"),
+                        }],
+                    }],
+                },
+            })
+            .to_string(),
+        );
+        assert!(check_hook_installation(&project, None, "codex", Some(&manifest)).is_empty());
+
+        std::fs::remove_file(&launcher).unwrap();
+        let findings = check_hook_installation(&project, None, "codex", Some(&manifest));
+        assert_eq!(findings.len(), 1, "{findings:?}");
+        assert_eq!(findings[0].id, "hook-script-missing");
+        assert!(findings[0].fix.contains("by hand"), "{:?}", findings[0].fix);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+}

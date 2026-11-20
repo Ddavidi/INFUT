@@ -1,0 +1,347 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-17T00:00:00.000Z",
+  "title": "Design System: Impeccable",
+  "extensions": {
+    "colorMeta": {
+      "kinpaku": {
+        "role": "primary",
+        "displayName": "Kinpaku",
+        "canonical": "oklch(84% 0.19 80.46)",
+        "description": "The mark's line, a hairline, the lit dot on a control, the AI-tell tag, the primary button fill. Never text on paper.",
+        "tonalRamp": [
+          "oklch(61% 0.085 78)",
+          "oklch(77% 0.13 82)",
+          "oklch(84% 0.19 80.46)",
+          "oklch(87% 0.20 85)"
+        ]
+      },
+      "kinpaku-vivid": {
+        "role": "interaction",
+        "displayName": "Kinpaku Vivid",
+        "canonical": "oklch(87% 0.20 85)",
+        "description": "The lit hover on a gold fill: the popup's Scan page button under the pointer."
+      },
+      "kinpaku-rich": {
+        "role": "interaction",
+        "displayName": "Kinpaku Rich",
+        "canonical": "oklch(77% 0.13 82)",
+        "description": "Hover on a pressed gold control (the walks mic), the focused field's inset ring, and the sidebar's AI-tell marker glyph."
+      },
+      "patina-deep": {
+        "role": "secondary",
+        "displayName": "Patina Deep",
+        "canonical": "oklch(46% 0.08 188)",
+        "description": "Any text that has to be colored: selectors, finding details, the copied state. Clears 4.5:1 on paper."
+      },
+      "paper": {
+        "role": "surface",
+        "displayName": "Paper",
+        "canonical": "oklch(97.8% 0 0)",
+        "description": "Page ground of the DevTools panel and sidebar, and the toolbar.",
+        "tonalRamp": [
+          "oklch(88% 0 0)",
+          "oklch(92% 0 0)",
+          "oklch(95% 0 0)",
+          "oklch(97.8% 0 0)",
+          "oklch(99.5% 0 0)"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "oklch(13% 0 0)",
+        "description": "The mark, wordmark, names and active labels.",
+        "tonalRamp": [
+          "oklch(13% 0 0)",
+          "oklch(22% 0 0)",
+          "oklch(46% 0 0)",
+          "oklch(56% 0 0)",
+          "oklch(66% 0 0)"
+        ]
+      },
+      "on-gold": {
+        "role": "neutral",
+        "displayName": "On Gold",
+        "canonical": "oklch(14% 0.018 95)",
+        "description": "The only foreground on a gold fill: tag, badge, primary button."
+      },
+      "kinpaku-deep": {
+        "role": "accent",
+        "displayName": "Kinpaku Deep",
+        "canonical": "oklch(61% 0.085 78)",
+        "description": "A gold border against paper: a pending item in component review, the walks panel's focus outline."
+      },
+      "patina": {
+        "role": "state",
+        "displayName": "Patina",
+        "canonical": "oklch(70% 0.12 188)",
+        "description": "The quality dot and the 2px focus outline. Never text.",
+        "tonalRamp": [
+          "oklch(38% 0.08 188)",
+          "oklch(46% 0.08 188)",
+          "oklch(70% 0.12 188)",
+          "oklch(82% 0.07 188)"
+        ]
+      },
+      "patina-pale": {
+        "role": "state",
+        "displayName": "Patina Pale",
+        "canonical": "oklch(82% 0.07 188)",
+        "description": "Fill of the page-level finding tag."
+      },
+      "patina-ink": {
+        "role": "state",
+        "displayName": "Patina Ink",
+        "canonical": "oklch(38% 0.08 188)",
+        "description": "Text on a patina-pale tag."
+      },
+      "vermilion": {
+        "role": "state",
+        "displayName": "Vermilion",
+        "canonical": "oklch(52% 0.16 35)",
+        "description": "Failure only: the line that says a scan did not run."
+      },
+      "paper-raised": {
+        "role": "surface",
+        "displayName": "Paper Raised",
+        "canonical": "oklch(99.5% 0 0)",
+        "description": "Popup ground, and every raised cap: tool button, segmented cap, switch knob."
+      },
+      "paper-deep": {
+        "role": "surface",
+        "displayName": "Paper Deep",
+        "canonical": "oklch(95% 0 0)",
+        "description": "Row hover, the settings well, the secondary button."
+      },
+      "gray": {
+        "role": "surface",
+        "displayName": "Gray",
+        "canonical": "oklch(92% 0 0)",
+        "description": "Segmented track, quiet chips and counts, secondary button hover."
+      },
+      "gray-2": {
+        "role": "surface",
+        "displayName": "Gray 2",
+        "canonical": "oklch(88% 0 0)",
+        "description": "Switch track and an unlit indicator dot."
+      },
+      "text": {
+        "role": "neutral",
+        "displayName": "Text",
+        "canonical": "oklch(22% 0 0)",
+        "description": "Default reading text."
+      },
+      "text-muted": {
+        "role": "neutral",
+        "displayName": "Text Muted",
+        "canonical": "oklch(46% 0 0)",
+        "description": "Descriptions, section labels, resting tool icons."
+      },
+      "text-faint": {
+        "role": "neutral",
+        "displayName": "Text Faint",
+        "canonical": "oklch(56% 0 0)",
+        "description": "Chevrons, group counts, the resting copy button."
+      },
+      "text-mute-deep": {
+        "role": "neutral",
+        "displayName": "Text Mute Deep",
+        "canonical": "oklch(66% 0 0)",
+        "description": "Disabled and off states: the zero count, hidden overlays."
+      },
+      "rule": {
+        "role": "neutral",
+        "displayName": "Rule",
+        "canonical": "oklch(13% 0 0 / 0.08)",
+        "description": "Dividers and a raised cap's border. Steps to 0.12 in dark DevTools."
+      },
+      "edge": {
+        "role": "neutral",
+        "displayName": "Edge",
+        "canonical": "oklch(13% 0 0 / 0.45)",
+        "description": "The bound of a control (text inputs); clears 3:1."
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Big words in the bundled Alumni Sans: the popup's count (104px), walks headings (2.5rem)."
+      },
+      "wordmark": {
+        "displayName": "Wordmark",
+        "purpose": "IMPECCABLE beside the mark, uppercase, tracked 0.16em."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Empty-state titles and other 13px headings."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Everything read in the dense panels."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Mono uppercase section and settings labels; 11px is the functional floor."
+      },
+      "tag": {
+        "displayName": "Tag",
+        "purpose": "The detector's tag and finding chips, mono uppercase."
+      }
+    },
+    "shadows": [
+      {
+        "name": "--ks-cap-lift",
+        "value": "inset 0 1px 0 oklch(100% 0 0 / 0.9), 0 1px 0 oklch(13% 0 0 / 0.14), 0 2px 3px oklch(13% 0 0 / 0.08)",
+        "purpose": "The raised cap on an instrument control: a hovered or held tool button, the selected segmented cap, the switch knob."
+      },
+      {
+        "name": "--ks-cap-press",
+        "value": "inset 0 1px 2px oklch(13% 0 0 / 0.14)",
+        "purpose": "A cap while it is pressed."
+      },
+      {
+        "name": "--ks-track-recess",
+        "value": "inset 0 1px 3px oklch(13% 0 0 / 0.16), inset 0 -1px 0 oklch(100% 0 0 / 0.7)",
+        "purpose": "The recessed track under segmented caps and the switch."
+      },
+      {
+        "name": "--ks-led",
+        "value": "0 0 0 1px oklch(13% 0 0 / 0.12), 0 0 4px oklch(84% 0.19 80 / 0.6)",
+        "purpose": "A lit gold dot: selected cap, switch on, held tool, AI-tell section, scanning."
+      },
+      {
+        "name": "--ks-lift-1",
+        "value": "0 1px 1px oklch(13% 0 0 / 0.05), 0 2px 3px oklch(13% 0 0 / 0.04), 0 6px 12px oklch(13% 0 0 / 0.05)",
+        "purpose": "Component review only: the locator map on hover."
+      },
+      {
+        "name": "unlit-dot",
+        "value": "inset 0 1px 1px oklch(13% 0 0 / 0.18)",
+        "purpose": "An indicator dot at rest, before it lights. Hand-typed in panel.css; no token yet."
+      },
+      {
+        "name": "gold-key-sheen",
+        "value": "inset 0 1px 0 oklch(100% 0 0 / 0.35)",
+        "purpose": "The top highlight on a gold-filled button (popup Scan page, walks gold button). Hand-typed; no token yet."
+      }
+    ],
+    "motion": [
+      {
+        "name": "--ks-ease",
+        "value": "cubic-bezier(0.2, 0.8, 0.2, 1)",
+        "purpose": "Every color, border and shadow transition."
+      },
+      {
+        "name": "--ks-quick",
+        "value": "120ms",
+        "purpose": "Duration of hover and state changes on controls and rows."
+      }
+    ],
+    "breakpoints": [],
+    "roundedMeta": {
+      "sm": {
+        "value": "3px",
+        "purpose": "Tags, chips, rows, tool buttons, the segmented track."
+      },
+      "button": {
+        "value": "10px",
+        "purpose": "Popup and walks-panel buttons. Hand-typed in each stylesheet; no token yet."
+      },
+      "pill": {
+        "value": "999px",
+        "purpose": "The switch track."
+      }
+    }
+  },
+  "components": [
+    {
+      "name": "Segmented Control",
+      "kind": "custom",
+      "refersTo": "segmented-control",
+      "description": "Paper hardware: a recessed track carrying raised caps, the selected cap's dot lit gold.",
+      "html": "<div class=\"ds-seg\"><button type=\"button\" class=\"active\">Page</button><button type=\"button\">Element</button></div>",
+      "css": ".ds-seg { display: inline-flex; gap: 2px; padding: 2px; border-radius: 3px; background: oklch(92% 0 0); box-shadow: inset 0 1px 3px oklch(13% 0 0 / 0.16), inset 0 -1px 0 oklch(100% 0 0 / 0.7); font-family: \"Avenir Next\", \"Segoe UI Variable Text\", \"Segoe UI\", system-ui, -apple-system, \"Helvetica Neue\", Arial, sans-serif; } .ds-seg button { position: relative; padding: 3px 9px 3px 16px; border: none; border-radius: 2px; background: transparent; color: oklch(46% 0 0); font: 500 11px/1.4 \"Avenir Next\", \"Segoe UI Variable Text\", \"Segoe UI\", system-ui, -apple-system, \"Helvetica Neue\", Arial, sans-serif; cursor: pointer; transition: background-color 120ms cubic-bezier(0.2, 0.8, 0.2, 1), color 120ms cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 120ms cubic-bezier(0.2, 0.8, 0.2, 1); } .ds-seg button::before { content: \"\"; position: absolute; top: 50%; left: 6px; transform: translateY(-50%); width: 5px; height: 5px; border-radius: 50%; background: oklch(88% 0 0); box-shadow: inset 0 1px 1px oklch(13% 0 0 / 0.18); } .ds-seg button:hover { color: oklch(13% 0 0); } .ds-seg button.active { background: oklch(99.5% 0 0); box-shadow: inset 0 1px 0 oklch(100% 0 0 / 0.9), 0 1px 0 oklch(13% 0 0 / 0.14), 0 2px 3px oklch(13% 0 0 / 0.08); color: oklch(13% 0 0); } .ds-seg button.active::before { background: oklch(84% 0.19 80.46); box-shadow: 0 0 0 1px oklch(13% 0 0 / 0.12), 0 0 4px oklch(84% 0.19 80 / 0.6); } .ds-seg button:active { box-shadow: inset 0 1px 2px oklch(13% 0 0 / 0.14); transform: translateY(1px); } .ds-seg button:focus-visible { outline: 2px solid oklch(70% 0.12 188); outline-offset: 2px; }"
+    },
+    {
+      "name": "Switch",
+      "kind": "custom",
+      "refersTo": "switch",
+      "description": "A recessed track, a raised paper knob, a dot that lights gold when on.",
+      "html": "<label class=\"ds-switch\"><input type=\"checkbox\" checked><span class=\"ds-switch-track\"></span></label>",
+      "css": ".ds-switch { position: relative; display: inline-block; width: 30px; height: 18px; cursor: pointer; } .ds-switch input { position: absolute; opacity: 0; width: 0; height: 0; } .ds-switch-track { position: absolute; inset: 0; border-radius: 999px; background: oklch(88% 0 0); box-shadow: inset 0 1px 3px oklch(13% 0 0 / 0.16), inset 0 -1px 0 oklch(100% 0 0 / 0.7); } .ds-switch-track::before { content: ''; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: oklch(99.5% 0 0); box-shadow: inset 0 1px 0 oklch(100% 0 0 / 0.9), 0 1px 0 oklch(13% 0 0 / 0.14), 0 2px 3px oklch(13% 0 0 / 0.08); transition: transform 220ms cubic-bezier(0.3, 0.7, 0.2, 1); } .ds-switch-track::after { content: ''; position: absolute; top: 7px; left: 7px; width: 4px; height: 4px; border-radius: 50%; background: oklch(88% 0 0); box-shadow: inset 0 1px 1px oklch(13% 0 0 / 0.18); transition: transform 220ms cubic-bezier(0.3, 0.7, 0.2, 1), background-color 120ms cubic-bezier(0.2, 0.8, 0.2, 1); } .ds-switch input:checked + .ds-switch-track::before, .ds-switch input:checked + .ds-switch-track::after { transform: translateX(12px); } .ds-switch input:checked + .ds-switch-track::after { background: oklch(84% 0.19 80.46); box-shadow: 0 0 0 1px oklch(13% 0 0 / 0.12), 0 0 4px oklch(84% 0.19 80 / 0.6); } .ds-switch input:focus-visible + .ds-switch-track { outline: 2px solid oklch(70% 0.12 188); outline-offset: 2px; }"
+    },
+    {
+      "name": "Tool Button",
+      "kind": "button",
+      "refersTo": "tool-button-active",
+      "description": "The DevTools toolbar's control: transparent at rest, a raised cap under the pointer, a lit dot when held.",
+      "html": "<div class=\"ds-toolbar\"><button type=\"button\" class=\"ds-tool\" aria-label=\"Rescan\"><svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><path d=\"M21 12a9 9 0 1 1-3-6.7L21 8\"/><path d=\"M21 3v5h-5\"/></svg></button><button type=\"button\" class=\"ds-tool active\" aria-label=\"Overlays\"><svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><path d=\"M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z\"/><circle cx=\"12\" cy=\"12\" r=\"3\"/></svg></button></div>",
+      "css": ".ds-toolbar { display: flex; align-items: center; gap: 2px; padding: 7px 10px; background: oklch(97.8% 0 0); border-bottom: 1px solid oklch(13% 0 0 / 0.12); } .ds-tool { position: relative; display: flex; align-items: center; justify-content: center; width: 26px; height: 26px; border: 1px solid transparent; border-radius: 3px; background: transparent; color: oklch(46% 0 0); cursor: pointer; transition: background-color 120ms cubic-bezier(0.2, 0.8, 0.2, 1), border-color 120ms cubic-bezier(0.2, 0.8, 0.2, 1), color 120ms cubic-bezier(0.2, 0.8, 0.2, 1); } .ds-tool:hover, .ds-tool.active { background: oklch(99.5% 0 0); border-color: oklch(13% 0 0 / 0.12); box-shadow: inset 0 1px 0 oklch(100% 0 0 / 0.9), 0 1px 0 oklch(13% 0 0 / 0.14), 0 2px 3px oklch(13% 0 0 / 0.08); color: oklch(13% 0 0); } .ds-tool:active { box-shadow: inset 0 1px 2px oklch(13% 0 0 / 0.14); } .ds-tool.active::after { content: \"\"; position: absolute; bottom: 2px; left: 50%; transform: translateX(-50%); width: 4px; height: 4px; border-radius: 50%; background: oklch(84% 0.19 80.46); box-shadow: 0 0 0 1px oklch(13% 0 0 / 0.12), 0 0 4px oklch(84% 0.19 80 / 0.6); } .ds-tool:focus-visible { outline: 2px solid oklch(70% 0.12 188); outline-offset: 2px; }"
+    },
+    {
+      "name": "Finding Row",
+      "kind": "custom",
+      "refersTo": "finding-row",
+      "description": "One finding: the patina-deep mono selector is the only colored text; the description shows on hover.",
+      "html": "<div class=\"ds-finding\"><span class=\"ds-finding-selector\">main &gt; section.hero h1</span><span class=\"ds-finding-detail\">Gradient text on the headline</span></div>",
+      "css": ".ds-finding { display: flex; flex-direction: column; gap: 1px; padding: 4px 6px 5px 26px; border-radius: 3px; font-family: \"Avenir Next\", \"Segoe UI Variable Text\", \"Segoe UI\", system-ui, -apple-system, \"Helvetica Neue\", Arial, sans-serif; cursor: pointer; transition: background-color 120ms cubic-bezier(0.2, 0.8, 0.2, 1); } .ds-finding:hover { background: oklch(95% 0 0); } .ds-finding-selector { font-family: ui-monospace, \"SF Mono\", SFMono-Regular, \"JetBrains Mono\", Menlo, Consolas, monospace; font-size: 11px; color: oklch(46% 0.08 188); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .ds-finding-detail { font-size: 11px; color: oklch(22% 0 0); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }"
+    },
+    {
+      "name": "Tag",
+      "kind": "chip",
+      "refersTo": "tag",
+      "description": "The detector's own label: ink on gold for an AI tell, gray and muted for quality.",
+      "html": "<span class=\"ds-tag\">AI tell</span> <span class=\"ds-tag is-quiet\">Quality</span>",
+      "css": ".ds-tag { display: inline-flex; align-items: center; min-height: 16px; padding: 0 5px; border-radius: 3px; background: oklch(84% 0.19 80.46); color: oklch(14% 0.018 95); font-family: ui-monospace, \"SF Mono\", SFMono-Regular, \"JetBrains Mono\", Menlo, Consolas, monospace; font-size: 9px; font-weight: 600; letter-spacing: 0.06em; line-height: 1; text-transform: uppercase; white-space: nowrap; } .ds-tag.is-quiet { background: oklch(92% 0 0); color: oklch(46% 0 0); }"
+    },
+    {
+      "name": "Buttons",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Popup buttons: the one gold primary, paper-deep secondaries.",
+      "html": "<button type=\"button\" class=\"ds-btn\">Copy all</button> <button type=\"button\" class=\"ds-btn ds-btn-primary\">Scan page</button>",
+      "css": ".ds-btn { height: 40px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 0 16px; border: 0; border-radius: 10px; background: oklch(95% 0 0); color: oklch(13% 0 0); font: 500 13px \"Avenir Next\", \"Segoe UI Variable Text\", \"Segoe UI\", system-ui, -apple-system, \"Helvetica Neue\", Arial, sans-serif; white-space: nowrap; cursor: pointer; transition: background 120ms cubic-bezier(0.2, 0.8, 0.2, 1); } .ds-btn:hover { background: oklch(92% 0 0); } .ds-btn-primary { background: oklch(84% 0.19 80.46); color: oklch(14% 0.018 95); font-size: 14px; font-weight: 600; box-shadow: inset 0 1px 0 oklch(100% 0 0 / 0.35); } .ds-btn-primary:hover { background: oklch(87% 0.20 85); } .ds-btn:focus-visible { outline: 2px solid oklch(46% 0.08 188); outline-offset: 2px; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "Paper and Instruments",
+    "overview": "Surfaces are neutral paper (chroma 0) and type is ink: no warm cast, no dark section backgrounds. Gold is jewelry. A raised or dark surface is something you operate: a recessed track, a raised cap, a lit gold dot. One light theme everywhere, including inside dark DevTools, where the panel is a sheet laid on the tool with a hardened ink seam.",
+    "keyCharacteristics": [
+      "Chroma-0 paper and ink; color appears only as gold jewelry, patina state or vermilion failure.",
+      "Controls are paper hardware with real depth; everything else is flat.",
+      "Dense UI: 11px is the floor for anything functional."
+    ],
+    "rules": [
+      {
+        "name": "The Gold Is Jewelry Rule",
+        "section": "colors",
+        "body": "Kinpaku fills the mark, a hairline, the lit dot on a control, the tag and the one primary button. It never carries text on paper and never fills a panel."
+      },
+      {
+        "name": "The Gold Text Is a Bug Rule",
+        "section": "colors",
+        "body": "Gold at 84% lightness lands under 2:1 on paper. Text that has to be colored is patina-deep, which clears 4.5:1. Text on a gold fill is on-gold."
+      },
+      {
+        "name": "The Severity Rule",
+        "section": "colors",
+        "body": "One mapping, everywhere. AI tell: the gold tag and a lit gold dot. Quality: a patina dot and patina-deep text, never competing with the gold. Failure: vermilion, only for a scan that did not run."
+      },
+      {
+        "name": "The Mono Means Machine Rule",
+        "section": "typography",
+        "body": "Selectors, counts, section labels and tags are mono, as in the agent. Labels are uppercase and tracked (0.12em)."
+      }
+    ],
+    "dos": [
+      "Do read every value from the `--ks-*` tokens rather than hand-typing oklch.",
+      "Do give every lit indicator the LED glow, and only lit indicators."
+    ],
+    "donts": [
+      "Don't set gold text on paper.",
+      "Don't add a dark theme or a dark section background; tune the seam instead.",
+      "Don't use vermilion for anything but a failed scan."
+    ]
+  }
+}

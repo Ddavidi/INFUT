@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Legitimate Border Patterns — Should NOT Flag</title>
+  <style>
+    body { font-family: system-ui, sans-serif; background: #f9fafb; padding: 2rem; color: #111827; }
+    h1 { font-size: 1.5rem; margin-bottom: 0.5rem; }
+    h2 { font-size: 1.125rem; margin: 2rem 0 0.75rem; color: #6b7280; }
+    .demo { max-width: 36rem; margin-bottom: 1.5rem; }
+  </style>
+</head>
+<body>
+  <h1>Legitimate Border Patterns</h1>
+  <p style="color: #6b7280; margin-bottom: 2rem;">Every border here is a well-established web pattern. None should be flagged.</p>
+
+  <!-- 1. BLOCKQUOTE — the classic border-left usage -->
+  <h2>Blockquotes</h2>
+  <div class="demo">
+    <blockquote style="border-left: 4px solid #d1d5db; padding-left: 1rem; margin: 0; color: #4b5563; font-style: italic;">
+      "Design is not just what it looks like and feels like. Design is how it works."
+    </blockquote>
+  </div>
+
+  <!-- A bar down one side of a nav link, an input or a timeline is a side
+       tab (side-tab-every-variant.html); a square quote rule and a code
+       line's gutter are typography. -->
+
+  <!-- 5. CODE BLOCK — diff highlighting -->
+  <h2>Code Diff Highlighting</h2>
+  <div class="demo">
+    <pre style="background: #1e293b; color: #e2e8f0; padding: 1rem; border-radius: 8px; font-size: 0.8125rem; overflow-x: auto; margin: 0;">
+<code><span style="display: block; border-left: 3px solid #ef4444; padding-left: 0.75rem; background: rgba(239,68,68,0.1);">- const old = getValue();</span>
+<span style="display: block; border-left: 3px solid #22c55e; padding-left: 0.75rem; background: rgba(34,197,94,0.1);">+ const value = getNewValue();</span>
+<span style="display: block; padding-left: calc(3px + 0.75rem);">  return value;</span></code></pre>
+  </div>
+
+  <!-- 6. TAB ACTIVE STATE — bottom border -->
+  <h2>Tab Navigation</h2>
+  <div class="demo">
+    <div style="display: flex; border-bottom: 1px solid #e5e7eb;">
+      <button style="padding: 0.75rem 1.25rem; border: none; background: none; font-size: 0.875rem; color: #1d4ed8; border-bottom: 2px solid #3b82f6; font-weight: 500; cursor: pointer;">Overview</button>
+      <button style="padding: 0.75rem 1.25rem; border: none; background: none; font-size: 0.875rem; color: #6b7280; border-bottom: 2px solid transparent; cursor: pointer;">Analytics</button>
+      <button style="padding: 0.75rem 1.25rem; border: none; background: none; font-size: 0.875rem; color: #6b7280; border-bottom: 2px solid transparent; cursor: pointer;">Settings</button>
+    </div>
+  </div>
+
+  <!-- 7. TABLE CELL BORDERS -->
+  <h2>Data Table</h2>
+  <div class="demo">
+    <table style="width: 100%; border-collapse: collapse; font-size: 0.875rem;">
+      <thead>
+        <tr>
+          <th style="text-align: left; padding: 0.5rem; border-bottom: 2px solid #111827;">Name</th>
+          <th style="text-align: right; padding: 0.5rem; border-bottom: 2px solid #111827;">Revenue</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td style="padding: 0.5rem; border-bottom: 1px solid #e5e7eb;">Acme Corp</td><td style="text-align: right; padding: 0.5rem; border-bottom: 1px solid #e5e7eb;">$1.2M</td></tr>
+        <tr><td style="padding: 0.5rem; border-bottom: 1px solid #e5e7eb;">Globex</td><td style="text-align: right; padding: 0.5rem; border-bottom: 1px solid #e5e7eb;">$850K</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- 8. ALERT BANNER — full-width, not a card -->
+  <h2>Alert Banner</h2>
+  <div class="demo">
+    <div style="border: 1px solid #f59e0b; background: #fffbeb; padding: 0.75rem 1rem; font-size: 0.875rem; color: #92400e;">
+      <strong>Warning:</strong> Your trial expires in 3 days. <a href="#" style="color: #92400e;">Upgrade now</a>
+    </div>
+  </div>
+<script src="/js/detect-antipatterns-browser.js"></script>
+</body>
+</html>

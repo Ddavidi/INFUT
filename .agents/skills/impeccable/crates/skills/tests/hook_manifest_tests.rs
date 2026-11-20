@@ -1,0 +1,1433 @@
+//! Hook manifest rewriting (JS: tests/skills-cli.test.js "copyProviderHooks:
+//! hook command path resolution (#399)", "hook manifest merge helpers"), in
+//! the launcher generation.
+
+use impeccable_common::jsp;
+use impeccable_skills::hook_manifest::*;
+use impeccable_skills::providers::Sys;
+use serde_json::{json, Value};
+use std::collections::HashMap;
+
+fn claude_bundle_manifest() -> Value {
+    json!({
+        "description": "fresh claude hook",
+        "hooks": {
+            "PostToolUse": [{ "matcher": "Edit", "hooks": [{ "type": "command", "command": "node \".claude/skills/impeccable/scripts/hook.mjs\"" }] }],
+            "Stop": [{ "hooks": [{ "type": "command", "command": "[ ! -f \"${CLAUDE_PROJECT_DIR}/.claude/skills/impeccable/scripts/impeccable\" ] || \"${CLAUDE_PROJECT_DIR}/.claude/skills/impeccable/scripts/impeccable\" hook", "timeout": 30 }] }]
+        }
+    })
+}
+
+/// The launcher path a hook command points at, joined with the host's path
+/// semantics the way `rewrite_hook_commands_for_platform` joins it.
+fn skill_launcher(root: &str, provider: &str) -> String {
+    jsp::join(&[root, provider, "skills", "impeccable", "scripts", "impeccable"])
+}
+
+fn commands(v: &Value) -> Vec<String> {
+    let mut out = Vec::new();
+    fn walk(v: &Value, out: &mut Vec<String>) {
+        match v {
+            Value::Object(o) => {
+                for (k, c) in o {
+                    if (k == "command" || k == "commandWindows") && c.is_string() {
+                        out.push(format!("{k}={}", c.as_str().unwrap()));
+                    } else {
+                        walk(c, out);
+                    }
+                }
+            }
+            Value::Array(a) => a.iter().for_each(|c| walk(c, out)),
+            _ => {}
+        }
+    }
+    walk(v, &mut out);
+    out
+}
+
+#[test]
+fn project_scope_keeps_claude_project_dir_token_and_guard() {
+    let out = rewrite_hook_commands_for_platform(&claude_bundle_manifest(), ".claude", "/proj", false, false);
+    let cmds = commands(&out);
+    assert_eq!(cmds.len(), 2);
+    for c in &cmds {
+        assert_eq!(
+            c,
+            "command=[ ! -f \"${CLAUDE_PROJECT_DIR}/.claude/skills/impeccable/scripts/impeccable\" ] || \"${CLAUDE_PROJECT_DIR}/.claude/skills/impeccable/scripts/impeccable\" hook"
+        );
+        assert!(!c.contains("/proj"));
+        assert!(!c.contains("|| true"));
+        assert!(!c.contains("node "));
+    }
+    // What we write is what every reader recognizes as ours.
+    assert!(value_has_impeccable_hook_marker(&out));
+    // Old-generation input is recognized too (that is how it got rewritten).
+    assert!(value_has_impeccable_hook_marker(&claude_bundle_manifest()));
+}
+
+#[test]
+fn absolute_path_is_single_quoted_and_inert_under_sh() {
+    let root = "/tmp/imp-hook-$(touch pwned)-x";
+    let out = rewrite_hook_commands_for_platform(&claude_bundle_manifest(), ".claude", root, true, false);
+    for c in commands(&out) {
+        // The launcher path is joined with the host's path semantics, so the
+        // expectation is joined the same way (backslashes on Windows).
+        let expected_path = skill_launcher(root, ".claude");
+        assert_eq!(c, format!("command=[ ! -f '{expected_path}' ] || '{expected_path}' hook"));
+        assert!(!c.contains("${CLAUDE_PROJECT_DIR}"));
+        assert!(!c.contains(&format!("\"{root}")));
+    }
+    // A single quote inside the path gets the '\'' escape.
+    assert_eq!(sh_single_quote("/it's/here"), "'/it'\\''s/here'");
+    #[cfg(unix)]
+    {
+        let dir = std::env::temp_dir().join(format!("imp-guard-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        for c in commands(&out) {
+            let cmd = c.trim_start_matches("command=");
+            let status = std::process::Command::new("/bin/sh").arg("-c").arg(cmd).current_dir(&dir).status().unwrap();
+            assert!(status.success());
+        }
+        assert!(!dir.join("pwned").exists());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+}
+
+#[test]
+fn windows_form_keeps_double_quoted_absolute_path() {
+    let root = "/home/u";
+    let out = rewrite_hook_commands_for_platform(&claude_bundle_manifest(), ".claude", root, true, true);
+    for c in commands(&out) {
+        let p = skill_launcher(root, ".claude");
+        // The Windows form is the JSON-quoted path, so a host path's
+        // backslashes arrive escaped inside the command string.
+        let q = serde_json::to_string(&p).unwrap();
+        assert_eq!(c, format!("command=[ ! -f {q} ] || {q} hook"));
+        assert!(!c.contains(&format!("'{p}")));
+    }
+}
+
+#[test]
+fn codex_gets_command_windows_sibling_pointing_at_cmd_shim() {
+    let bundle = json!({
+        "hooks": { "PostToolUse": [{ "matcher": "apply_patch", "hooks": [{ "type": "command", "command": "node \".codex/skills/impeccable/scripts/hook.mjs\"", "timeout": 5 }] }] }
+    });
+    let out = rewrite_hook_commands_for_platform(&bundle, ".agents", "/proj", false, false);
+    let entry = &out["hooks"]["PostToolUse"][0]["hooks"][0];
+    assert_eq!(
+        entry["command"],
+        "[ ! -f \".agents/skills/impeccable/scripts/impeccable\" ] || \".agents/skills/impeccable/scripts/impeccable\" hook"
+    );
+    assert_eq!(
+        entry["commandWindows"],
+        r#"cmd /c if exist ".agents\skills\impeccable\scripts\impeccable.cmd" ".agents\skills\impeccable\scripts\impeccable.cmd" hook"#
+    );
+    // JS key order: existing keys, then the appended commandWindows.
+    let keys: Vec<&String> = entry.as_object().unwrap().keys().collect();
+    assert_eq!(keys, ["type", "command", "timeout", "commandWindows"]);
+    // Windows host: Codex keeps the POSIX command; the sibling handles cmd.exe.
+    let win = rewrite_hook_commands_for_platform(&bundle, ".agents", "/proj", false, true);
+    assert_eq!(win["hooks"]["PostToolUse"][0]["hooks"][0]["command"], entry["command"]);
+    assert!(value_has_impeccable_hook_marker(&out));
+}
+
+#[test]
+fn cursor_runs_the_post_edit_hook() {
+    let bundle = json!({ "version": 1, "hooks": { "postToolUse": [{ "command": "[ ! -f \".cursor/skills/impeccable/scripts/impeccable\" ] || \".cursor/skills/impeccable/scripts/impeccable\" hook", "matcher": "^Write$", "timeout": 5 }] } });
+    let out = rewrite_hook_commands_for_platform(&bundle, ".cursor", "/proj", false, false);
+    assert_eq!(out, bundle);
+    assert!(out["hooks"]["postToolUse"][0].get("commandWindows").is_none());
+}
+
+const CURSOR_POST_EDIT: &str = "[ ! -f \".cursor/skills/impeccable/scripts/impeccable\" ] || \".cursor/skills/impeccable/scripts/impeccable\" hook";
+
+#[test]
+fn repair_moves_the_retired_cursor_gate_in_both_spellings() {
+    for gate in [
+        "[ ! -f \".cursor/skills/impeccable/scripts/impeccable\" ] || \".cursor/skills/impeccable/scripts/impeccable\" hook-before-edit",
+        "node \".cursor/skills/impeccable/scripts/hook-before-edit.mjs\"",
+    ] {
+        let home = tmp_dir("cursor-gate-home").to_string_lossy().to_string();
+        let proj = tmp_dir("cursor-gate-proj").to_string_lossy().to_string();
+        let sys = sys_with_home(&home);
+        let manifest = format!("{proj}/.cursor/hooks.json");
+        write(&manifest, &json!({ "version": 1, "hooks": {
+            "preToolUse": [{ "command": "./audit.sh", "matcher": "Shell" }, { "command": gate, "timeout": 5 }],
+        } }).to_string());
+
+        assert_eq!(repair_stale_hook_manifests(&sys, &proj, &[".cursor"], None).unwrap(), [".cursor"], "{gate}");
+
+        let after: Value = serde_json::from_str(&read(&manifest)).unwrap();
+        assert_eq!(after, json!({ "version": 1, "hooks": {
+            "preToolUse": [{ "command": "./audit.sh", "matcher": "Shell" }],
+            "postToolUse": [{ "command": CURSOR_POST_EDIT, "matcher": "^Write$", "timeout": 5 }],
+        } }), "{gate}");
+        // Idempotent.
+        assert!(repair_stale_hook_manifests(&sys, &proj, &[".cursor"], None).unwrap().is_empty());
+        let _ = std::fs::remove_dir_all(&proj);
+        let _ = std::fs::remove_dir_all(&home);
+    }
+}
+
+#[test]
+fn install_from_an_older_bundle_never_runs_the_post_edit_verb_before_the_edit() {
+    let dir = tmp_dir("cursor-old-bundle");
+    let root = dir.to_string_lossy().into_owned();
+    let bundle = jsp::join(&[&root, "bundle"]);
+    let project = jsp::join(&[&root, "project"]);
+    write(&jsp::join(&[&bundle, ".cursor", "hooks.json"]), &json!({ "version": 1, "hooks": { "preToolUse": [{
+        "command": "[ ! -f \".cursor/skills/impeccable/scripts/impeccable\" ] || \".cursor/skills/impeccable/scripts/impeccable\" hook-before-edit",
+        "timeout": 5,
+    }] } }).to_string());
+    let sys = sys_with_home("/nonexistent-home");
+
+    copy_provider_hooks(&sys, &bundle, &project, &[".cursor"], false, None, None).unwrap();
+
+    let after: Value = serde_json::from_str(&read(&jsp::join(&[&project, ".cursor", "hooks.json"]))).unwrap();
+    assert_eq!(after, json!({ "version": 1, "hooks": {
+        "postToolUse": [{ "command": CURSOR_POST_EDIT, "matcher": "^Write$", "timeout": 5 }],
+    } }));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+const GITHUB_PORTABLE: &str = "[ ! -f \"$(git rev-parse --show-toplevel)/.github/skills/impeccable/scripts/impeccable\" ] || \"$(git rev-parse --show-toplevel)/.github/skills/impeccable/scripts/impeccable\" hook";
+
+fn github_bundle_manifest() -> Value {
+    json!({ "version": 1, "hooks": { "postToolUse": [{ "type": "command", "matcher": "edit|create|apply_patch", "bash": GITHUB_PORTABLE, "timeoutSec": 5 }] } })
+}
+
+#[test]
+fn github_project_manifest_stays_portable_and_global_install_uses_home() {
+    // Project installs keep the committed `$(git rev-parse ...)` form.
+    let bundle = json!({ "version": 1, "hooks": { "postToolUse": [{ "type": "command", "bash": "[ ! -f \"$(git rev-parse --show-toplevel)/.github/skills/impeccable/scripts/impeccable\" ] || \"$(git rev-parse --show-toplevel)/.github/skills/impeccable/scripts/impeccable\" hook" }] } });
+    assert_eq!(rewrite_hook_commands_for_platform(&bundle, ".github", "/proj", false, false), bundle);
+    // A global install still writes the manifest into the project, so its
+    // launcher must resolve from the user profile instead of the repository.
+    let global = rewrite_hook_commands_for_platform(&bundle, ".github", "/home/u", true, false);
+    assert_eq!(
+        global["hooks"]["postToolUse"][0]["bash"],
+        "[ ! -f \"$HOME/.github/skills/impeccable/scripts/impeccable\" ] || \"$HOME/.github/skills/impeccable/scripts/impeccable\" hook"
+    );
+    let windows = rewrite_hook_commands_for_platform(&bundle, ".github", r"C:\Users\u", true, true);
+    assert_eq!(
+        windows["hooks"]["postToolUse"][0]["bash"],
+        "[ ! -f 'C:/Users/u/.github/skills/impeccable/scripts/impeccable' ] || 'C:/Users/u/.github/skills/impeccable/scripts/impeccable' hook"
+    );
+    assert!(!windows["hooks"]["postToolUse"][0]["bash"].as_str().unwrap().contains("$HOME"));
+    assert!(value_has_impeccable_hook_marker(&bundle));
+}
+
+#[test]
+fn grok_manifest_is_rewritten() {
+    // .grok is rewritten like the other command-hook providers (upstream
+    // 49571365, #642): a global install must not leave the bundled
+    // project-relative path behind.
+    let grok = json!({ "hooks": { "PostToolUse": [{ "matcher": "Edit|Write|MultiEdit", "hooks": [{ "type": "command", "command": "node \".grok/skills/impeccable/scripts/hook.mjs\"" }] }] } });
+    let rel = rewrite_hook_commands_for_platform(&grok, ".grok", "/proj", false, false);
+    assert_eq!(
+        rel["hooks"]["PostToolUse"][0]["hooks"][0]["command"],
+        "[ ! -f \".grok/skills/impeccable/scripts/impeccable\" ] || \".grok/skills/impeccable/scripts/impeccable\" hook"
+    );
+    let abs = rewrite_hook_commands_for_platform(&grok, ".grok", "/home/u", true, false);
+    let p = skill_launcher("/home/u", ".grok");
+    assert_eq!(
+        abs["hooks"]["PostToolUse"][0]["hooks"][0]["command"],
+        serde_json::Value::String(format!("[ ! -f '{p}' ] || '{p}' hook"))
+    );
+    // Grok is not Codex: no commandWindows sibling is added.
+    assert!(rel["hooks"]["PostToolUse"][0]["hooks"][0].get("commandWindows").is_none());
+    // Grok has no per-OS field and runs `command` in the session shell
+    // (PowerShell by default on Windows), so a Windows install writes the
+    // `cmd /c` form into `command` itself (#859).
+    let win_rel = rewrite_hook_commands_for_platform(&grok, ".grok", "/proj", false, true);
+    assert_eq!(
+        win_rel["hooks"]["PostToolUse"][0]["hooks"][0]["command"],
+        r#"cmd /c if exist ".grok\skills\impeccable\scripts\impeccable.cmd" ".grok\skills\impeccable\scripts\impeccable.cmd" hook"#
+    );
+    assert!(win_rel["hooks"]["PostToolUse"][0]["hooks"][0].get("commandWindows").is_none());
+    assert!(value_has_impeccable_hook_marker(&win_rel));
+    let win_abs = rewrite_hook_commands_for_platform(&grok, ".grok", "/home/u", true, true);
+    let w = format!("{}.cmd", p.replace('/', "\\"));
+    assert_eq!(
+        win_abs["hooks"]["PostToolUse"][0]["hooks"][0]["command"],
+        serde_json::Value::String(format!("cmd /c if exist \"{w}\" \"{w}\" hook"))
+    );
+}
+
+#[test]
+fn antigravity_named_hook_manifest_merges_and_preserves_other_hooks() {
+    let existing = json!({
+        "other-hook": {
+            "PostToolUse": [{ "matcher": "run_command", "hooks": [{ "type": "command", "command": "./lint.sh" }] }]
+        },
+        "impeccable": {
+            "PostToolUse": [{ "matcher": "edit_file", "hooks": [{ "type": "command", "command": "\"../.agent/skills/impeccable/scripts/impeccable\" hook" }] }]
+        }
+    });
+    let fresh = json!({
+        "impeccable": {
+            "PostToolUse": [{ "matcher": "write_file|edit_file", "hooks": [{ "type": "command", "command": "new" }] }],
+            "Stop": [{ "type": "command", "command": "new" }]
+        }
+    });
+    let merged = merge_hook_manifests(&existing, &fresh);
+    assert!(merged.get("hooks").is_none());
+    assert!(merged.get("other-hook").is_some());
+    assert_eq!(merged["impeccable"]["PostToolUse"][0]["hooks"][0]["command"], "new");
+    assert_eq!(merged["impeccable"]["Stop"][0]["command"], "new");
+}
+
+/// Pipes the probe event to a hook shell and returns its exit code. A shell
+/// that kept stdin from the shim would leave it reading forever. The bound only
+/// has to tell that from a slow start: Windows PowerShell has taken over 30 s
+/// to start on a cold runner.
+#[cfg(windows)]
+fn probe_and_wait(mut child: std::process::Child, at: &str) -> Option<i32> {
+    use std::io::Write;
+    let _ = child.stdin.take().unwrap().write_all(b"{\"probe\":1}\n");
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(120);
+    loop {
+        if let Some(status) = child.try_wait().unwrap() {
+            return status.code();
+        }
+        if std::time::Instant::now() > deadline {
+            let _ = child.kill();
+            panic!("timed out: {at}");
+        }
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+}
+
+/// The Windows form only counts if the shells the harnesses hand it to run it
+/// (#848, #859), so spawn it the way they do: PowerShell 5.1 and 7 with
+/// `-Command` (Grok, Codex), Git Bash with MSYS path conversion off (Grok),
+/// and cmd.exe behind Codex's raw `/C "<line>"` fallback. The stub shim saves
+/// the event piped to it and exits 3. It runs only on a Windows host.
+#[cfg(windows)]
+#[test]
+fn windows_form_runs_the_shim_in_each_harness_shell() {
+    use std::os::windows::process::CommandExt;
+    use std::process::{Command, Stdio};
+
+    struct Shell {
+        name: &'static str,
+        spawn: fn(&str) -> Command,
+        /// pwsh and Git Bash are not on every Windows host; CI has both, so
+        /// a missing one fails there instead of skipping.
+        optional: bool,
+        /// What a shim exiting 3 comes back as; `None` where the shell never
+        /// reaches the shim.
+        exit: Option<i32>,
+    }
+    fn powershell(program: &str, line: &str) -> Command {
+        let mut c = Command::new(program);
+        c.args(["-NoProfile", "-NonInteractive", "-Command", line]);
+        c
+    }
+    let shells = [
+        // `-Command` reports any native failure as 1.
+        Shell { name: "powershell", spawn: |line| powershell("powershell.exe", line), optional: false, exit: Some(1) },
+        Shell { name: "pwsh", spawn: |line| powershell("pwsh", line), optional: true, exit: Some(1) },
+        Shell {
+            name: "git-bash",
+            spawn: |line| {
+                let mut c = Command::new("C:\\Program Files\\Git\\bin\\bash.exe");
+                c.args(["-c", line]).env("MSYS_NO_PATHCONV", "1").env("MSYS2_ARG_CONV_EXCL", "*");
+                c
+            },
+            optional: true,
+            exit: Some(3),
+        },
+        Shell {
+            name: "cmd (Codex fallback)",
+            spawn: |line| {
+                let mut c = Command::new("cmd.exe");
+                c.arg("/C").raw_arg(format!("\"{line}\""));
+                c
+            },
+            optional: false,
+            exit: Some(3),
+        },
+        // `GROK_SHELL=cmd`: Grok passes the line as a plain argument, so its
+        // quotes reach cmd.exe as `\"` and the guard never finds the shim.
+        Shell {
+            name: "cmd (GROK_SHELL=cmd)",
+            spawn: |line| {
+                let mut c = Command::new("cmd");
+                c.args(["/C", line]);
+                c
+            },
+            optional: false,
+            exit: None,
+        },
+    ];
+
+    // A space in the install root, which the absolute form has to survive.
+    let root = std::env::temp_dir().join(format!("imp hook {}", std::process::id()));
+    let scripts = root.join(".grok").join("skills").join("impeccable").join("scripts");
+    let seen = scripts.join("seen-hook.txt");
+    std::fs::create_dir_all(&root).unwrap();
+    let bundle = json!({ "hooks": { "Stop": [{ "hooks": [{ "type": "command", "command": "\".grok/skills/impeccable/scripts/impeccable\" hook" }] }] } });
+    for present in [false, true] {
+        if present {
+            std::fs::create_dir_all(&scripts).unwrap();
+            std::fs::write(scripts.join("impeccable.cmd"), "@echo off\r\nfindstr \"^\" > \"%~dp0seen-%1.txt\"\r\nexit /b 3\r\n").unwrap();
+        }
+        for absolute in [false, true] {
+            let out = rewrite_hook_commands_for_platform(&bundle, ".grok", root.to_str().unwrap(), absolute, true);
+            let line = out["hooks"]["Stop"][0]["hooks"][0]["command"].as_str().unwrap();
+            for shell in &shells {
+                let _ = std::fs::remove_file(&seen);
+                let at = format!("{} absolute={absolute} present={present}: {line}", shell.name);
+                let spawned = (shell.spawn)(line).current_dir(&root).stdin(Stdio::piped()).stdout(Stdio::null()).stderr(Stdio::null()).spawn();
+                let child = match spawned {
+                    Ok(child) => child,
+                    Err(_) if shell.optional && std::env::var_os("CI").is_none() => continue,
+                    Err(e) => panic!("{at}: {e}"),
+                };
+                let code = probe_and_wait(child, &at);
+                if present && shell.exit.is_some() {
+                    assert_eq!(std::fs::read_to_string(&seen).unwrap_or_default().trim(), "{\"probe\":1}", "{at}");
+                    assert_eq!(code, shell.exit, "{at}");
+                } else {
+                    assert!(!seen.exists(), "{at}");
+                    // A missing shim is a silent no-op wherever the form works.
+                    assert!(shell.exit.is_none() || code == Some(0), "{at}: {code:?}");
+                }
+            }
+        }
+    }
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// VS Code Copilot Chat loads `plugin/hooks/hooks.json` and, on Windows, takes
+/// each handler's `windows` string over `command` (#1249). Apply its
+/// `${CLAUDE_PLUGIN_ROOT}` substitution (a plain replace, or a single-quoted path
+/// when the root has a space) and run the tracked line the way each of its
+/// runners does: PowerShell in the Copilot extension's HookExecutor, and
+/// `cmd.exe /c` with escaped arguments in the agent host.
+#[cfg(windows)]
+#[test]
+fn plugin_windows_form_runs_under_vscode_hook_runners() {
+    use std::process::{Command, Stdio};
+
+    fn hook_executor(line: &str) -> Command {
+        let mut c = Command::new("powershell.exe");
+        c.args(["-ExecutionPolicy", "Bypass", "-NoProfile", "-NoLogo", "-Command", line]);
+        c
+    }
+    fn agent_host(line: &str) -> Command {
+        let mut c = Command::new("cmd.exe");
+        c.args(["/c", line]);
+        c
+    }
+    let runners: [(&str, fn(&str) -> Command); 2] = [("HookExecutor", hook_executor), ("agent host", agent_host)];
+
+    let manifest: Value = serde_json::from_str(
+        &std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../../plugin/hooks/hooks.json")).unwrap(),
+    )
+    .unwrap();
+    let template = manifest["hooks"]["Stop"][0]["hooks"][0]["windows"].as_str().unwrap();
+    let token = "${CLAUDE_PLUGIN_ROOT}";
+    // Not temp_dir(): a CI runner's is 8.3-shortened, and VS Code quotes a `~`.
+    let base = std::path::Path::new(env!("CARGO_TARGET_TMPDIR"));
+    for dir in ["imp-vscode-", "imp vscode "] {
+        let root = base.join(format!("{dir}{}", std::process::id()));
+        let root_str = root.to_str().unwrap();
+        let quoted = !root_str.chars().all(|c| c.is_ascii_alphanumeric() || "_./\\:-".contains(c));
+        if dir == "imp-vscode-" && quoted {
+            eprintln!("skipping the bare-path case: {root_str} is not space-free");
+            continue;
+        }
+        let line = if !quoted {
+            template.replace(token, root_str)
+        } else {
+            template
+                .split(' ')
+                .map(|word| if word.starts_with(token) { format!("'{}'", word.replace(token, root_str)) } else { word.to_string() })
+                .collect::<Vec<_>>()
+                .join(" ")
+        };
+        let scripts = root.join("skills").join("impeccable").join("scripts");
+        let seen = scripts.join("seen-hook.txt");
+        std::fs::create_dir_all(&root).unwrap();
+        for present in [false, true] {
+            if present {
+                std::fs::create_dir_all(&scripts).unwrap();
+                std::fs::write(scripts.join("impeccable.cmd"), "@echo off\r\nfindstr \"^\" > \"%~dp0seen-%1.txt\"\r\nexit /b 0\r\n").unwrap();
+            }
+            for (runner, spawn) in &runners {
+                let _ = std::fs::remove_file(&seen);
+                let at = format!("{runner} present={present}: {line}");
+                let child = spawn(&line)
+                    .stdin(Stdio::piped())
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null())
+                    .spawn()
+                    .unwrap_or_else(|e| panic!("{at}: {e}"));
+                let code = probe_and_wait(child, &at);
+                // cmd.exe does not read single quotes, so a root VS Code has to quote
+                // stays out of this runner's reach: a known gap, not a hang.
+                if quoted && *runner == "agent host" {
+                    assert!(!seen.exists(), "{at}");
+                    continue;
+                }
+                assert_eq!(code, Some(0), "{at}");
+                if present {
+                    assert_eq!(std::fs::read_to_string(&seen).unwrap_or_default().trim(), "{\"probe\":1}", "{at}");
+                } else {
+                    assert!(!seen.exists(), "{at}");
+                }
+            }
+        }
+        let _ = std::fs::remove_dir_all(&root);
+    }
+}
+
+#[test]
+fn merge_refreshes_ours_and_preserves_third_party_hooks() {
+    let existing = json!({
+        "permissions": { "allow": ["x"] },
+        "description": "old",
+        "hooks": {
+            "PostToolUse": [
+                { "matcher": "Bash", "hooks": [{ "type": "command", "command": "echo hi" }] },
+                { "matcher": "Edit", "hooks": [{ "type": "command", "command": "[ ! -f \"${CLAUDE_PROJECT_DIR}/.claude/skills/impeccable/scripts/hook.mjs\" ] || node \"${CLAUDE_PROJECT_DIR}/.claude/skills/impeccable/scripts/hook.mjs\"" }] }
+            ],
+            "Stop": [{ "hooks": [{ "type": "command", "command": "\".claude/skills/impeccable/scripts/impeccable\" hook" }] }]
+        }
+    });
+    let fresh = rewrite_hook_commands_for_platform(&claude_bundle_manifest(), ".claude", "/proj", false, false);
+    let merged = merge_hook_manifests(&existing, &fresh);
+    let keys: Vec<&String> = merged.as_object().unwrap().keys().collect();
+    assert_eq!(keys, ["permissions", "description", "hooks"]);
+    assert_eq!(merged["description"], "fresh claude hook");
+    let post = merged["hooks"]["PostToolUse"].as_array().unwrap();
+    assert_eq!(post.len(), 2);
+    assert_eq!(post[0]["matcher"], "Bash");
+    assert!(post[1]["hooks"][0]["command"].as_str().unwrap().contains("scripts/impeccable\" hook"));
+    let stop = merged["hooks"]["Stop"].as_array().unwrap();
+    assert_eq!(stop.len(), 1);
+    assert!(stop[0]["hooks"][0]["command"].as_str().unwrap().starts_with("[ ! -f "));
+}
+
+#[test]
+fn prune_removes_only_ours_and_drops_empty_scaffolding() {
+    let dir = std::env::temp_dir().join(format!("imp-prune-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("settings.local.json");
+    let p = path.to_string_lossy().to_string();
+    std::fs::write(&path, serde_json::to_string_pretty(&json!({
+        "other": 1,
+        "hooks": { "Stop": [{ "hooks": [{ "type": "command", "command": "\".claude/skills/impeccable/scripts/impeccable\" hook" }] }] }
+    })).unwrap()).unwrap();
+    assert!(file_has_impeccable_hook_marker(&p));
+    assert!(prune_impeccable_hook_from_manifest(&p).unwrap());
+    let after: Value = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    assert_eq!(after, json!({ "other": 1 }));
+    assert!(!prune_impeccable_hook_from_manifest(&p).unwrap());
+    // A permissions entry naming the hook path is not a hook.
+    std::fs::write(&path, r#"{"permissions":{"allow":["Bash(.claude/skills/impeccable/scripts/impeccable hook)"]}}"#).unwrap();
+    assert!(!file_has_impeccable_hook_marker(&p));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+// ─── E8: stale-hook self-heal on upgrade ─────────────────────────────────────
+
+fn write(path: &str, content: &str) {
+    let p = std::path::Path::new(path);
+    std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+    std::fs::write(p, content).unwrap();
+}
+
+fn read(path: &str) -> String {
+    std::fs::read_to_string(path).unwrap_or_else(|e| panic!("read {path}: {e}"))
+}
+
+fn tmp_dir(name: &str) -> std::path::PathBuf {
+    let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
+    let dir = std::env::temp_dir().join(format!("imp-{name}-{}-{nanos}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    dir
+}
+
+fn sys_with_home(home: &str) -> Sys {
+    let mut env = HashMap::new();
+    env.insert("HOME".to_string(), home.to_string());
+    Sys::new(env, home.to_string())
+}
+
+#[test]
+fn manifest_has_stale_hook_distinguishes_generations() {
+    let dir = tmp_dir("stale-detect");
+    let stale = dir.join("stale.json");
+    std::fs::write(&stale, serde_json::to_string_pretty(&json!({
+        "hooks": { "PostToolUse": [{ "matcher": "Edit", "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PROJECT_DIR}/.claude/skills/impeccable/scripts/hook.mjs\"" }] }] }
+    })).unwrap()).unwrap();
+    assert!(manifest_has_stale_hook(&stale.to_string_lossy()));
+
+    let launcher = dir.join("launcher.json");
+    std::fs::write(&launcher, serde_json::to_string_pretty(&json!({
+        "hooks": { "PostToolUse": [{ "matcher": "Edit", "hooks": [{ "type": "command", "command": "\".claude/skills/impeccable/scripts/impeccable\" hook" }] }] }
+    })).unwrap()).unwrap();
+    assert!(!manifest_has_stale_hook(&launcher.to_string_lossy()));
+
+    // A manifest that already names the launcher alongside a legacy sibling is
+    // repaired, not stale.
+    let mixed = dir.join("mixed.json");
+    std::fs::write(&mixed, serde_json::to_string_pretty(&json!({
+        "hooks": {
+            "PostToolUse": [{ "hooks": [{ "type": "command", "command": "\".claude/skills/impeccable/scripts/impeccable\" hook" }] }],
+            "Stop": [{ "hooks": [{ "type": "command", "command": "node .claude/skills/impeccable/scripts/hook.mjs" }] }]
+        }
+    })).unwrap()).unwrap();
+    assert!(!manifest_has_stale_hook(&mixed.to_string_lossy()));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn repair_rewrites_stale_mjs_manifest_to_launcher_form() {
+    let home = tmp_dir("repair-home");
+    let home = home.to_string_lossy().to_string();
+    let proj = tmp_dir("repair-proj");
+    let proj = proj.to_string_lossy().to_string();
+    let sys = sys_with_home(&home);
+
+    // A v3-era Claude manifest naming the retired `.mjs` script, plus a
+    // non-Impeccable hook that must be preserved untouched.
+    let manifest = format!("{proj}/.claude/settings.local.json");
+    write(&manifest, &serde_json::to_string_pretty(&json!({
+        "other": true,
+        "hooks": {
+            "PostToolUse": [
+                { "matcher": "Bash", "hooks": [{ "type": "command", "command": "echo keep-me" }] },
+                { "matcher": "Edit", "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PROJECT_DIR}/.claude/skills/impeccable/scripts/hook.mjs\"" }] }
+            ]
+        }
+    })).unwrap());
+
+    let repaired = repair_stale_hook_manifests(&sys, &proj, &[".claude"], None).unwrap();
+    assert_eq!(repaired, [".claude"]);
+
+    let after: Value = serde_json::from_str(&read(&manifest)).unwrap();
+    assert_eq!(after["other"], json!(true));
+    let post = after["hooks"]["PostToolUse"].as_array().unwrap();
+    assert_eq!(post[0]["hooks"][0]["command"], "echo keep-me");
+    let repaired_cmd = post[1]["hooks"][0]["command"].as_str().unwrap();
+    assert_eq!(
+        repaired_cmd,
+        "[ ! -f \"${CLAUDE_PROJECT_DIR}/.claude/skills/impeccable/scripts/impeccable\" ] || \"${CLAUDE_PROJECT_DIR}/.claude/skills/impeccable/scripts/impeccable\" hook"
+    );
+    assert!(!repaired_cmd.contains("hook.mjs"));
+    assert!(!repaired_cmd.contains("node "));
+
+    // Idempotent: a second pass sees a launcher-form manifest and changes nothing.
+    let before = read(&manifest);
+    let repaired2 = repair_stale_hook_manifests(&sys, &proj, &[".claude"], None).unwrap();
+    assert!(repaired2.is_empty());
+    assert_eq!(read(&manifest), before);
+
+    let _ = std::fs::remove_dir_all(&proj);
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+#[test]
+fn repair_leaves_dirs_without_an_impeccable_marker_alone() {
+    let home = tmp_dir("repair2-home");
+    let home = home.to_string_lossy().to_string();
+    let proj = tmp_dir("repair2-proj");
+    let proj = proj.to_string_lossy().to_string();
+    let sys = sys_with_home(&home);
+
+    // A manifest with only a foreign hook: repair must never add ours.
+    let manifest = format!("{proj}/.claude/settings.local.json");
+    write(&manifest, &serde_json::to_string_pretty(&json!({
+        "hooks": { "PostToolUse": [{ "hooks": [{ "type": "command", "command": "echo unrelated" }] }] }
+    })).unwrap());
+    let before = read(&manifest);
+    let repaired = repair_stale_hook_manifests(&sys, &proj, &[".claude"], None).unwrap();
+    assert!(repaired.is_empty());
+    assert_eq!(read(&manifest), before);
+    let _ = std::fs::remove_dir_all(&proj);
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+#[test]
+fn hook_artifacts_map_providers_to_manifest_files() {
+    let dests = expected_hook_dests("/p", &[".claude", ".agents", ".cursor", ".github", ".grok", ".gemini"]);
+    // Manifest destinations are joined with the host's path semantics, so the
+    // expectations are joined the same way (backslashes on Windows).
+    assert_eq!(dests, [
+        jsp::join(&["/p", ".claude", "settings.local.json"]),
+        jsp::join(&["/p", ".codex", "hooks.json"]),
+        jsp::join(&["/p", ".cursor", "hooks.json"]),
+        jsp::join(&["/p", ".github", "hooks", "impeccable.json"]),
+        jsp::join(&["/p", ".grok", "hooks", "impeccable.json"]),
+        jsp::join(&["/p", ".gemini", "settings.json"]),
+    ]);
+    let a = hook_artifacts_for_provider("/b", "/p", ".claude");
+    assert_eq!(a[0].src, jsp::join(&["/b", ".claude", "settings.json"]));
+    assert_eq!(a[0].dest, jsp::join(&["/p", ".claude", "settings.local.json"]));
+    assert_eq!(a[0].shared_dest.as_deref(), Some(jsp::join(&["/p", ".claude", "settings.json"]).as_str()));
+    let c = hook_artifacts_for_provider("/b", "/p", ".agents");
+    assert_eq!(c[0].src, jsp::join(&["/b", ".codex", "hooks.json"]));
+    assert_eq!(c[0].dest, jsp::join(&["/p", ".codex", "hooks.json"]));
+    assert!(c[0].shared_dest.is_none());
+}
+
+fn windows_user_scope_hook_command() -> String {
+    let launcher = r"C:\Users\alice\.claude\skills\impeccable\scripts\impeccable";
+    let q = json_string(launcher);
+    format!("[ ! -f {q} ] || {q} hook")
+}
+
+#[test]
+fn merge_json_escaped_windows_launcher_is_idempotent() {
+    let cmd = windows_user_scope_hook_command();
+    let hook_entry = |cmd: String| {
+        json!({ "matcher": "Edit", "hooks": [{ "type": "command", "command": cmd }] })
+    };
+    let stop_entry = |cmd: String| {
+        json!({ "hooks": [{ "type": "command", "command": cmd, "timeout": 30 }] })
+    };
+    let existing = json!({
+        "hooks": {
+            "PostToolUse": [hook_entry(cmd.clone())],
+            "Stop": [stop_entry(cmd.clone())]
+        }
+    });
+    let fresh = json!({
+        "description": "fresh",
+        "hooks": {
+            "PostToolUse": [hook_entry(cmd.clone())],
+            "Stop": [stop_entry(cmd.clone())]
+        }
+    });
+    let merged = merge_hook_manifests(&existing, &fresh);
+    assert_eq!(merged["hooks"]["PostToolUse"].as_array().unwrap().len(), 1);
+    assert_eq!(merged["hooks"]["Stop"].as_array().unwrap().len(), 1);
+    let merged2 = merge_hook_manifests(&merged, &fresh);
+    assert_eq!(merged2["hooks"]["PostToolUse"].as_array().unwrap().len(), 1);
+    assert_eq!(merged2["hooks"]["Stop"].as_array().unwrap().len(), 1);
+}
+
+#[test]
+fn merge_heals_triplicated_stop_groups() {
+    let cmd = windows_user_scope_hook_command();
+    let stop_entry = json!({ "hooks": [{ "type": "command", "command": cmd.clone(), "timeout": 30 }] });
+    let existing = json!({
+        "hooks": {
+            "Stop": [stop_entry.clone(), stop_entry.clone(), stop_entry]
+        }
+    });
+    let fresh = json!({
+        "hooks": {
+            "Stop": [json!({ "hooks": [{ "type": "command", "command": cmd, "timeout": 30 }] })]
+        }
+    });
+    let merged = merge_hook_manifests(&existing, &fresh);
+    assert_eq!(merged["hooks"]["Stop"].as_array().unwrap().len(), 1);
+}
+
+#[test]
+fn gemini_manifest_installs_and_rewrites_both_events() {
+    let artifacts = hook_artifacts_for_provider("/bundle", "/project", ".gemini");
+    assert_eq!(artifacts.len(), 1);
+    assert_eq!(artifacts[0].src, jsp::join(&["/bundle", ".gemini", "settings.json"]));
+    assert_eq!(artifacts[0].dest, jsp::join(&["/project", ".gemini", "settings.json"]));
+    let manifest = json!({"hooks": {
+        "BeforeTool": [{"matcher": "^run_shell_command$", "hooks": [{"type": "command", "command": "[ ! -f \"$GEMINI_PROJECT_DIR/.gemini/skills/impeccable/scripts/impeccable\" ] || \"$GEMINI_PROJECT_DIR/.gemini/skills/impeccable/scripts/impeccable\" hook", "timeout": 5000}]}],
+        "AfterAgent": [{"hooks": [{"type": "command", "command": "\"$GEMINI_PROJECT_DIR/.gemini/skills/impeccable/scripts/impeccable\" hook", "timeout": 30000}]}]
+    }});
+    for absolute in [false, true] {
+        let rewritten = rewrite_hook_commands_for_platform(&manifest, ".gemini", "/installed", absolute, false);
+        // Gemini substitutes `$GEMINI_PROJECT_DIR` textually with a
+        // shell-escaped path before the shell runs, so the token stays bare.
+        let expected = if absolute { format!("'{}'", jsp::join(&["/installed", ".gemini", "skills", "impeccable", "scripts", "impeccable"])) }
+            else { "$GEMINI_PROJECT_DIR/.gemini/skills/impeccable/scripts/impeccable".to_string() };
+        for command in commands(&rewritten) { assert_eq!(command, format!("command=[ ! -f {expected} ] || {expected} hook")); }
+        assert_eq!(rewritten["hooks"]["AfterAgent"][0]["hooks"][0]["timeout"], 30000);
+        assert!(rewritten["hooks"].get("AfterTool").is_none());
+    }
+}
+
+#[test]
+fn gemini_windows_command_is_powershell() {
+    // Gemini runs hooks through PowerShell on Windows and has no per-OS
+    // command field, so a Windows install writes a PowerShell guard around
+    // the `.cmd` shim, still recognized as ours.
+    let manifest = json!({"hooks": {"AfterAgent": [{"hooks": [{"type": "command",
+        "command": "\"$GEMINI_PROJECT_DIR/.gemini/skills/impeccable/scripts/impeccable\" hook"}]}]}});
+    let rel = rewrite_hook_commands_for_platform(&manifest, ".gemini", "C:/p", false, true);
+    let cmd = rel["hooks"]["AfterAgent"][0]["hooks"][0]["command"].as_str().unwrap().to_string();
+    assert_eq!(cmd, "if (Test-Path -LiteralPath \"$env:GEMINI_PROJECT_DIR/.gemini/skills/impeccable/scripts/impeccable.cmd\") { & \"$env:GEMINI_PROJECT_DIR/.gemini/skills/impeccable/scripts/impeccable.cmd\" hook }");
+    assert!(value_has_launcher_hook_marker(&Value::String(cmd)));
+    let abs = rewrite_hook_commands_for_platform(&manifest, ".gemini", "C:/Users/o'k", true, true);
+    let cmd = abs["hooks"]["AfterAgent"][0]["hooks"][0]["command"].as_str().unwrap().to_string();
+    let shim = jsp::join(&["C:/Users/o''k", ".gemini", "skills", "impeccable", "scripts", "impeccable.cmd"]);
+    assert_eq!(cmd, format!("if (Test-Path -LiteralPath '{shim}') {{ & '{shim}' hook }}"));
+    assert!(value_has_launcher_hook_marker(&Value::String(cmd)));
+}
+
+#[test]
+fn gemini_install_merges_into_commented_settings_and_force_never_wipes() {
+    let dir = tmp_dir("gemini-jsonc");
+    let root = dir.to_string_lossy().into_owned();
+    let bundle = jsp::join(&[&root, "bundle"]);
+    let project = jsp::join(&[&root, "project"]);
+    write(&jsp::join(&[&bundle, ".gemini", "settings.json"]), &json!({"hooks": {"AfterAgent": [{"hooks": [{"type": "command",
+        "command": "[ ! -f \"$GEMINI_PROJECT_DIR/.gemini/skills/impeccable/scripts/impeccable\" ] || \"$GEMINI_PROJECT_DIR/.gemini/skills/impeccable/scripts/impeccable\" hook"}]}]}}).to_string());
+    let settings = jsp::join(&[&project, ".gemini", "settings.json"]);
+    let original = "{\n  // pick a model\n  \"model\": {\"name\": \"gemini-3-pro\"},\n  /* MCP */ \"mcpServers\": {\"x\": {\"url\": \"http://a//b\"}}\n}\n";
+    write(&settings, original);
+    let sys = sys_with_home("/nonexistent-home");
+    copy_provider_hooks(&sys, &bundle, &project, &[".gemini"], false, None, None).unwrap();
+    let merged: Value = serde_json::from_str(&read(&settings)).unwrap();
+    assert_eq!(merged["model"]["name"], "gemini-3-pro");
+    assert_eq!(merged["mcpServers"]["x"]["url"], "http://a//b");
+    assert!(merged["hooks"]["AfterAgent"].is_array());
+    assert_eq!(read(&format!("{settings}.bak")), original);
+    // Truly malformed: refused without --force, and --force never replaces
+    // the user's whole settings file with a hooks-only manifest.
+    write(&settings, "{ \"model\": ");
+    assert!(copy_provider_hooks(&sys, &bundle, &project, &[".gemini"], false, None, None).is_err());
+    assert!(copy_provider_hooks(&sys, &bundle, &project, &[".gemini"], true, None, None).is_err());
+    assert_eq!(read(&settings), "{ \"model\": ");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn user_scope_keeps_project_hook_when_bundle_has_no_replacement() {
+    let dir = tmp_dir("claude-user-hook-missing-bundle-manifest");
+    let root = dir.to_string_lossy().into_owned();
+    let bundle = jsp::join(&[&root, "bundle"]);
+    let home = jsp::join(&[&root, "home"]);
+    let project = jsp::join(&[&root, "project"]);
+    let project_manifest = jsp::join(&[&project, ".claude", "settings.local.json"]);
+    write(
+        &project_manifest,
+        r#"{"hooks":{"PostToolUse":[{"hooks":[{"type":"command","command":"\"${CLAUDE_PROJECT_DIR}/.claude/skills/impeccable/scripts/impeccable\" hook"}]}]}}"#,
+    );
+    let sys = sys_with_home(&home);
+
+    let written = copy_provider_hooks(
+        &sys,
+        &bundle,
+        &project,
+        &[".claude"],
+        false,
+        Some(&home),
+        Some(&project),
+    )
+    .unwrap();
+
+    assert!(written.is_empty());
+    assert!(std::path::Path::new(&project_manifest).exists());
+    assert!(!std::path::Path::new(&jsp::join(&[&home, ".claude", "settings.json"])).exists());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn user_scope_install_reports_each_manifest_path_it_wrote() {
+    // #1190: a global install writes the Claude, Codex and Grok hooks under
+    // home and reports each manifest path it wrote.
+    let dir = tmp_dir("user-scope-hook-paths");
+    let root = dir.to_string_lossy().into_owned();
+    let bundle = jsp::join(&[&root, "bundle"]);
+    let home = jsp::join(&[&root, "home"]);
+    let project = jsp::join(&[&root, "project"]);
+    write(&jsp::join(&[&bundle, ".claude", "settings.json"]), &claude_bundle_manifest().to_string());
+    write(&jsp::join(&[&bundle, ".codex", "hooks.json"]), &claude_bundle_manifest().to_string());
+    write(&jsp::join(&[&bundle, ".grok", "hooks", "impeccable.json"]), &claude_bundle_manifest().to_string());
+    std::fs::create_dir_all(&project).unwrap();
+    let sys = home_sys(&home, &home, &[]);
+
+    let written = copy_provider_hooks(&sys, &bundle, &project, &[".claude", ".agents", ".grok"], false, Some(&home), Some(&project)).unwrap();
+
+    assert_eq!(
+        written,
+        [
+            jsp::join(&[&home, ".claude", "settings.json"]),
+            jsp::join(&[&home, ".codex", "hooks.json"]),
+            jsp::join(&[&home, ".grok", "hooks", "impeccable.json"]),
+        ]
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+// ─── #1190: global installs put Codex, Cursor and Grok hooks under home ─────
+
+/// A `Sys` whose home is `home` on every platform, running in `cwd`.
+fn home_sys(home: &str, cwd: &str, extra: &[(&str, &str)]) -> Sys {
+    let mut env = HashMap::new();
+    env.insert("HOME".to_string(), home.to_string());
+    env.insert("USERPROFILE".to_string(), home.to_string());
+    for (k, v) in extra {
+        env.insert(k.to_string(), v.to_string());
+    }
+    Sys::new(env, cwd.to_string())
+}
+
+/// The shipped bundle manifests (the current wiring for each provider).
+fn write_current_bundle(bundle: &str, providers: &[&str]) {
+    for target in impeccable_context::hook_wiring::HOOK_MANIFEST_TARGETS {
+        if !providers.contains(&target.provider) {
+            continue;
+        }
+        let spec = &provider_hook_artifacts(target.provider)[0];
+        write(&jsp::join(&[bundle, spec.source_provider, spec.rel]), &(target.manifest)().to_string());
+    }
+}
+
+struct HomeFixture {
+    dir: std::path::PathBuf,
+    bundle: String,
+    home: String,
+    project: String,
+}
+
+impl Drop for HomeFixture {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.dir);
+    }
+}
+
+fn home_fixture(name: &str) -> HomeFixture {
+    let dir = tmp_dir(name);
+    let root = dir.to_string_lossy().into_owned();
+    let fx = HomeFixture {
+        bundle: jsp::join(&[&root, "bundle"]),
+        home: jsp::join(&[&root, "home"]),
+        project: jsp::join(&[&root, "project"]),
+        dir,
+    };
+    std::fs::create_dir_all(&fx.project).unwrap();
+    std::fs::create_dir_all(&fx.home).unwrap();
+    write_current_bundle(&fx.bundle, &[".agents", ".cursor", ".grok", ".github"]);
+    // The installed home skills: a home hook is current only when its
+    // launcher exists.
+    for p in [".agents", ".cursor", ".grok"] {
+        write(&skill_launcher(&fx.home, p), "#!/bin/sh\n");
+    }
+    fx
+}
+
+fn exists(p: &str) -> bool {
+    std::path::Path::new(p).exists()
+}
+
+fn all_commands_name(manifest: &str, skill_dir: &str) -> bool {
+    let value: Value = serde_json::from_str(&read(manifest)).unwrap();
+    let cmds = commands(&value);
+    !cmds.is_empty() && cmds.iter().all(|c| command_names_skill_dir(c.split_once('=').unwrap().1, skill_dir))
+}
+
+#[test]
+fn skill_dir_match_reads_every_command_spelling_the_installer_writes() {
+    // The exact Windows strings PR #1378's CI wrote: the POSIX guard with
+    // single backslashes, and Cursor's double-quoted guard whose backslashes
+    // JSON-doubling left in the command text.
+    let home = r"D:\a\_temp\tmp\impeccable-home-hooks-e2e-10836-1794278891894509500\home";
+    let dir = format!(r"{home}\.cursor\skills\impeccable");
+    let posix = format!(r"[ ! -f '{dir}\scripts\impeccable' ] || '{dir}\scripts\impeccable' hook");
+    assert!(command_names_skill_dir_for(&posix, &dir, true));
+    let doubled = format!("[ ! -f {q} ] || {q} hook", q = serde_json::to_string(&format!(r"{dir}\scripts\impeccable")).unwrap());
+    assert!(doubled.contains(r"\\"), "{doubled}");
+    assert!(command_names_skill_dir_for(&doubled, &dir, true));
+    // The `cmd /c` shim form (Grok on Windows, Codex `commandWindows`).
+    let shim = format!(r#"cmd /c if exist "{dir}\scripts\impeccable.cmd" "{dir}\scripts\impeccable.cmd" hook"#);
+    assert!(command_names_skill_dir_for(&shim, &dir, true));
+    // A verbatim-prefixed or differently cased skill dir still matches.
+    assert!(command_names_skill_dir_for(&posix, &format!(r"\\?\{dir}"), true));
+    assert!(command_names_skill_dir_for(&posix, &dir.replace("D:", "d:").replace("home", "HOME"), true));
+    // POSIX paths keep their case and stay distinct from a sibling skill.
+    let unix = "[ ! -f '/home/u/.cursor/skills/impeccable/scripts/impeccable' ] || '/home/u/.cursor/skills/impeccable/scripts/impeccable' hook";
+    assert!(command_names_skill_dir_for(unix, "/home/u/.cursor/skills/impeccable", false));
+    assert!(!command_names_skill_dir_for(unix, "/home/U/.cursor/skills/impeccable", false));
+    assert!(!command_names_skill_dir_for(unix, "/home/u/.cursor/skills/impeccable-old", false));
+    assert!(!command_names_skill_dir_for("\".cursor/skills/impeccable/scripts/impeccable\" hook", "/home/u/.cursor/skills/impeccable", false));
+}
+
+#[test]
+fn skill_dir_match_decodes_a_shell_quoted_apostrophe() {
+    // `sh_single_quote` writes `/home/Ann's` as `'/home/Ann'\''s'`.
+    let dir = "/home/Ann's/.cursor/skills/impeccable";
+    let q = sh_single_quote(&format!("{dir}/scripts/impeccable"));
+    assert!(q.contains("'\\''"), "{q}");
+    let command = format!("[ ! -f {q} ] || {q} hook");
+    assert!(command_names_skill_dir_for(&command, dir, false));
+    assert!(command_names_skill_dir_for(&command, dir, true));
+}
+
+#[test]
+fn global_install_prunes_the_project_copy_under_a_home_with_an_apostrophe() {
+    let dir = tmp_dir("home-apostrophe");
+    let root = dir.to_string_lossy().into_owned();
+    let bundle = jsp::join(&[&root, "bundle"]);
+    let home = jsp::join(&[&root, "Ann's home"]);
+    let project = jsp::join(&[&root, "project"]);
+    write_current_bundle(&bundle, &[".cursor"]);
+    let launcher = skill_launcher(&home, ".cursor");
+    write(&launcher, "#!/bin/sh\n");
+    let q = sh_single_quote(&launcher);
+    let project_cursor = jsp::join(&[&project, ".cursor", "hooks.json"]);
+    write(&project_cursor, &json!({ "version": 1, "hooks": { "postToolUse": [{ "command": format!("[ ! -f {q} ] || {q} hook"), "matcher": "^Write$" }, { "command": "./format.sh" }] } }).to_string());
+    let sys = home_sys(&home, &project, &[]);
+
+    copy_provider_hooks(&sys, &bundle, &project, &[".cursor"], false, Some(&home), Some(&project)).unwrap();
+
+    let after: Value = serde_json::from_str(&read(&project_cursor)).unwrap();
+    assert_eq!(after, json!({ "version": 1, "hooks": { "postToolUse": [{ "command": "./format.sh" }] } }));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_dead_home_hook_does_not_count_as_installed() {
+    let fx = home_fixture("home-hooks-legacy");
+    let sys = home_sys(&fx.home, &fx.project, &[]);
+    for (provider, rel, legacy) in [
+        (".agents", ".codex/hooks.json", json!({ "hooks": { "PostToolUse": [{ "matcher": "Edit|Write|apply_patch", "hooks": [{ "type": "command", "command": format!("node '{}/.agents/skills/impeccable/scripts/hook.mjs'", fx.home) }] }] } })),
+        (".cursor", ".cursor/hooks.json", json!({ "version": 1, "hooks": { "preToolUse": [{ "command": format!("node '{}/.cursor/skills/impeccable/scripts/hook-before-edit.mjs'", fx.home) }] } })),
+        (".grok", ".grok/hooks/impeccable.json", json!({ "hooks": { "PostToolUse": [{ "matcher": "Edit|Write|MultiEdit", "hooks": [{ "type": "command", "command": format!("node '{}/.grok/skills/impeccable/scripts/hook.mjs'", fx.home) }] }] } })),
+    ] {
+        let path = jsp::join(&[&fx.home, rel]);
+        write(&path, &legacy.to_string());
+        assert!(file_has_impeccable_hook_marker(&path));
+        assert!(!hook_installed_for_provider_at_scope(&sys, &fx.project, provider, true), "{provider}");
+    }
+    // Current entries, but the home launcher is gone: dead too.
+    copy_provider_hooks(&sys, &fx.bundle, &fx.project, &[".cursor"], false, Some(&fx.home), Some(&fx.project)).unwrap();
+    assert!(hook_installed_for_provider_at_scope(&sys, &fx.project, ".cursor", true));
+    std::fs::remove_file(skill_launcher(&fx.home, ".cursor")).unwrap();
+    assert!(!hook_installed_for_provider_at_scope(&sys, &fx.project, ".cursor", true));
+}
+
+#[test]
+fn global_install_writes_codex_cursor_and_grok_hooks_under_home() {
+    let fx = home_fixture("home-hooks");
+    let sys = home_sys(&fx.home, &fx.project, &[]);
+
+    let written = copy_provider_hooks(&sys, &fx.bundle, &fx.project, &[".agents", ".cursor", ".grok", ".github"], false, Some(&fx.home), Some(&fx.project)).unwrap();
+
+    let codex = jsp::join(&[&fx.home, ".codex", "hooks.json"]);
+    let cursor = jsp::join(&[&fx.home, ".cursor", "hooks.json"]);
+    let grok = jsp::join(&[&fx.home, ".grok", "hooks", "impeccable.json"]);
+    let github = jsp::join(&[&fx.project, ".github", "hooks", "impeccable.json"]);
+    assert_eq!(written, [codex.clone(), cursor.clone(), grok.clone(), github.clone()]);
+    assert!(all_commands_name(&codex, &jsp::join(&[&fx.home, ".agents", "skills", "impeccable"])), "{}", read(&codex));
+    assert!(all_commands_name(&cursor, &jsp::join(&[&fx.home, ".cursor", "skills", "impeccable"])), "{}", read(&cursor));
+    assert!(all_commands_name(&grok, &jsp::join(&[&fx.home, ".grok", "skills", "impeccable"])), "{}", read(&grok));
+    // Copilot stays in the project; nothing else lands there.
+    assert!(exists(&github));
+    for rel in [".codex", ".cursor", ".grok"] {
+        assert!(!exists(&jsp::join(&[&fx.project, rel])), "{rel} written into the project");
+    }
+    // The installed check follows the manifests home.
+    for p in [".agents", ".cursor", ".grok"] {
+        assert!(hook_installed_for_provider_at_scope(&sys, &fx.project, p, true), "{p}");
+        assert!(!hook_installed_for_provider_at_scope(&sys, &fx.project, p, false), "{p}");
+    }
+}
+
+#[test]
+fn global_codex_hook_honors_codex_home() {
+    let fx = home_fixture("codex-home");
+    let codex_home = jsp::join(&[&fx.dir.to_string_lossy(), "codex-home"]);
+    let sys = home_sys(&fx.home, &fx.project, &[("CODEX_HOME", &codex_home)]);
+
+    let written = copy_provider_hooks(&sys, &fx.bundle, &fx.project, &[".agents"], false, Some(&fx.home), Some(&fx.project)).unwrap();
+
+    let dest = std::path::Path::new(&fx.project).join(&codex_home).join("hooks.json").to_string_lossy().into_owned();
+    assert_eq!(written, [dest.clone()]);
+    assert!(all_commands_name(&dest, &jsp::join(&[&fx.home, ".agents", "skills", "impeccable"])), "{}", read(&dest));
+    assert!(!exists(&jsp::join(&[&fx.home, ".codex", "hooks.json"])));
+    assert!(!exists(&jsp::join(&[&fx.project, ".codex"])));
+    // The path `context` reads for a user-scope Codex hook is this one.
+    assert_eq!(impeccable_context::context_cli::user_hook_manifest("codex", &sys.cwd, &sys.env).as_deref(), Some(dest.as_str()));
+}
+
+#[test]
+fn global_install_keeps_the_users_own_home_hooks() {
+    let fx = home_fixture("home-hooks-merge");
+    let sys = home_sys(&fx.home, &fx.project, &[]);
+    let codex = jsp::join(&[&fx.home, ".codex", "hooks.json"]);
+    let cursor = jsp::join(&[&fx.home, ".cursor", "hooks.json"]);
+    write(&codex, &json!({ "hooks": { "PostToolUse": [{ "matcher": "Bash", "hooks": [{ "type": "command", "command": "./lint.sh" }] }], "SessionStart": [{ "hooks": [{ "type": "command", "command": "./hello.sh" }] }] } }).to_string());
+    write(&cursor, &json!({ "version": 1, "theme": "mine", "hooks": { "stop": [{ "command": "./notify.sh" }] } }).to_string());
+
+    copy_provider_hooks(&sys, &fx.bundle, &fx.project, &[".agents", ".cursor"], false, Some(&fx.home), Some(&fx.project)).unwrap();
+
+    let codex_after: Value = serde_json::from_str(&read(&codex)).unwrap();
+    let post = codex_after["hooks"]["PostToolUse"].as_array().unwrap();
+    assert_eq!(post[0], json!({ "matcher": "Bash", "hooks": [{ "type": "command", "command": "./lint.sh" }] }));
+    assert!(post.len() >= 2 && value_has_impeccable_hook_marker(&post[1]));
+    assert_eq!(codex_after["hooks"]["SessionStart"], json!([{ "hooks": [{ "type": "command", "command": "./hello.sh" }] }]));
+    let cursor_after: Value = serde_json::from_str(&read(&cursor)).unwrap();
+    assert_eq!(cursor_after["theme"], "mine");
+    assert_eq!(cursor_after["hooks"]["stop"], json!([{ "command": "./notify.sh" }]));
+    assert!(value_has_impeccable_hook_marker(&cursor_after["hooks"]["postToolUse"]));
+
+    // A home manifest that is not JSON is never replaced without --force.
+    write(&cursor, "{ broken");
+    let err = copy_provider_hooks(&sys, &fx.bundle, &fx.project, &[".cursor"], false, Some(&fx.home), Some(&fx.project)).unwrap_err();
+    assert!(err.contains("Existing hook manifest is not valid JSON") && err.contains(&cursor), "{err}");
+    assert_eq!(read(&cursor), "{ broken");
+    copy_provider_hooks(&sys, &fx.bundle, &fx.project, &[".cursor"], true, Some(&fx.home), Some(&fx.project)).unwrap();
+    assert_eq!(read(&format!("{cursor}.bak")), "{ broken");
+}
+
+#[test]
+fn project_install_still_writes_project_manifests() {
+    let fx = home_fixture("project-hooks");
+    let sys = home_sys(&fx.home, &fx.project, &[]);
+
+    let written = copy_provider_hooks(&sys, &fx.bundle, &fx.project, &[".agents", ".cursor", ".grok"], false, None, None).unwrap();
+
+    assert_eq!(
+        written,
+        [
+            jsp::join(&[&fx.project, ".codex", "hooks.json"]),
+            jsp::join(&[&fx.project, ".cursor", "hooks.json"]),
+            jsp::join(&[&fx.project, ".grok", "hooks", "impeccable.json"]),
+        ]
+    );
+    for rel in [".codex/hooks.json", ".cursor/hooks.json", ".grok/hooks"] {
+        assert!(!exists(&jsp::join(&[&fx.home, rel])), "{rel} written under home");
+    }
+}
+
+#[test]
+fn global_install_prunes_only_the_stale_project_copy_of_the_home_hook() {
+    let fx = home_fixture("home-hooks-dedupe");
+    let sys = home_sys(&fx.home, &fx.project, &[]);
+    // What an older global install left in the project: the Cursor hook
+    // naming the home skill beside the user's own hook, and a Codex manifest
+    // holding nothing but ours.
+    let cursor_skill = jsp::join(&[&fx.home, ".cursor", "skills", "impeccable", "scripts", "impeccable"]);
+    let old_cursor = format!("[ ! -f '{cursor_skill}' ] || '{cursor_skill}' hook");
+    let project_cursor = jsp::join(&[&fx.project, ".cursor", "hooks.json"]);
+    write(&project_cursor, &json!({ "version": 1, "hooks": {
+        "postToolUse": [{ "command": old_cursor, "matcher": "^Write$", "timeout": 5 }, { "command": "./format.sh" }],
+    } }).to_string());
+    let codex_skill = jsp::join(&[&fx.home, ".agents", "skills", "impeccable", "scripts", "impeccable"]);
+    let project_codex = jsp::join(&[&fx.project, ".codex", "hooks.json"]);
+    write(&project_codex, &json!({ "hooks": { "Stop": [{ "hooks": [{ "type": "command", "command": format!("[ ! -f '{codex_skill}' ] || '{codex_skill}' hook") }] }] } }).to_string());
+    // A Grok hook from a project install of the skill is not ours to move.
+    let project_grok = jsp::join(&[&fx.project, ".grok", "hooks", "impeccable.json"]);
+    let project_grok_text = json!({ "hooks": { "PostToolUse": [{ "matcher": "Edit|Write|MultiEdit", "hooks": [{ "type": "command", "command": "[ ! -f \".grok/skills/impeccable/scripts/impeccable\" ] || \".grok/skills/impeccable/scripts/impeccable\" hook" }] }] } }).to_string();
+    write(&project_grok, &project_grok_text);
+
+    copy_provider_hooks(&sys, &fx.bundle, &fx.project, &[".agents", ".cursor", ".grok"], false, Some(&fx.home), Some(&fx.project)).unwrap();
+
+    let cursor_after: Value = serde_json::from_str(&read(&project_cursor)).unwrap();
+    assert_eq!(cursor_after, json!({ "version": 1, "hooks": { "postToolUse": [{ "command": "./format.sh" }] } }));
+    assert!(!exists(&project_codex), "{}", read(&project_codex));
+    assert_eq!(read(&project_grok), project_grok_text);
+    for home_manifest in [jsp::join(&[&fx.home, ".cursor", "hooks.json"]), jsp::join(&[&fx.home, ".codex", "hooks.json"]), jsp::join(&[&fx.home, ".grok", "hooks", "impeccable.json"])] {
+        assert!(file_has_impeccable_hook_marker(&home_manifest), "{home_manifest}");
+    }
+}
+
+#[test]
+fn global_install_keeps_a_project_owned_hook_on_the_project_skill() {
+    // The project has its own Cursor skill and a stale hook naming it. A
+    // global install repairs that hook against the project skill, so the
+    // cleanup that follows does not mistake it for a global leftover.
+    let fx = home_fixture("home-hooks-project-owned");
+    let sys = home_sys(&fx.home, &fx.project, &[]);
+    copy_provider_hooks(&sys, &fx.bundle, &fx.project, &[".cursor"], false, Some(&fx.home), Some(&fx.project)).unwrap();
+    assert!(file_has_impeccable_hook_marker(&jsp::join(&[&fx.home, ".cursor", "hooks.json"])));
+    write(&jsp::join(&[&fx.project, ".cursor", "skills", "impeccable", "scripts", "impeccable"]), "#!/bin/sh\n");
+    let project_cursor = jsp::join(&[&fx.project, ".cursor", "hooks.json"]);
+    write(&project_cursor, &json!({ "version": 1, "hooks": {
+        "postToolUse": [{ "command": "node .cursor/skills/impeccable/scripts/hook.mjs", "matcher": "^Write$", "timeout": 5 }],
+    } }).to_string());
+
+    repair_stale_hook_manifests(&sys, &fx.project, &[".cursor"], Some(&fx.home)).unwrap();
+    assert!(prune_duplicate_home_hooks(&sys, &fx.home, &fx.project, &[".cursor"]).unwrap().is_empty());
+
+    let after = read(&project_cursor);
+    assert!(file_has_impeccable_hook_marker(&project_cursor), "{after}");
+    assert!(!after.contains("hook.mjs"), "{after}");
+    assert!(!after.contains(&fx.home), "{after}");
+    assert!(after.contains(".cursor/skills/impeccable/scripts/impeccable"), "{after}");
+}
+
+#[test]
+fn first_global_install_repairs_and_prunes_a_v3_project_hook() {
+    // A v3 install left a `node .../hook.mjs` Cursor hook in the project,
+    // naming a project skill that is gone. The first global install retargets
+    // it at the home skill and then prunes it as a duplicate of the home hook.
+    let fx = home_fixture("home-hooks-first-install-v3");
+    let sys = home_sys(&fx.home, &fx.project, &[]);
+    let project_cursor = jsp::join(&[&fx.project, ".cursor", "hooks.json"]);
+    write(&project_cursor, &json!({ "version": 1, "hooks": {
+        "postToolUse": [{ "command": "node .cursor/skills/impeccable/scripts/hook.mjs", "matcher": "^Write$", "timeout": 5 }],
+    } }).to_string());
+
+    copy_provider_hooks(&sys, &fx.bundle, &fx.project, &[".cursor"], false, Some(&fx.home), Some(&fx.project)).unwrap();
+
+    assert!(file_has_impeccable_hook_marker(&jsp::join(&[&fx.home, ".cursor", "hooks.json"])));
+    let after = std::fs::read_to_string(&project_cursor).unwrap_or_default();
+    assert!(!after.contains("hook.mjs"), "{after}");
+    assert!(!file_has_impeccable_hook_marker(&project_cursor), "{after}");
+}
+
+#[test]
+fn first_global_install_leaves_a_v3_project_hook_when_no_home_hook_is_written() {
+    // The bundle has no Cursor hook, so nothing is written to home. The v3
+    // project hook must not be retargeted at a home path nothing prunes.
+    let fx = home_fixture("home-hooks-first-install-no-artifact");
+    let bundle = jsp::join(&[&fx.dir.to_string_lossy(), "bundle-no-cursor"]);
+    write_current_bundle(&bundle, &[".agents"]);
+    let sys = home_sys(&fx.home, &fx.project, &[]);
+    let project_cursor = jsp::join(&[&fx.project, ".cursor", "hooks.json"]);
+    let text = json!({ "version": 1, "hooks": {
+        "postToolUse": [{ "command": "node .cursor/skills/impeccable/scripts/hook.mjs", "matcher": "^Write$", "timeout": 5 }],
+    } }).to_string();
+    write(&project_cursor, &text);
+
+    copy_provider_hooks(&sys, &bundle, &fx.project, &[".cursor"], false, Some(&fx.home), Some(&fx.project)).unwrap();
+
+    assert!(!exists(&jsp::join(&[&fx.home, ".cursor", "hooks.json"])));
+    assert_eq!(read(&project_cursor), text);
+}
+
+#[test]
+fn first_global_install_never_rewrites_committed_claude_settings() {
+    let fx = home_fixture("home-hooks-first-install-claude");
+    let sys = home_sys(&fx.home, &fx.project, &[]);
+    let settings = jsp::join(&[&fx.project, ".claude", "settings.json"]);
+    let text = json!({ "hooks": { "PostToolUse": [{ "hooks": [{ "type": "command", "command": "node .claude/skills/impeccable/scripts/hook.mjs" }] }] } }).to_string();
+    write(&settings, &text);
+
+    copy_provider_hooks(&sys, &fx.bundle, &fx.project, &[".claude", ".cursor"], false, Some(&fx.home), Some(&fx.project)).unwrap();
+
+    assert_eq!(read(&settings), text);
+}
+
+#[test]
+fn stale_project_copy_stays_while_the_home_hook_is_not_wired() {
+    let fx = home_fixture("home-hooks-unwired");
+    let sys = home_sys(&fx.home, &fx.project, &[]);
+    let cursor_skill = jsp::join(&[&fx.home, ".cursor", "skills", "impeccable", "scripts", "impeccable"]);
+    let project_cursor = jsp::join(&[&fx.project, ".cursor", "hooks.json"]);
+    let text = json!({ "version": 1, "hooks": { "postToolUse": [{ "command": format!("[ ! -f '{cursor_skill}' ] || '{cursor_skill}' hook"), "matcher": "^Write$", "timeout": 5 }] } }).to_string();
+    write(&project_cursor, &text);
+    // No home manifest at all: nothing is pruned.
+    assert!(prune_duplicate_home_hooks(&sys, &fx.home, &fx.project, &[".cursor"]).unwrap().is_empty());
+    assert_eq!(read(&project_cursor), text);
+    // Running from home itself never prunes the home manifest as a "project".
+    copy_provider_hooks(&sys, &fx.bundle, &fx.project, &[".cursor"], false, Some(&fx.home), Some(&fx.project)).unwrap();
+    let home_cursor = jsp::join(&[&fx.home, ".cursor", "hooks.json"]);
+    assert!(prune_duplicate_home_hooks(&sys, &fx.home, &fx.home, &[".cursor"]).unwrap().is_empty());
+    assert!(file_has_impeccable_hook_marker(&home_cursor));
+}
+
+#[test]
+fn github_user_scope_install_points_the_project_hook_at_the_home_skill() {
+    // #1098: a global install wrote the portable project form into the
+    // project's manifest, naming `.github/skills/...` in a project that has
+    // no Copilot skill, so the hook never fired.
+    let dir = tmp_dir("github-user-hook");
+    let root = dir.to_string_lossy().into_owned();
+    let bundle = jsp::join(&[&root, "bundle"]);
+    let home = jsp::join(&[&root, "home"]);
+    let project = jsp::join(&[&root, "project"]);
+    write(&jsp::join(&[&bundle, ".github", "hooks", "impeccable.json"]), &github_bundle_manifest().to_string());
+    write(&skill_launcher(&home, ".github"), "#!/bin/sh\n");
+    std::fs::create_dir_all(&project).unwrap();
+    let sys = sys_with_home(&home);
+    let manifest = jsp::join(&[&project, ".github", "hooks", "impeccable.json"]);
+
+    // An older global install left the portable form behind: not installed.
+    write(&manifest, &github_bundle_manifest().to_string());
+    assert!(hook_installed_for_provider(&sys, &project, ".github"));
+    assert!(!hook_installed_for_provider_at_scope(&sys, &project, ".github", true));
+    assert!(hook_installed_for_provider_at_scope(&sys, &project, ".github", false));
+
+    let written = copy_provider_hooks(&sys, &bundle, &project, &[".github"], false, Some(&home), Some(&project)).unwrap();
+    assert_eq!(written, [manifest.clone()]);
+    let after: Value = serde_json::from_str(&read(&manifest)).unwrap();
+    let gp = skill_launcher(&home, ".github");
+    let expected = if cfg!(windows) {
+        let w = gp.replace('\\', "/");
+        format!("[ ! -f '{w}' ] || '{w}' hook")
+    } else {
+        "[ ! -f \"$HOME/.github/skills/impeccable/scripts/impeccable\" ] || \"$HOME/.github/skills/impeccable/scripts/impeccable\" hook".to_string()
+    };
+    assert_eq!(after["hooks"]["postToolUse"].as_array().unwrap().len(), 1);
+    assert_eq!(after["hooks"]["postToolUse"][0]["bash"], Value::String(expected));
+    assert!(hook_installed_for_provider_at_scope(&sys, &project, ".github", true));
+
+    // A project that ships its own Copilot skill keeps the committed,
+    // portable manifest even when the user installs globally.
+    write(&skill_launcher(&project, ".github"), "#!/bin/sh\n");
+    write(&manifest, &github_bundle_manifest().to_string());
+    assert!(hook_installed_for_provider_at_scope(&sys, &project, ".github", true));
+    copy_provider_hooks(&sys, &bundle, &project, &[".github"], false, Some(&home), Some(&project)).unwrap();
+    let kept: Value = serde_json::from_str(&read(&manifest)).unwrap();
+    assert_eq!(kept["hooks"]["postToolUse"].as_array().unwrap().len(), 1);
+    assert_eq!(kept["hooks"]["postToolUse"][0]["bash"], GITHUB_PORTABLE);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn partial_shared_settings_never_prune_the_project_hook() {
+    let dir = tmp_dir("partial-shared");
+    let root = dir.join("project").to_string_lossy().into_owned();
+    let bundle = dir.join("bundle").to_string_lossy().into_owned();
+    let home = dir.join("home").to_string_lossy().into_owned();
+    let sys = sys_with_home(&home);
+    let target = impeccable_context::hook_wiring::HOOK_MANIFEST_TARGETS.iter().find(|t| t.provider == ".claude").unwrap();
+    let fresh = (target.manifest)();
+    write(&format!("{bundle}/.claude/settings.json"), &fresh.to_string());
+    write(&format!("{root}/.claude/settings.local.json"), &fresh.to_string());
+    let mut partial = fresh;
+    partial["hooks"].as_object_mut().unwrap().remove("Stop");
+    write(&format!("{root}/.claude/settings.json"), &partial.to_string());
+    copy_provider_hooks(&sys, &bundle, &root, &[".claude"], false, None, None).unwrap();
+    assert!(std::path::Path::new(&format!("{root}/.claude/settings.local.json")).exists());
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn partial_user_settings_never_prune_the_project_hook() {
+    let dir = tmp_dir("partial-user");
+    let root = dir.join("project").to_string_lossy().into_owned();
+    let home = dir.join("home").to_string_lossy().into_owned();
+    let sys = sys_with_home(&home);
+    write(&format!("{home}/.claude/skills/impeccable/scripts/impeccable"), "");
+    let command = user_claude_hook_command(&home, cfg!(windows)).unwrap();
+    write(&format!("{home}/.claude/settings.json"), &json!({"hooks":{"Stop":[{"hooks":[{"type":"command","command":command}]}]}}).to_string());
+    let local = format!("{root}/.claude/settings.local.json");
+    write(&local, &json!({"hooks":{"Stop":[{"hooks":[{"type":"command","command":command}]}]}}).to_string());
+    prune_duplicate_claude_hooks(&sys, &home, &root).unwrap();
+    assert!(std::path::Path::new(&local).exists());
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+// ─── Antigravity named hooks (.agents/hooks.json, ~/.gemini/config/hooks.json) ─
+
+fn agy_bundle_manifest() -> Value {
+    use impeccable_context::hook_wiring::{antigravity_hook_command, antigravity_manifest_for_command};
+    antigravity_manifest_for_command(&antigravity_hook_command(false))
+}
+
+#[test]
+fn antigravity_install_and_hooks_on_write_the_same_command_per_platform() {
+    // ZpR: `hooks on` and install/update must agree on both platforms, or each
+    // rewrites the other's entry and the wiring check flips.
+    use impeccable_context::hook_wiring::{antigravity_hook_command, antigravity_manifest_for_command};
+    for win32 in [false, true] {
+        let installed = rewrite_hook_commands_for_platform(&agy_bundle_manifest(), ".agent", "/proj", false, win32);
+        assert_eq!(installed, antigravity_manifest_for_command(&antigravity_hook_command(win32)), "win32={win32}");
+    }
+    let win = antigravity_hook_command(true);
+    assert!(win.starts_with("cmd /c") || win.contains(".cmd"), "{win}");
+    assert!(!win.contains("[ ! -f"), "{win}");
+}
+
+#[test]
+fn antigravity_prune_strips_only_impeccable_entries_from_named_hooks() {
+    let dir = tmp_dir("agy-prune");
+    let path = dir.join("hooks.json").to_string_lossy().into_owned();
+    let mut manifest = agy_bundle_manifest();
+    manifest["impeccable"]["PostToolUse"].as_array_mut().unwrap()
+        .push(json!({ "matcher": "run_command", "hooks": [{ "type": "command", "command": "./mine.sh" }] }));
+    manifest["lint"] = json!({ "PostToolUse": [{ "matcher": "write_to_file", "hooks": [{ "type": "command", "command": "./lint.sh" }] }] });
+    manifest["$schema"] = json!("https://example.invalid/hooks.json");
+    write(&path, &manifest.to_string());
+    assert!(file_has_impeccable_hook_marker(&path));
+    assert!(prune_impeccable_hook_from_manifest(&path).unwrap());
+    let after: Value = serde_json::from_str(&read(&path)).unwrap();
+    assert!(!value_has_impeccable_hook_marker(&after), "{after}");
+    assert_eq!(after["lint"]["PostToolUse"][0]["hooks"][0]["command"], "./lint.sh");
+    assert_eq!(after["impeccable"]["PostToolUse"].as_array().unwrap().len(), 1);
+    assert!(after["impeccable"].get("Stop").is_none());
+    assert_eq!(after["$schema"], "https://example.invalid/hooks.json");
+
+    // A manifest that held only our hook is removed outright.
+    write(&path, &agy_bundle_manifest().to_string());
+    assert!(prune_impeccable_hook_from_manifest(&path).unwrap());
+    assert!(!std::path::Path::new(&path).exists());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn prune_leaves_a_hookless_claude_settings_file_alone() {
+    // The named-hook branch must not treat a Claude settings file without a
+    // `hooks` key as Antigravity's shape and drop its other keys.
+    let dir = tmp_dir("claude-perms");
+    let path = dir.join("settings.json").to_string_lossy().into_owned();
+    let settings = json!({ "permissions": { "allow": ["Bash(.claude/skills/impeccable/scripts/impeccable hook)"] }, "model": "x" });
+    write(&path, &settings.to_string());
+    assert!(!file_has_impeccable_hook_marker(&path));
+    assert!(!prune_impeccable_hook_from_manifest(&path).unwrap());
+    let after: Value = serde_json::from_str(&read(&path)).unwrap();
+    assert_eq!(after, settings);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn antigravity_user_install_writes_the_global_manifest_and_prunes_a_dead_project_entry() {
+    // ZpM / ZpU: a `--user` install writes ~/.gemini/config/hooks.json, counts
+    // it as installed, and removes a project `.agents/hooks.json` entry whose
+    // `../.agent/skills/...` launcher is missing.
+    let dir = tmp_dir("agy-user");
+    let root = dir.to_string_lossy().into_owned();
+    let bundle = jsp::join(&[&root, "bundle"]);
+    let home = jsp::join(&[&root, "home"]);
+    let project = jsp::join(&[&root, "project"]);
+    write(&jsp::join(&[&bundle, ".agents", "hooks.json"]), &agy_bundle_manifest().to_string());
+    write(&jsp::join(&[&home, ".gemini", "config", "skills", "impeccable", "scripts", "impeccable"]), "#!/bin/sh\n");
+    let project_manifest = jsp::join(&[&project, ".agents", "hooks.json"]);
+    let mut project_hooks = agy_bundle_manifest();
+    project_hooks["lint"] = json!({ "Stop": [{ "type": "command", "command": "./lint.sh" }] });
+    write(&project_manifest, &project_hooks.to_string());
+    let mut env = HashMap::new();
+    env.insert("HOME".to_string(), home.clone());
+    env.insert("USERPROFILE".to_string(), home.clone());
+    let sys = Sys::new(env, home.clone());
+
+    assert!(!hook_installed_for_provider_at_scope(&sys, &home, ".agent", true));
+    let written = copy_provider_hooks(&sys, &bundle, &project, &[".agent"], false, Some(&home), Some(&project)).unwrap();
+    let global = jsp::join(&[&home, ".gemini", "config", "hooks.json"]);
+    assert_eq!(written, [global.clone()]);
+    let after: Value = serde_json::from_str(&read(&global)).unwrap();
+    let cmd = after["impeccable"]["Stop"][0]["command"].as_str().unwrap();
+    assert!(cmd.contains(&jsp::join(&[&home, ".gemini", "config", "skills", "impeccable", "scripts", "impeccable"])) || cfg!(windows), "{cmd}");
+    assert!(hook_installed_for_provider_at_scope(&sys, &home, ".agent", true));
+
+    let project_after: Value = serde_json::from_str(&read(&project_manifest)).unwrap();
+    assert!(!value_has_impeccable_hook_marker(&project_after), "{project_after}");
+    assert_eq!(project_after["lint"]["Stop"][0]["command"], "./lint.sh");
+
+    // An entry naming a launcher elsewhere may still run: kept.
+    let elsewhere = jsp::join(&[&root, "vendor", "skills", "impeccable", "scripts", "impeccable"]);
+    let custom = impeccable_context::hook_wiring::antigravity_manifest_for_command(&format!("[ ! -f '{elsewhere}' ] || '{elsewhere}' hook"));
+    assert!(value_has_impeccable_hook_marker(&custom), "the custom entry must read as ours, or the prune would skip it anyway");
+    write(&project_manifest, &custom.to_string());
+    copy_provider_hooks(&sys, &bundle, &project, &[".agent"], false, Some(&home), Some(&project)).unwrap();
+    assert_eq!(serde_json::from_str::<Value>(&read(&project_manifest)).unwrap(), custom);
+
+    // A project that ships its own Antigravity skill keeps its shared entry.
+    write(&project_manifest, &agy_bundle_manifest().to_string());
+    write(&skill_launcher(&project, ".agent"), "#!/bin/sh\n");
+    copy_provider_hooks(&sys, &bundle, &project, &[".agent"], false, Some(&home), Some(&project)).unwrap();
+    assert!(value_has_impeccable_hook_marker(&serde_json::from_str::<Value>(&read(&project_manifest)).unwrap()));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn antigravity_merge_keeps_a_users_disabled_switch() {
+    let mut existing = agy_bundle_manifest();
+    existing["impeccable"]["enabled"] = json!(false);
+    let merged = merge_hook_manifests(&existing, &agy_bundle_manifest());
+    assert_eq!(merged["impeccable"]["enabled"], json!(false), "{merged}");
+    assert!(value_has_impeccable_hook_marker(&merged));
+    // Without the switch, nothing is added.
+    let merged = merge_hook_manifests(&agy_bundle_manifest(), &agy_bundle_manifest());
+    assert!(merged["impeccable"].get("enabled").is_none());
+    assert_eq!(merged, agy_bundle_manifest());
+}
