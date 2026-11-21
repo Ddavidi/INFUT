@@ -4,6 +4,12 @@ import { hashPassword, comparePassword } from '../utils/password';
 import { generateToken } from '../utils/jwt';
 import { RegisterInput, LoginInput } from '../schemas/auth.schema';
 
+export function normalizeInstagram(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  const handle = raw.trim().replace(/^@+/, '').toLowerCase();
+  return handle ? handle : null;
+}
+
 export class AuthService {
   async register(data: RegisterInput) {
     // Verificar se email ja existe
@@ -26,6 +32,12 @@ export class AuthService {
         name: data.name,
         email: data.email,
         passwordHash,
+        sport: data.sport || null,
+        position: data.position || null,
+        photoUrl: data.photoUrl || null,
+        instagram: normalizeInstagram(data.instagram),
+        favoriteTeam: data.favoriteTeam?.trim() || null,
+        idol: data.idol?.trim() || null,
       },
       select: {
         id: true,
@@ -35,6 +47,9 @@ export class AuthService {
         position: true,
         photoUrl: true,
         region: true,
+        instagram: true,
+        favoriteTeam: true,
+        idol: true,
         createdAt: true,
       },
     });
@@ -78,6 +93,9 @@ export class AuthService {
         position: user.position,
         photoUrl: user.photoUrl,
         region: user.region,
+        instagram: user.instagram,
+        favoriteTeam: user.favoriteTeam,
+        idol: user.idol,
         createdAt: user.createdAt,
       },
       token,

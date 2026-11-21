@@ -1,6 +1,4 @@
-// Prisma Schema - INFUT
-// Models: User, Pelada, PeladaPlayer
-
+// Prisma Schema - INFUT (mantenha identico a /prisma/schema.prisma usado no build da Vercel)
 generator client {
   provider      = "prisma-client-js"
   binaryTargets = ["native", "rhel-openssl-3.0.x"]
@@ -20,10 +18,12 @@ model User {
   position     String?
   photoUrl     String?  @map("photo_url")
   region       String?
+  instagram    String?
+  favoriteTeam String?  @map("favorite_team")
+  idol         String?
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
-  // Relações
   organizedPeladas Pelada[]       @relation("organizer")
   participations   PeladaPlayer[]
 
@@ -31,32 +31,35 @@ model User {
 }
 
 model Pelada {
-  id                String   @id @default(uuid())
-  title             String
-  sport             String
-  dateTime          DateTime @map("date_time")
-  location          String
-  locationAddress   String?  @map("location_address")
-  price             Float?
-  isRecurring       Boolean  @default(false) @map("is_recurring")
-  recurrenceDay     String?  @map("recurrence_day") // 'monday', 'tuesday', etc.
-  maxPlayers        Int?     @map("max_players")
-  inviteCode        String   @unique @default(cuid()) @map("invite_code")
-  isPublic          Boolean  @default(true) @map("is_public")
-  pixKey            String?  @map("pix_key")
+  id                  String   @id @default(uuid())
+  seriesId            String?  @map("series_id")
+  title               String
+  sport               String
+  dateTime            DateTime @map("date_time")
+  location            String
+  locationAddress     String?  @map("location_address")
+  price               Float?
+  priceGoalkeeper     Float?   @map("price_goalkeeper")
+  priceMonthly        Float?   @map("price_monthly")
+  isRecurring         Boolean  @default(false) @map("is_recurring")
+  recurrenceDay       String?  @map("recurrence_day")
+  recurrenceDays      String?  @map("recurrence_days")
+  maxPlayers          Int?     @map("max_players")
+  inviteCode          String   @unique @default(cuid()) @map("invite_code")
+  isPublic            Boolean  @default(true) @map("is_public")
+  pixKey              String?  @map("pix_key")
   goalkeepersExempt   Boolean  @default(true) @map("goalkeepers_exempt")
   playersPerTeam      Int      @default(5) @map("players_per_team")
   cancelDeadlineHours Int      @default(4) @map("cancel_deadline_hours")
   durationHours       Float    @default(2) @map("duration_hours")
   whatsappGroupUrl    String?  @map("whatsapp_group_url")
-  status              String   @default("OPEN") // OPEN, IN_PROGRESS, FINISHED
+  status              String   @default("OPEN")
   teamsJson           String?  @map("teams_json")
   matchesJson         String?  @map("matches_json")
   organizerId         String   @map("organizer_id")
-  createdAt         DateTime @default(now()) @map("created_at")
-  updatedAt         DateTime @updatedAt @map("updated_at")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
 
-  // Relações
   organizer User           @relation("organizer", fields: [organizerId], references: [id], onDelete: Cascade)
   players   PeladaPlayer[]
 
@@ -64,26 +67,25 @@ model Pelada {
 }
 
 model PeladaPlayer {
-  id            String   @id @default(uuid())
-  peladaId      String   @map("pelada_id")
-  userId        String?  @map("user_id")
-  guestName     String?  @map("guest_name")
-  role          String   @default("PLAYER") // ORGANIZER, CO_ORGANIZER, PLAYER
-  status        String   @default("CONFIRMED") // CONFIRMED, WAITLIST, DECLINED
-  isGoalkeeper  Boolean  @default(false) @map("is_goalkeeper")
-  position      String?
-  paymentStatus        String   @default("PENDING") @map("payment_status") // PENDING, WAITING_CONFIRMATION, PAID, EXEMPT
-  memberType           String   @default("DIARISTA") @map("member_type") // MENSALISTA, DIARISTA
-  attendanceStatus     String   @default("PENDING") @map("attendance_status") // PENDING, PRESENT, NO_SHOW
+  id                   String   @id @default(uuid())
+  peladaId             String   @map("pelada_id")
+  userId               String?  @map("user_id")
+  guestName            String?  @map("guest_name")
+  role                 String   @default("PLAYER")
+  status               String   @default("CONFIRMED")
+  isGoalkeeper         Boolean  @default(false) @map("is_goalkeeper")
+  position             String?
+  paymentStatus        String   @default("PENDING") @map("payment_status")
+  memberType           String   @default("DIARISTA") @map("member_type")
+  attendanceStatus     String   @default("PENDING") @map("attendance_status")
   goals                Int      @default(0)
   assists              Int      @default(0)
   wins                 Int      @default(0)
   votedMvpForId        String?  @map("voted_mvp_for_id")
   votedGoalkeeperForId String?  @map("voted_goalkeeper_for_id")
   joinedAt             DateTime @default(now()) @map("joined_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
 
-  // Relações
   pelada Pelada @relation(fields: [peladaId], references: [id], onDelete: Cascade)
   user   User?  @relation(fields: [userId], references: [id], onDelete: Cascade)
 

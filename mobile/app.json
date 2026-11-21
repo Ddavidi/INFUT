@@ -28,6 +28,14 @@
       "shortName": "INFUT",
       "themeColor": "#FE7F2D",
       "backgroundColor": "#070B12"
-    }
+    },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "O INFUT usa suas fotos para a foto de perfil e o escudo dos times."
+        }
+      ]
+    ]
   }
 }

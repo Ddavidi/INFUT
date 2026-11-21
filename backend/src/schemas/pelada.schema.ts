@@ -7,7 +7,9 @@ export const createPeladaSchema = z.object({
   dateTime: z.string().datetime({ message: 'Data/hora invalida (use formato ISO 8601)' }),
   location: z.string().min(1, 'Local e obrigatorio'),
   locationAddress: z.string().optional().nullable(),
-  price: z.number().min(0).optional().nullable(),
+  price: z.number().min(0).max(100000).optional().nullable(),
+  priceGoalkeeper: z.number().min(0).max(100000).optional().nullable(),
+  priceMonthly: z.number().min(0).max(100000).optional().nullable(),
   isRecurring: z.boolean().optional().default(false),
   recurrenceDay: z.string().optional().nullable(),
   recurrenceDays: z.string().optional().nullable(),
@@ -102,6 +104,31 @@ export const drawTeamsSchema = z.object({
   maxConsecutiveWins: z.number().int().min(0).max(20).optional(),
 });
 
+export const liveGoalSchema = z.object({
+  teamName: z.string().min(1).max(60),
+  scorerId: z.string().min(1).optional().nullable(),
+  assistId: z.string().min(1).optional().nullable(),
+  ownGoal: z.boolean().optional().default(false),
+});
+
+export const liveMatchupSchema = z.object({
+  teamAName: z.string().min(1).max(60),
+  teamBName: z.string().min(1).max(60),
+});
+
+export const liveTimerSchema = z.object({
+  action: z.enum(['START', 'PAUSE', 'RESET']),
+});
+
+export const teamPhotoSchema = z.object({
+  teamName: z.string().min(1).max(60),
+  photoUrl: z
+    .string()
+    .max(400_000)
+    .regex(/^data:image\/(png|jpe?g|webp);base64,|^https?:\/\//i, 'Foto invalida')
+    .nullable(),
+});
+
 export const updatePeladaStatusSchema = z.object({
   status: z.enum(['OPEN', 'IN_PROGRESS', 'FINISHED']),
 });
@@ -132,4 +159,8 @@ export type VoteGoalkeeperInput = z.infer<typeof voteGoalkeeperSchema>;
 export type RecordMatchInput = z.infer<typeof recordMatchSchema>;
 export type DrawTeamsInput = z.infer<typeof drawTeamsSchema>;
 export type UpdatePeladaStatusInput = z.infer<typeof updatePeladaStatusSchema>;
+export type LiveGoalInput = z.infer<typeof liveGoalSchema>;
+export type LiveMatchupInput = z.infer<typeof liveMatchupSchema>;
+export type LiveTimerInput = z.infer<typeof liveTimerSchema>;
+export type TeamPhotoInput = z.infer<typeof teamPhotoSchema>;
 export type SetManualTeamsInput = z.infer<typeof setManualTeamsSchema>;

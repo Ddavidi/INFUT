@@ -18,6 +18,13 @@ import { SPORTS, getPositionsForSport } from '../../constants/sports';
 import { colors, fonts, spacing, borderRadius, shadows } from '../../constants/theme';
 import { showConfirm, showMessage } from '../../utils/alerts';
 import { useResponsive } from '../../hooks/useResponsive';
+import { Avatar } from '../../components/ui/Avatar';
+import {
+  EMPTY_PROFILE_EXTRAS,
+  ProfileExtrasFields,
+  ProfileExtrasValue,
+  profileExtrasToPayload,
+} from '../../components/profile/ProfileExtrasFields';
 
 export function EditProfileScreen() {
   const { user, refreshUser, signOut } = useAuth();
@@ -33,6 +40,7 @@ export function EditProfileScreen() {
   const [changingPassword, setChangingPassword] = useState(false);
   const [positions, setPositions] = useState<string[]>([]);
   const [showLegal, setShowLegal] = useState(false);
+  const [extras, setExtras] = useState<ProfileExtrasValue>(EMPTY_PROFILE_EXTRAS);
 
   useFocusEffect(
     useCallback(() => {
@@ -46,6 +54,12 @@ export function EditProfileScreen() {
       setRegion(user.region || '');
       setSelectedSport(user.sport || '');
       setSelectedPosition(user.position || '');
+      setExtras({
+        photoUrl: user.photoUrl || null,
+        instagram: user.instagram ? `@${user.instagram}` : '',
+        favoriteTeam: user.favoriteTeam || '',
+        idol: user.idol || '',
+      });
     }
   }, [user]);
 
@@ -70,6 +84,7 @@ export function EditProfileScreen() {
         sport: selectedSport || undefined,
         position: selectedPosition || undefined,
         region: region.trim() || null,
+        ...profileExtrasToPayload(extras),
       });
       await refreshUser();
       showMessage('Sucesso', 'Perfil atualizado com sucesso!');
@@ -158,9 +173,7 @@ export function EditProfileScreen() {
       {/* Cabecalho de Identidade */}
       <View style={styles.profileHeaderCard}>
         <View style={styles.avatarRing}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{(name || user.name).charAt(0).toUpperCase()}</Text>
-          </View>
+          <Avatar name={name || user.name} photoUrl={extras.photoUrl} size={72} borderColor={colors.border} />
         </View>
         <Text style={styles.displayName}>{name || user.name}</Text>
         <Text style={styles.email}>{user.email}</Text>
@@ -171,6 +184,13 @@ export function EditProfileScreen() {
               {selectedPosition ? ` • ${selectedPosition}` : ''}
             </Text>
           </View>
+        ) : null}
+        {extras.favoriteTeam || extras.idol || extras.instagram ? (
+          <Text style={styles.email}>
+            {[extras.instagram, extras.favoriteTeam && `Torce: ${extras.favoriteTeam}`, extras.idol && `Ídolo: ${extras.idol}`]
+              .filter(Boolean)
+              .join('  •  ')}
+          </Text>
         ) : null}
       </View>
 
@@ -263,6 +283,14 @@ export function EditProfileScreen() {
             </View>
           </>
         )}
+
+        <Text style={[styles.sectionLabel, { marginTop: spacing.md }]}>Mais sobre você</Text>
+        <ProfileExtrasFields
+          name={name || user.name}
+          sport={selectedSport}
+          value={extras}
+          onChange={setExtras}
+        />
 
         <Button
           title="Salvar Alterações"

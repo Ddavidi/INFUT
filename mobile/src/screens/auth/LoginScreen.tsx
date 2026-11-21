@@ -20,6 +20,8 @@ import { getPublicPeladaByCode } from '../../services/peladaService';
 import { Pelada } from '../../types';
 import { colors, fonts, spacing, borderRadius, layout, shadows } from '../../constants/theme';
 import { showMessage } from '../../utils/alerts';
+import { maskInviteCode } from '../../utils/masks';
+import { describePrices, hasAnyPrice } from '../../utils/prices';
 import { getInviteCodeFromUrl } from '../../utils/inviteLink';
 import { useResponsive } from '../../hooks/useResponsive';
 import { Ionicons } from '@expo/vector-icons';
@@ -169,7 +171,8 @@ export function LoginScreen({ navigation }: Props) {
                   placeholder="Ex: QUINTA"
                   placeholderTextColor={colors.textMuted}
                   value={inviteCode}
-                  onChangeText={setInviteCode}
+                  onChangeText={(v) => setInviteCode(maskInviteCode(v))}
+                  maxLength={12}
                   autoCapitalize="characters"
                   autoCorrect={false}
                   accessibilityLabel="Código de convite"
@@ -229,8 +232,8 @@ export function LoginScreen({ navigation }: Props) {
                   ) : null}
                   <Text style={styles.modalInfo}>
                     💰{' '}
-                    {previewPelada.price && previewPelada.price > 0
-                      ? `R$ ${previewPelada.price.toFixed(2)}`
+                    {hasAnyPrice(previewPelada)
+                      ? describePrices(previewPelada)
                       : 'Gratuita'}
                   </Text>
                   <Text style={styles.modalInfo}>

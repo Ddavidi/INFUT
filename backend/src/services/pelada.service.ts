@@ -6,7 +6,11 @@ import {
   BatchCheckinInput,
   CreatePeladaInput,
   DrawTeamsInput,
+  LiveGoalInput,
+  LiveMatchupInput,
+  LiveTimerInput,
   RecordMatchInput,
+  TeamPhotoInput,
   RsvpInput,
   SetManualTeamsInput,
   UpdateCheckinInput,
@@ -15,6 +19,7 @@ import {
   UpdatePeladaStatusInput,
   UpdateStatsInput,
 } from '../schemas/pelada.schema';
+import { rotateWinnerAtLimit, shuffleArray } from './rotation';
 
 export type PeladaGameMode = 'WINNER_STAYS_QUEUE' | 'FIXED_TEAMS';
 export type PeladaDrawMode = 'POSITION' | 'RANDOM' | 'MANUAL';
@@ -28,6 +33,35 @@ export interface PeladaGameConfig {
   fixedTeamsCount: number;
   teamNames: string[];
   maxConsecutiveWins?: number;
+  /** Escudo/foto de cada time, por nome do time (data URL ou http). */
+  teamPhotos?: Record<string, string>;
+}
+
+export interface LiveGoalEvent {
+  id: string;
+  teamName: string;
+  scorerId: string | null;
+  scorerName: string | null;
+  assistId: string | null;
+  assistName: string | null;
+  ownGoal: boolean;
+  minute: number | null;
+  createdAt: string;
+}
+
+export interface LiveMatchTimer {
+  running: boolean;
+  /** epoch ms (relogio do servidor) do ultimo "iniciar" */
+  startedAt: number | null;
+  /** tempo acumulado antes do ultimo "iniciar" */
+  accumulatedMs: number;
+}
+
+export interface LiveMatchState {
+  teamAName: string;
+  teamBName: string;
+  events: LiveGoalEvent[];
+  timer: LiveMatchTimer;
 }
 
 export interface DrawnTeamPlayer {
@@ -51,6 +85,7 @@ export interface StoredTeamsEnvelope {
   lastRotationSummary: string | null;
   config: PeladaGameConfig;
   votingStatus: PeladaVotingStatus;
+  liveMatch?: LiveMatchState | null;
 }
 
 export interface MatchRecord {
@@ -61,6 +96,68 @@ export interface MatchRecord {
   scoreB: number;
   winner: string;
   finishedAt: string;
+  events?: LiveGoalEvent[];
+}
+
+type PricedPelada = {
+  price?: number | null;
+  priceGoalkeeper?: number | null;
+  priceMonthly?: number | null;
+  goalkeepersExempt?: boolean;
+};
+
+/** Valor que um participante deve pagar conforme o tipo (goleiro, mensalista ou avulso). */
+export function getPlayerUnitPrice(
+  pelada: PricedPelada,
+  player: { isGoalkeeper?: boolean; memberType?: string | null }
+): number {
+  if (player.isGoalkeeper) {
+    if (pelada.priceGoalkeeper !== null && pelada.priceGoalkeeper !== undefined) {
+      return Math.max(0, pelada.priceGoalkeeper);
+    }
+    return pelada.goalkeepersExempt ? 0 : Math.max(0, pelada.price || 0);
+  }
+  if (player.memberType === 'MENSALISTA') {
+    if (pelada.priceMonthly !== null && pelada.priceMonthly !== undefined) {
+      return Math.max(0, pelada.priceMonthly);
+    }
+  }
+  return Math.max(0, pelada.price || 0);
+}
+
+function isPeladaFree(pelada: PricedPelada): boolean {
+  return (
+    !(pelada.price && pelada.price > 0) &&
+    !(pelada.priceGoalkeeper && pelada.priceGoalkeeper > 0) &&
+    !(pelada.priceMonthly && pelada.priceMonthly > 0)
+  );
+}
+
+/** Ajusta EXEMPT/PENDING conforme o valor devido; nunca mexe em PAID/WAITING_CONFIRMATION. */
+function resolvePaymentStatus(currentStatus: string | null | undefined, unitPrice: number): string {
+  const current = currentStatus || 'PENDING';
+  if (current === 'PAID' || current === 'WAITING_CONFIRMATION') return current;
+  return unitPrice <= 0 ? 'EXEMPT' : 'PENDING';
+}
+
+function computeLiveScore(live: LiveMatchState) {
+  const scoreA = live.events.filter((e) => e.teamName === live.teamAName).length;
+  const scoreB = live.events.filter((e) => e.teamName === live.teamBName).length;
+  return { scoreA, scoreB };
+}
+
+function getTimerElapsedMs(timer: LiveMatchTimer, now = Date.now()): number {
+  const running = timer.running && timer.startedAt ? now - timer.startedAt : 0;
+  return Math.max(0, (timer.accumulatedMs || 0) + running);
+}
+
+function newLiveMatch(teamAName: string, teamBName: string): LiveMatchState {
+  return {
+    teamAName,
+    teamBName,
+    events: [],
+    timer: { running: false, startedAt: null, accumulatedMs: 0 },
+  };
 }
 
 function normalizeText(value: string): string {
@@ -69,15 +166,6 @@ function normalizeText(value: string): string {
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
     .trim();
-}
-
-function shuffleArray<T>(items: T[]): T[] {
-  const arr = [...items];
-  for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [arr[i], arr[j]] = [arr[j], arr[i]];
-  }
-  return arr;
 }
 
 const RECURRENCE_DAY_MAP: Record<string, number> = {
@@ -179,6 +267,9 @@ export class PeladaService {
             position: true,
             photoUrl: true,
             region: true,
+            instagram: true,
+            favoriteTeam: true,
+            idol: true,
           },
         },
       },
@@ -265,6 +356,7 @@ export class PeladaService {
         lastRotationSummary: null,
         config: defaultConfig,
         votingStatus: 'OPEN',
+        liveMatch: null,
       };
     }
 
@@ -284,6 +376,7 @@ export class PeladaService {
               : defaultConfig.teamNames,
         },
         votingStatus: 'OPEN',
+        liveMatch: null,
       };
     }
 
@@ -328,9 +421,57 @@ export class PeladaService {
           typeof parsedConfig.maxConsecutiveWins === 'number'
             ? parsedConfig.maxConsecutiveWins
             : defaultConfig.maxConsecutiveWins || 0,
+        teamPhotos:
+          parsedConfig.teamPhotos && typeof parsedConfig.teamPhotos === 'object'
+            ? parsedConfig.teamPhotos
+            : {},
       },
       votingStatus: parsed.votingStatus === 'CLOSED' ? 'CLOSED' : 'OPEN',
+      liveMatch: this.parseLiveMatch(parsed.liveMatch),
     };
+  }
+
+  private parseLiveMatch(raw: any): LiveMatchState | null {
+    if (!raw || typeof raw !== 'object') return null;
+    if (typeof raw.teamAName !== 'string' || typeof raw.teamBName !== 'string') return null;
+    const timer = raw.timer || {};
+    return {
+      teamAName: raw.teamAName,
+      teamBName: raw.teamBName,
+      events: Array.isArray(raw.events) ? raw.events : [],
+      timer: {
+        running: Boolean(timer.running),
+        startedAt: typeof timer.startedAt === 'number' ? timer.startedAt : null,
+        accumulatedMs: typeof timer.accumulatedMs === 'number' ? timer.accumulatedMs : 0,
+      },
+    };
+  }
+
+  /**
+   * Partida em andamento: a salva no envelope ou, se ainda nao existir, a padrao
+   * (os dois primeiros times em quadra).
+   */
+  private resolveLiveMatch(envelope: StoredTeamsEnvelope): LiveMatchState | null {
+    const teamNames = envelope.teams.map((t) => t.name);
+    const live = envelope.liveMatch;
+    if (live && teamNames.includes(live.teamAName) && teamNames.includes(live.teamBName)) {
+      return live;
+    }
+    if (envelope.teams.length >= 2) {
+      return newLiveMatch(envelope.teams[0].name, envelope.teams[1].name);
+    }
+    return null;
+  }
+
+  /** Identificador de versao barato: muda sempre que a pelada ou qualquer participante muda. */
+  private buildSyncVersion(
+    peladaUpdatedAt: Date | string,
+    playersMaxUpdatedAt: Date | string | null | undefined,
+    playersCount: number
+  ): string {
+    const a = new Date(peladaUpdatedAt).getTime();
+    const b = playersMaxUpdatedAt ? new Date(playersMaxUpdatedAt).getTime() : 0;
+    return `${a}-${b}-${playersCount}`;
   }
 
   private formatPelada(pelada: any, currentUserId?: string) {
@@ -354,16 +495,26 @@ export class PeladaService {
         : myPlayer?.role || null;
 
     const unitPrice = pelada.price || 0;
+    const priceOf = (p: any) => getPlayerUnitPrice(pelada, p);
     const payableConfirmed = confirmedPlayers.filter((p: any) => p.paymentStatus !== 'EXEMPT');
-    const paidCount = confirmedPlayers.filter((p: any) => p.paymentStatus === 'PAID').length;
+    const paidPlayers = confirmedPlayers.filter((p: any) => p.paymentStatus === 'PAID');
+    const paidCount = paidPlayers.length;
     const waitingCount = confirmedPlayers.filter((p: any) => p.paymentStatus === 'WAITING_CONFIRMATION').length;
     const pendingCount = confirmedPlayers.filter((p: any) => p.paymentStatus === 'PENDING').length;
     const exemptCount = confirmedPlayers.filter((p: any) => p.paymentStatus === 'EXEMPT').length;
+    const sumPrices = (list: any[]) =>
+      Number(list.reduce((sum: number, p: any) => sum + priceOf(p), 0).toFixed(2));
+
+    for (const p of players) {
+      p.unitPrice = priceOf(p);
+    }
 
     const financialSummary = {
       unitPrice,
-      totalExpected: Number((payableConfirmed.length * unitPrice).toFixed(2)),
-      totalPaid: Number((paidCount * unitPrice).toFixed(2)),
+      goalkeeperPrice: getPlayerUnitPrice(pelada, { isGoalkeeper: true }),
+      monthlyPrice: getPlayerUnitPrice(pelada, { memberType: 'MENSALISTA' }),
+      totalExpected: sumPrices(payableConfirmed),
+      totalPaid: sumPrices(paidPlayers),
       paidCount,
       waitingCount,
       pendingCount,
@@ -383,9 +534,31 @@ export class PeladaService {
       ? this.buildVoteRanking(players, 'votedGoalkeeperForId')
       : [];
 
+    const playersMaxUpdatedAt = (pelada.players || []).reduce(
+      (max: number, p: any) => Math.max(max, new Date(p.updatedAt).getTime() || 0),
+      0
+    );
+    const syncVersion = this.buildSyncVersion(
+      pelada.updatedAt,
+      playersMaxUpdatedAt ? new Date(playersMaxUpdatedAt) : null,
+      (pelada.players || []).length
+    );
+
+    const live = pelada.status === 'IN_PROGRESS' ? this.resolveLiveMatch(envelope) : null;
+    const liveMatch = live
+      ? {
+          ...live,
+          ...computeLiveScore(live),
+          elapsedMs: getTimerElapsedMs(live.timer),
+        }
+      : null;
+
     const { teamsJson, matchesJson, ...rest } = pelada;
     return {
       ...rest,
+      syncVersion,
+      serverNow: Date.now(),
+      liveMatch,
       players,
       teams: envelope.teams,
       waitingQueue: envelope.waitingQueue,
@@ -515,7 +688,10 @@ export class PeladaService {
     }
 
     const inviteCode = await this.generateUniqueInviteCode();
-    const isFree = !data.price || data.price <= 0;
+    const goalkeepersExempt =
+      data.priceGoalkeeper !== undefined && data.priceGoalkeeper !== null
+        ? data.priceGoalkeeper <= 0
+        : data.goalkeepersExempt ?? true;
     const seriesId = crypto.randomUUID();
 
     const pelada = await prisma.pelada.create({
@@ -527,6 +703,8 @@ export class PeladaService {
         location: data.location,
         locationAddress: data.locationAddress,
         price: data.price,
+        priceGoalkeeper: data.priceGoalkeeper ?? null,
+        priceMonthly: data.priceMonthly ?? null,
         isRecurring: data.isRecurring ?? false,
         recurrenceDay: data.recurrenceDay,
         recurrenceDays: (data as any).recurrenceDays || null,
@@ -534,7 +712,7 @@ export class PeladaService {
         inviteCode,
         isPublic: data.isPublic ?? true,
         pixKey: data.pixKey || null,
-        goalkeepersExempt: data.goalkeepersExempt ?? true,
+        goalkeepersExempt,
         playersPerTeam: data.playersPerTeam ?? 5,
         cancelDeadlineHours: data.cancelDeadlineHours ?? 4,
         durationHours: data.durationHours ?? 2,
@@ -547,7 +725,7 @@ export class PeladaService {
             status: 'CONFIRMED',
             isGoalkeeper: false,
             position: organizer.position,
-            paymentStatus: isFree ? 'EXEMPT' : 'PAID',
+            paymentStatus: (data.price || 0) > 0 ? 'PAID' : 'EXEMPT',
           },
         },
       },
@@ -730,14 +908,46 @@ export class PeladaService {
     if (data.dateTime) {
       updateData.dateTime = new Date(data.dateTime);
     }
+    if (data.priceGoalkeeper !== undefined && data.priceGoalkeeper !== null) {
+      updateData.goalkeepersExempt = data.priceGoalkeeper <= 0;
+    }
 
-    await prisma.pelada.update({
+    const updated = await prisma.pelada.update({
       where: { id: peladaId },
       data: updateData,
+      include: { players: true },
     });
+
+    const pricesChanged =
+      data.price !== undefined ||
+      data.priceGoalkeeper !== undefined ||
+      data.priceMonthly !== undefined ||
+      data.goalkeepersExempt !== undefined;
+    if (pricesChanged) {
+      await this.recalculatePaymentStatuses(updated);
+    }
 
     await this.promoteFromWaitlistIfPossible(peladaId);
     return this.getById(peladaId, userId);
+  }
+
+  /** Reaplica isencao/pendencia conforme os valores atuais (pagos e em confirmacao ficam intactos). */
+  private async recalculatePaymentStatuses(pelada: any) {
+    const updates = (pelada.players || [])
+      .filter((p: any) => p.userId !== pelada.organizerId)
+      .map((p: any) => ({
+        id: p.id,
+        current: p.paymentStatus,
+        next: resolvePaymentStatus(p.paymentStatus, getPlayerUnitPrice(pelada, p)),
+      }))
+      .filter((u: any) => u.current !== u.next);
+
+    for (const u of updates) {
+      await prisma.peladaPlayer.update({
+        where: { id: u.id },
+        data: { paymentStatus: u.next },
+      });
+    }
   }
 
   async delete(peladaId: string, userId: string) {
@@ -841,15 +1051,10 @@ export class PeladaService {
       finalStatus = 'WAITLIST';
     }
 
-    const isFree = !pelada.price || pelada.price <= 0;
-    let paymentStatus = existing?.paymentStatus || 'PENDING';
-    if (paymentStatus !== 'PAID') {
-      if (isFree || (isGoalkeeper && pelada.goalkeepersExempt)) {
-        paymentStatus = 'EXEMPT';
-      } else if (paymentStatus === 'EXEMPT') {
-        paymentStatus = 'PENDING';
-      }
-    }
+    const paymentStatus = resolvePaymentStatus(
+      existing?.paymentStatus,
+      getPlayerUnitPrice(pelada, { isGoalkeeper, memberType: existing?.memberType })
+    );
 
     if (existing) {
       await prisma.peladaPlayer.update({
@@ -897,9 +1102,10 @@ export class PeladaService {
         ? 'WAITLIST'
         : 'CONFIRMED';
 
-    const isFree = !pelada.price || pelada.price <= 0;
-    const paymentStatus =
-      isFree || (isGoalkeeper && pelada.goalkeepersExempt) ? 'EXEMPT' : 'PENDING';
+    const paymentStatus = resolvePaymentStatus(
+      null,
+      getPlayerUnitPrice(pelada, { isGoalkeeper, memberType: 'DIARISTA' })
+    );
 
     await prisma.peladaPlayer.create({
       data: {
@@ -1148,7 +1354,19 @@ export class PeladaService {
       where: { id: playerRecordId },
       data: {
         ...(data.attendanceStatus !== undefined && { attendanceStatus: data.attendanceStatus }),
-        ...(data.memberType !== undefined && { memberType: data.memberType }),
+        ...(data.memberType !== undefined && {
+          memberType: data.memberType,
+          // mensalista e avulso podem ter valores diferentes
+          ...(record.userId !== pelada.organizerId && {
+            paymentStatus: resolvePaymentStatus(
+              record.paymentStatus,
+              getPlayerUnitPrice(pelada, {
+                isGoalkeeper: record.isGoalkeeper,
+                memberType: data.memberType,
+              })
+            ),
+          }),
+        }),
       },
     });
 
@@ -1245,6 +1463,21 @@ export class PeladaService {
     const matches = this.safeJsonParse<MatchRecord[]>(pelada.matchesJson, []);
     const maxWins = envelope.config.maxConsecutiveWins || 0;
 
+    // Se a sumula ao vivo e destes dois times, o placar oficial e o dos gols lancados.
+    const live = this.resolveLiveMatch(envelope);
+    let liveEvents: LiveGoalEvent[] | undefined;
+    if (live && live.events.length > 0) {
+      if (live.teamAName === data.teamAName && live.teamBName === data.teamBName) {
+        const s = computeLiveScore(live);
+        data = { ...data, scoreA: s.scoreA, scoreB: s.scoreB };
+        liveEvents = live.events;
+      } else if (live.teamAName === data.teamBName && live.teamBName === data.teamAName) {
+        const s = computeLiveScore(live);
+        data = { ...data, scoreA: s.scoreB, scoreB: s.scoreA };
+        liveEvents = live.events;
+      }
+    }
+
     const winner =
       data.scoreA > data.scoreB
         ? data.teamAName
@@ -1290,6 +1523,7 @@ export class PeladaService {
       scoreB: data.scoreB,
       winner,
       finishedAt: new Date().toISOString(),
+      ...(liveEvents ? { events: liveEvents } : {}),
     };
 
     matches.push(newMatch);
@@ -1412,6 +1646,46 @@ export class PeladaService {
         const stayingTeam = teams[stayingIdx];
         const losingTeam = teams[leavingIdx];
         losingTeam.consecutiveWins = 0;
+
+        if (winnerHitLimit) {
+          // Limite de vitorias seguidas: o time inteiro sai e entram os de fora NA ORDEM
+          // (sem sorteio). So sorteia quem fica se os de fora nao completam um time.
+          const rotation = rotateWinnerAtLimit({
+            leavingTeamPlayers: losingTeam.players,
+            waitingQueue: envelope.waitingQueue,
+            lastLoserPool: envelope.lastLoserPool,
+            perTeam,
+          });
+
+          const incomingTeam: DrawnTeam = {
+            name: losingTeam.name,
+            players: rotation.incomingTeamPlayers,
+            consecutiveWins: 0,
+          };
+          envelope.teams =
+            stayingIdx === 0 ? [stayingTeam, incomingTeam] : [incomingTeam, stayingTeam];
+          envelope.waitingQueue = rotation.waitingQueue;
+          envelope.lastLoserPool = rotation.lastLoserPool;
+
+          const names = (list: DrawnTeamPlayer[]) => list.map((p) => p.name).join(', ');
+          const parts: string[] = [];
+          if (rotation.enteredFromOutside.length > 0) {
+            parts.push(`Entraram (${rotation.enteredFromOutside.length}): ${names(rotation.enteredFromOutside)}`);
+          }
+          if (rotation.keptFromLeavingTeam.length > 0) {
+            parts.push(
+              `Faltou gente de fora, sorteados para continuar (${rotation.keptFromLeavingTeam.length}): ${names(rotation.keptFromLeavingTeam)}`
+            );
+          }
+          if (rotation.incomingGoalkeeper) {
+            parts.push(`Goleiro: ${rotation.incomingGoalkeeper.name}`);
+          } else if (rotation.goalkeeperStayed) {
+            parts.push(`Goleiro ${rotation.goalkeeperStayed.name} continua (sem outro goleiro fora)`);
+          }
+          envelope.lastRotationSummary = `${losingTeam.name} atingiu o limite de ${maxWins} ${
+            maxWins === 1 ? 'vitória' : 'vitórias'
+          } seguidas e saiu. ${stayingTeam.name} permanece. ${parts.join(' • ')}.`;
+        } else {
         const losingTeamLine = losingTeam.players.filter((p) => !p.isGoalkeeper);
         const losingTeamGks = losingTeam.players.filter((p) => p.isGoalkeeper);
 
@@ -1482,11 +1756,7 @@ export class PeladaService {
               .join(', ')}`
           );
         }
-        if (winnerHitLimit) {
-          envelope.lastRotationSummary = `${losingTeam.name} atingiu o limite de ${maxWins} ${maxWins === 1 ? 'vitória' : 'vitórias'} seguidas e rodou para a fila! ${stayingTeam.name} permaneceu em quadra. Entraram em ${newChallengingTeam.name} — ${parts.join(
-            ' • '
-          )}.`;
-        } else if (winner !== 'EMPATE') {
+        if (winner !== 'EMPATE') {
           envelope.lastRotationSummary = `${stayingTeam.name} venceu (${stayingTeam.consecutiveWins || 1}ª vitória seguida) e permanece. Entraram em ${newChallengingTeam.name} — ${parts.join(
             ' • '
           )}.`;
@@ -1495,10 +1765,13 @@ export class PeladaService {
             ' • '
           )}.`;
         }
+        }
       }
     } else if (winnerHitLimit) {
       envelope.lastRotationSummary = `${winner} atingiu o limite de ${maxWins} ${maxWins === 1 ? 'vitória' : 'vitórias'} seguidas!`;
     }
+
+    envelope.liveMatch = this.pickNextMatchup(envelope, data.teamAName, data.teamBName, winner);
 
     await prisma.pelada.update({
       where: { id: peladaId },
@@ -1508,6 +1781,239 @@ export class PeladaService {
       },
     });
 
+    return this.getById(peladaId, actorUserId);
+  }
+
+  /** Define o proximo confronto da sumula ao vivo apos encerrar uma partida. */
+  private pickNextMatchup(
+    envelope: StoredTeamsEnvelope,
+    playedA: string,
+    playedB: string,
+    winner: string
+  ): LiveMatchState | null {
+    const teams = envelope.teams;
+    if (teams.length < 2) return null;
+    if (envelope.config.gameMode !== 'FIXED_TEAMS' || teams.length === 2) {
+      return newLiveMatch(teams[0].name, teams[1].name);
+    }
+    // Times fixos (3+): quem venceu fica e enfrenta o proximo time que nao jogou.
+    const stays = winner !== 'EMPATE' ? winner : playedA;
+    const order = teams.map((t) => t.name);
+    const startIdx = Math.max(order.indexOf(playedA), order.indexOf(playedB));
+    for (let i = 1; i <= order.length; i++) {
+      const candidate = order[(startIdx + i) % order.length];
+      if (candidate !== playedA && candidate !== playedB) {
+        return newLiveMatch(stays, candidate);
+      }
+    }
+    return newLiveMatch(playedA, playedB);
+  }
+
+  /**
+   * Le-modifica-grava o envelope com controle otimista (evita perder um gol quando
+   * dois organizadores lancam ao mesmo tempo).
+   */
+  private async mutateEnvelope(
+    peladaId: string,
+    actorUserId: string,
+    mutate: (envelope: StoredTeamsEnvelope, pelada: any) => Promise<void> | void
+  ) {
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const pelada = await this.ensureCanManage(peladaId, actorUserId);
+      const envelope = this.parseTeamsEnvelope(pelada);
+      await mutate(envelope, pelada);
+      const result = await prisma.pelada.updateMany({
+        where: { id: peladaId, updatedAt: pelada.updatedAt },
+        data: { teamsJson: JSON.stringify(envelope), updatedAt: new Date() },
+      });
+      if (result.count === 1) return;
+    }
+    throw this.createHttpError('A súmula foi alterada por outra pessoa. Tente novamente.', 409);
+  }
+
+  private requireLiveMatch(envelope: StoredTeamsEnvelope, pelada: any): LiveMatchState {
+    if (pelada.status !== 'IN_PROGRESS') {
+      throw this.createHttpError('A súmula ao vivo só funciona com a pelada em andamento.', 400);
+    }
+    const live = this.resolveLiveMatch(envelope);
+    if (!live) {
+      throw this.createHttpError('Defina os times antes de lançar a súmula.', 400);
+    }
+    envelope.liveMatch = live;
+    return live;
+  }
+
+  async getSyncVersion(peladaId: string) {
+    const [pelada, agg] = await Promise.all([
+      prisma.pelada.findUnique({
+        where: { id: peladaId },
+        select: { updatedAt: true, status: true },
+      }),
+      prisma.peladaPlayer.aggregate({
+        where: { peladaId },
+        _max: { updatedAt: true },
+        _count: { _all: true },
+      }),
+    ]);
+    if (!pelada) {
+      throw this.createHttpError('Peladinha nao encontrada', 404);
+    }
+    return {
+      syncVersion: this.buildSyncVersion(pelada.updatedAt, agg._max.updatedAt, agg._count._all),
+      status: pelada.status,
+      serverNow: Date.now(),
+    };
+  }
+
+  async addLiveGoal(peladaId: string, actorUserId: string, input: LiveGoalInput) {
+    let statsToApply: { scorerId: string | null; assistId: string | null } | null = null;
+
+    await this.mutateEnvelope(peladaId, actorUserId, (envelope, pelada) => {
+      const live = this.requireLiveMatch(envelope, pelada);
+      if (input.teamName !== live.teamAName && input.teamName !== live.teamBName) {
+        throw this.createHttpError('Esse time não está jogando a partida atual.', 400);
+      }
+
+      const findPlayer = (id?: string | null) =>
+        id ? pelada.players.find((p: any) => p.id === id) || null : null;
+      const scorer = findPlayer(input.scorerId);
+      const assist = input.ownGoal ? null : findPlayer(input.assistId);
+      if (input.scorerId && !scorer) {
+        throw this.createHttpError('Autor do gol não encontrado nesta pelada.', 404);
+      }
+      if (assist && scorer && assist.id === scorer.id) {
+        throw this.createHttpError('O autor do gol não pode dar a assistência para si mesmo.', 400);
+      }
+
+      const nameOf = (id: string | null) => {
+        if (!id) return null;
+        for (const t of envelope.teams) {
+          const found = t.players.find((p) => p.id === id);
+          if (found) return found.name;
+        }
+        return null;
+      };
+      const elapsed = getTimerElapsedMs(live.timer);
+      const timerUsed = live.timer.running || live.timer.accumulatedMs > 0;
+
+      live.events.push({
+        id: crypto.randomUUID(),
+        teamName: input.teamName,
+        scorerId: scorer?.id || null,
+        scorerName: scorer ? nameOf(scorer.id) || scorer.guestName || 'Jogador' : null,
+        assistId: assist?.id || null,
+        assistName: assist ? nameOf(assist.id) || assist.guestName || 'Jogador' : null,
+        ownGoal: Boolean(input.ownGoal),
+        minute: timerUsed ? Math.floor(elapsed / 60000) + 1 : null,
+        createdAt: new Date().toISOString(),
+      });
+
+      statsToApply = {
+        scorerId: input.ownGoal ? null : scorer?.id || null,
+        assistId: assist?.id || null,
+      };
+    });
+
+    await this.applyGoalStats(statsToApply, 1);
+    return this.getById(peladaId, actorUserId);
+  }
+
+  async removeLiveGoal(peladaId: string, actorUserId: string, eventId: string) {
+    let statsToRevert: { scorerId: string | null; assistId: string | null } | null = null;
+
+    await this.mutateEnvelope(peladaId, actorUserId, (envelope, pelada) => {
+      const live = this.requireLiveMatch(envelope, pelada);
+      const idx = live.events.findIndex((e) => e.id === eventId);
+      if (idx === -1) {
+        throw this.createHttpError('Lance não encontrado na súmula.', 404);
+      }
+      const [removed] = live.events.splice(idx, 1);
+      statsToRevert = {
+        scorerId: removed.ownGoal ? null : removed.scorerId,
+        assistId: removed.assistId,
+      };
+    });
+
+    await this.applyGoalStats(statsToRevert, -1);
+    return this.getById(peladaId, actorUserId);
+  }
+
+  private async applyGoalStats(
+    stats: { scorerId: string | null; assistId: string | null } | null,
+    delta: 1 | -1
+  ) {
+    if (!stats) return;
+    const ops: Promise<unknown>[] = [];
+    if (stats.scorerId) {
+      ops.push(
+        prisma.peladaPlayer.updateMany({
+          where: { id: stats.scorerId, ...(delta < 0 && { goals: { gt: 0 } }) },
+          data: { goals: { increment: delta } },
+        })
+      );
+    }
+    if (stats.assistId) {
+      ops.push(
+        prisma.peladaPlayer.updateMany({
+          where: { id: stats.assistId, ...(delta < 0 && { assists: { gt: 0 } }) },
+          data: { assists: { increment: delta } },
+        })
+      );
+    }
+    await Promise.all(ops);
+  }
+
+  async setLiveMatchup(peladaId: string, actorUserId: string, input: LiveMatchupInput) {
+    await this.mutateEnvelope(peladaId, actorUserId, (envelope, pelada) => {
+      const live = this.requireLiveMatch(envelope, pelada);
+      const names = envelope.teams.map((t) => t.name);
+      if (
+        !names.includes(input.teamAName) ||
+        !names.includes(input.teamBName) ||
+        input.teamAName === input.teamBName
+      ) {
+        throw this.createHttpError('Escolha dois times diferentes que estão na pelada.', 400);
+      }
+      if (live.events.length > 0) {
+        throw this.createHttpError(
+          'Já há gols lançados nesta partida. Encerre a partida ou apague os gols antes de trocar os times.',
+          400
+        );
+      }
+      envelope.liveMatch = { ...live, teamAName: input.teamAName, teamBName: input.teamBName };
+    });
+    return this.getById(peladaId, actorUserId);
+  }
+
+  async controlLiveTimer(peladaId: string, actorUserId: string, input: LiveTimerInput) {
+    await this.mutateEnvelope(peladaId, actorUserId, (envelope, pelada) => {
+      const live = this.requireLiveMatch(envelope, pelada);
+      const now = Date.now();
+      if (input.action === 'START' && !live.timer.running) {
+        live.timer = { ...live.timer, running: true, startedAt: now };
+      } else if (input.action === 'PAUSE' && live.timer.running) {
+        live.timer = {
+          running: false,
+          startedAt: null,
+          accumulatedMs: getTimerElapsedMs(live.timer, now),
+        };
+      } else if (input.action === 'RESET') {
+        live.timer = { running: false, startedAt: null, accumulatedMs: 0 };
+      }
+    });
+    return this.getById(peladaId, actorUserId);
+  }
+
+  async setTeamPhoto(peladaId: string, actorUserId: string, input: TeamPhotoInput) {
+    await this.mutateEnvelope(peladaId, actorUserId, (envelope) => {
+      const photos = { ...(envelope.config.teamPhotos || {}) };
+      if (input.photoUrl) {
+        photos[input.teamName] = input.photoUrl;
+      } else {
+        delete photos[input.teamName];
+      }
+      envelope.config.teamPhotos = photos;
+    });
     return this.getById(peladaId, actorUserId);
   }
 
@@ -1719,6 +2225,7 @@ export class PeladaService {
     envelope.waitingQueue = [...excessField, ...excessGks];
     envelope.lastLoserPool = [];
     envelope.lastRotationSummary = null;
+    envelope.liveMatch = null;
 
     await prisma.pelada.update({
       where: { id: peladaId },
@@ -1782,6 +2289,7 @@ export class PeladaService {
     envelope.waitingQueue = unassignedPresent;
     envelope.lastLoserPool = [];
     envelope.lastRotationSummary = null;
+    envelope.liveMatch = null;
 
     await prisma.pelada.update({
       where: { id: peladaId },
@@ -1857,7 +2365,7 @@ export class PeladaService {
 
     const originalInviteCode = pelada.inviteCode;
     const archivedCode = await this.generateUniqueInviteCode();
-    const isFree = !pelada.price || pelada.price <= 0;
+    const isFree = isPeladaFree(pelada);
 
     const statusPriority = (p: any) => {
       if (p.role === 'ORGANIZER' || p.role === 'CO_ORGANIZER' || p.memberType === 'MENSALISTA') {
@@ -1886,8 +2394,9 @@ export class PeladaService {
         fieldConfirmedCount += 1;
       }
 
+      const unitPrice = getPlayerUnitPrice(pelada, { isGoalkeeper: isGk, memberType: p.memberType });
       const paymentStatus =
-        isFree || (isGk && pelada.goalkeepersExempt)
+        unitPrice <= 0
           ? 'EXEMPT'
           : p.role === 'ORGANIZER' || p.memberType === 'MENSALISTA'
           ? 'PAID'
@@ -1947,6 +2456,8 @@ export class PeladaService {
           location: pelada.location,
           locationAddress: pelada.locationAddress,
           price: pelada.price,
+          priceGoalkeeper: pelada.priceGoalkeeper,
+          priceMonthly: pelada.priceMonthly,
           isRecurring: pelada.isRecurring,
           recurrenceDay: pelada.recurrenceDay,
           recurrenceDays: pelada.recurrenceDays,
@@ -1978,7 +2489,7 @@ export class PeladaService {
     count: number
   ) {
     const baseDate = new Date(basePelada.dateTime);
-    const isFree = !basePelada.price || basePelada.price <= 0;
+    const isFree = isPeladaFree(basePelada);
 
     for (let i = 1; i <= count; i++) {
       const nextDate = new Date(baseDate);
@@ -1993,6 +2504,8 @@ export class PeladaService {
           location: basePelada.location,
           locationAddress: basePelada.locationAddress,
           price: basePelada.price,
+          priceGoalkeeper: basePelada.priceGoalkeeper ?? null,
+          priceMonthly: basePelada.priceMonthly ?? null,
           isRecurring: true,
           recurrenceDay: basePelada.recurrenceDay,
           maxPlayers: basePelada.maxPlayers,

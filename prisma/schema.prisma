@@ -18,6 +18,9 @@ model User {
   position     String?
   photoUrl     String?  @map("photo_url")
   region       String?
+  instagram    String?
+  favoriteTeam String?  @map("favorite_team")
+  idol         String?
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
@@ -36,6 +39,8 @@ model Pelada {
   location            String
   locationAddress     String?  @map("location_address")
   price               Float?
+  priceGoalkeeper     Float?   @map("price_goalkeeper")
+  priceMonthly        Float?   @map("price_monthly")
   isRecurring         Boolean  @default(false) @map("is_recurring")
   recurrenceDay       String?  @map("recurrence_day")
   recurrenceDays      String?  @map("recurrence_days")

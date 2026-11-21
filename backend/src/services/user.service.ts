@@ -2,6 +2,7 @@
 import prisma from '../utils/prisma';
 import { ChangePasswordInput, UpdateProfileInput } from '../schemas/user.schema';
 import { comparePassword, hashPassword } from '../utils/password';
+import { normalizeInstagram } from './auth.service';
 
 interface ParticipationSummary {
   id: string;
@@ -50,6 +51,9 @@ export class UserService {
         position: true,
         photoUrl: true,
         region: true,
+        instagram: true,
+        favoriteTeam: true,
+        idol: true,
         createdAt: true,
         updatedAt: true,
         _count: {
@@ -112,6 +116,7 @@ export class UserService {
           sport: true,
           position: true,
           region: true,
+          photoUrl: true,
           participations: {
             select: {
               id: true,
@@ -169,6 +174,7 @@ export class UserService {
           sport: u.sport,
           position: u.position,
           region: u.region,
+          photoUrl: u.photoUrl,
           totalGames: metrics.totalGames,
           totalGoals: metrics.totalGoals,
           totalAssists: metrics.totalAssists,
@@ -187,9 +193,15 @@ export class UserService {
   }
 
   async updateProfile(userId: string, data: UpdateProfileInput) {
+    const { instagram, favoriteTeam, idol, ...rest } = data;
     await prisma.user.update({
       where: { id: userId },
-      data,
+      data: {
+        ...rest,
+        ...(instagram !== undefined && { instagram: normalizeInstagram(instagram) }),
+        ...(favoriteTeam !== undefined && { favoriteTeam: favoriteTeam?.trim() || null }),
+        ...(idol !== undefined && { idol: idol?.trim() || null }),
+      },
     });
 
     return this.getProfile(userId);

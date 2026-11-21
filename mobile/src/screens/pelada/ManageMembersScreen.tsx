@@ -24,6 +24,7 @@ import { Pelada, PeladaPlayer } from '../../types';
 import { colors, fonts, spacing, borderRadius, shadows } from '../../constants/theme';
 import { showConfirm, showMessage } from '../../utils/alerts';
 import { useResponsive } from '../../hooks/useResponsive';
+import { usePeladaLiveSync } from '../../hooks/usePeladaLiveSync';
 
 type Props = NativeStackScreenProps<AppStackParamList, 'ManageMembers'>;
 
@@ -59,6 +60,16 @@ export function ManageMembersScreen({ navigation, route }: Props) {
       loadPelada();
     }, [loadPelada])
   );
+
+  // Tempo real: quando alguem muda algo na pelada, atualiza esta tela sozinha
+  const silentReload = useCallback(async () => {
+    try {
+      setPelada(await getPeladaById(peladaId));
+    } catch {
+      // ignora falhas pontuais; tenta no proximo ciclo
+    }
+  }, [peladaId]);
+  usePeladaLiveSync(peladaId, { currentVersion: pelada?.syncVersion, reload: silentReload });
 
   const isOrganizer = pelada?.myRole === 'ORGANIZER';
   const canManage = pelada?.myRole === 'ORGANIZER' || pelada?.myRole === 'CO_ORGANIZER';
@@ -286,6 +297,7 @@ export function ManageMembersScreen({ navigation, route }: Props) {
             placeholderTextColor={colors.textMuted}
             value={guestName}
             onChangeText={setGuestName}
+            maxLength={40}
             accessibilityLabel="Nome do convidado avulso"
           />
           <TouchableOpacity

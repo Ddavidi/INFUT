@@ -18,6 +18,7 @@ export interface RankingPlayer {
   sport: string | null;
   position: string | null;
   region: string | null;
+  photoUrl?: string | null;
   totalGames: number;
   totalGoals: number;
   totalAssists: number;
@@ -35,9 +36,21 @@ export interface User {
   position: string | null;
   photoUrl: string | null;
   region: string | null;
+  instagram?: string | null;
+  favoriteTeam?: string | null;
+  idol?: string | null;
   createdAt: string;
   updatedAt?: string;
   stats?: UserStats;
+}
+
+export interface ProfileExtras {
+  photoUrl?: string | null;
+  instagram?: string | null;
+  favoriteTeam?: string | null;
+  idol?: string | null;
+  sport?: string | null;
+  position?: string | null;
 }
 
 export interface AuthResponse {
@@ -63,6 +76,29 @@ export interface PeladaGameConfig {
   fixedTeamsCount: number;
   teamNames: string[];
   maxConsecutiveWins?: number;
+  teamPhotos?: Record<string, string>;
+}
+
+export interface LiveGoalEvent {
+  id: string;
+  teamName: string;
+  scorerId: string | null;
+  scorerName: string | null;
+  assistId: string | null;
+  assistName: string | null;
+  ownGoal: boolean;
+  minute: number | null;
+  createdAt: string;
+}
+
+export interface LiveMatch {
+  teamAName: string;
+  teamBName: string;
+  events: LiveGoalEvent[];
+  timer: { running: boolean; startedAt: number | null; accumulatedMs: number };
+  scoreA: number;
+  scoreB: number;
+  elapsedMs: number;
 }
 
 export interface PeladaPlayer {
@@ -84,6 +120,7 @@ export interface PeladaPlayer {
   votedMvpForId: string | null;
   votedGoalkeeperForId: string | null;
   joinedAt: string;
+  unitPrice?: number;
   user?: {
     id: string;
     name: string;
@@ -92,6 +129,9 @@ export interface PeladaPlayer {
     position: string | null;
     photoUrl: string | null;
     region: string | null;
+    instagram?: string | null;
+    favoriteTeam?: string | null;
+    idol?: string | null;
   } | null;
 }
 
@@ -117,10 +157,13 @@ export interface MatchRecord {
   winner: string;
   finishedAt: string;
   leavingTeamName?: string;
+  events?: LiveGoalEvent[];
 }
 
 export interface FinancialSummary {
   unitPrice: number;
+  goalkeeperPrice?: number;
+  monthlyPrice?: number;
   totalExpected: number;
   totalPaid: number;
   paidCount: number;
@@ -171,6 +214,8 @@ export interface Pelada {
   location: string;
   locationAddress: string | null;
   price: number | null;
+  priceGoalkeeper?: number | null;
+  priceMonthly?: number | null;
   isRecurring: boolean;
   recurrenceDay: string | null;
   recurrenceDays?: string | null;
@@ -187,6 +232,9 @@ export interface Pelada {
   organizerId: string;
   createdAt: string;
   updatedAt: string;
+  syncVersion?: string;
+  serverNow?: number;
+  liveMatch?: LiveMatch | null;
   pastEditionsCount?: number;
   pastEditions?: PeladaPastEdition[];
   activeEditionId?: string;
@@ -227,6 +275,8 @@ export interface CreatePeladaInput {
   location: string;
   locationAddress?: string | null;
   price?: number | null;
+  priceGoalkeeper?: number | null;
+  priceMonthly?: number | null;
   isRecurring?: boolean;
   recurrenceDay?: string | null;
   recurrenceDays?: string | null;
@@ -246,4 +296,7 @@ export interface UpdateProfileInput {
   position?: string;
   photoUrl?: string | null;
   region?: string | null;
+  instagram?: string | null;
+  favoriteTeam?: string | null;
+  idol?: string | null;
 }

@@ -28,6 +28,7 @@ import { showConfirm, showMessage } from '../../utils/alerts';
 import { formatPeladaSchedule } from '../../utils/dateTime';
 import { buildInviteUrl, shareOrCopyText } from '../../utils/inviteLink';
 import { useResponsive } from '../../hooks/useResponsive';
+import { usePeladaLiveSync } from '../../hooks/usePeladaLiveSync';
 import { Ionicons } from '@expo/vector-icons';
 
 type Props = NativeStackScreenProps<AppStackParamList, 'PostGame'>;
@@ -69,6 +70,16 @@ export function PostGameScreen({ navigation, route }: Props) {
       loadPelada();
     }, [loadPelada])
   );
+
+  // Tempo real: quando alguem muda algo na pelada, atualiza esta tela sozinha
+  const silentReload = useCallback(async () => {
+    try {
+      setPelada(await getPeladaById(peladaId));
+    } catch {
+      // ignora falhas pontuais; tenta no proximo ciclo
+    }
+  }, [peladaId]);
+  usePeladaLiveSync(peladaId, { currentVersion: pelada?.syncVersion, reload: silentReload });
 
   const canManage = pelada?.myRole === 'ORGANIZER' || pelada?.myRole === 'CO_ORGANIZER';
 

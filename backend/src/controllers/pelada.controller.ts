@@ -319,4 +319,63 @@ export class PeladaController {
       next(error);
     }
   }
+
+  async getSyncVersion(req: Request, res: Response, next: NextFunction) {
+    try {
+      const result = await peladaService.getSyncVersion(String(req.params.id));
+      res.set('Cache-Control', 'no-store');
+      res.status(200).json(result);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async addLiveGoal(req: Request, res: Response, next: NextFunction) {
+    try {
+      const pelada = await peladaService.addLiveGoal(String(req.params.id), req.user!.userId, req.body);
+      res.status(201).json(pelada);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async removeLiveGoal(req: Request, res: Response, next: NextFunction) {
+    try {
+      const pelada = await peladaService.removeLiveGoal(
+        String(req.params.id),
+        req.user!.userId,
+        String(req.params.eventId)
+      );
+      res.status(200).json(pelada);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async setLiveMatchup(req: Request, res: Response, next: NextFunction) {
+    try {
+      const pelada = await peladaService.setLiveMatchup(String(req.params.id), req.user!.userId, req.body);
+      res.status(200).json(pelada);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async controlLiveTimer(req: Request, res: Response, next: NextFunction) {
+    try {
+      const pelada = await peladaService.controlLiveTimer(String(req.params.id), req.user!.userId, req.body);
+      res.status(200).json(pelada);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async setTeamPhoto(req: Request, res: Response, next: NextFunction) {
+    try {
+      const pelada = await peladaService.setTeamPhoto(String(req.params.id), req.user!.userId, req.body);
+      res.status(200).json(pelada);
+    } catch (error) {
+      next(error);
+    }
+  }
 }

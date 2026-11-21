@@ -27,10 +27,13 @@ import {
 import { PaymentStatus, Pelada, PeladaPastEdition, PeladaPlayer } from '../../types';
 import { colors, fonts, spacing, borderRadius, shadows } from '../../constants/theme';
 import { showConfirm, showMessage } from '../../utils/alerts';
+import { describePrices, hasAnyPrice } from '../../utils/prices';
+import { formatBRL } from '../../utils/masks';
 import { formatPeladaSchedule } from '../../utils/dateTime';
 import { buildInviteUrl, shareOrCopyText } from '../../utils/inviteLink';
 import { getPositionsForSport } from '../../constants/sports';
 import { useResponsive } from '../../hooks/useResponsive';
+import { usePeladaLiveSync } from '../../hooks/usePeladaLiveSync';
 import { Ionicons } from '@expo/vector-icons';
 import { FadeInView, PulseDot } from '../../components/ui/Motion';
 
@@ -98,6 +101,16 @@ export function PeladaDetailsScreen({ navigation, route }: Props) {
     }, [loadPelada])
   );
 
+  // Tempo real: quando alguem muda algo na pelada, atualiza esta tela sozinha
+  const silentReload = useCallback(async () => {
+    try {
+      setPelada(await getPeladaById(peladaId));
+    } catch {
+      // ignora falhas pontuais; tenta no proximo ciclo
+    }
+  }, [peladaId]);
+  usePeladaLiveSync(peladaId, { currentVersion: pelada?.syncVersion, reload: silentReload });
+
   const isOrganizer = pelada?.myRole === 'ORGANIZER';
   const canManage = pelada?.myRole === 'ORGANIZER' || pelada?.myRole === 'CO_ORGANIZER';
 
@@ -119,7 +132,7 @@ export function PeladaDetailsScreen({ navigation, route }: Props) {
 
   async function handleShareInvite() {
     if (!pelada) return;
-    const priceInfo = pelada.price && pelada.price > 0 ? `R$ ${pelada.price.toFixed(2)}` : 'Gratuita';
+    const priceInfo = describePrices(pelada);
     const whatsappLine = pelada.whatsappGroupUrl
       ? `\n💬 Grupo WhatsApp: ${pelada.whatsappGroupUrl}`
       : '';
@@ -168,7 +181,7 @@ export function PeladaDetailsScreen({ navigation, route }: Props) {
     const message =
       `💰 *Caixa da Pelada — ${pelada.title}*\n` +
       `📅 ${formatPeladaSchedule(pelada.dateTime, pelada.durationHours)}\n` +
-      `💵 *Valor por atleta:* R$ ${(pelada.price || 0).toFixed(2)}` +
+      `💵 *Valores:* ${describePrices(pelada)}` +
       pixLine +
       pendingBlock +
       waitingBlock +
@@ -312,7 +325,7 @@ export function PeladaDetailsScreen({ navigation, route }: Props) {
       : 100;
 
   const peladaStatus = pelada.status || 'OPEN';
-  const showPaymentStatusOnList = Boolean(pelada.price && pelada.price > 0);
+  const showPaymentStatusOnList = hasAnyPrice(pelada);
   const effectiveTab: DetailTab = canManage ? activeTab : 'attendance';
 
   function renderPlayerRow(player: PeladaPlayer, index: number, showPayment = false) {
@@ -409,10 +422,7 @@ export function PeladaDetailsScreen({ navigation, route }: Props) {
         <View style={styles.metaLineRow}>
           <Text style={styles.metaKey}>TAXA</Text>
           <Text style={styles.metaText}>
-            {pelada.price && pelada.price > 0
-              ? `R$ ${pelada.price.toFixed(2)}`
-              : 'Gratuita'}
-            {pelada.goalkeepersExempt ? ' (Goleiros isentos)' : ''}
+            {describePrices(pelada)}
           </Text>
         </View>
         <View style={styles.metaLineRow}>
@@ -570,7 +580,7 @@ export function PeladaDetailsScreen({ navigation, route }: Props) {
   ) : null;
 
   const pixCardContent =
-    pelada.pixKey || (pelada.price && pelada.price > 0) ? (
+    pelada.pixKey || hasAnyPrice(pelada) ? (
       <View style={styles.sectionCard}>
         <View style={styles.sectionHeaderRow}>
           <Text style={styles.sectionTitleNoMargin}>Chave Pix</Text>
@@ -593,6 +603,12 @@ export function PeladaDetailsScreen({ navigation, route }: Props) {
           )}
         </View>
 
+        {pelada.myPlayer && pelada.myStatus === 'CONFIRMED' && typeof pelada.myPlayer.unitPrice === 'number' ? (
+          <Text style={[styles.emptyListText, { fontStyle: 'normal', marginBottom: spacing.xs }]}>
+            Seu valor ({pelada.myPlayer.isGoalkeeper ? 'goleiro' : pelada.myPlayer.memberType === 'MENSALISTA' ? 'mensalista' : 'avulso'}):{' '}
+            {pelada.myPlayer.unitPrice > 0 ? formatBRL(pelada.myPlayer.unitPrice) : 'isento'}
+          </Text>
+        ) : null}
         {pelada.pixKey ? (
           <>
             <Text style={styles.pixKeyText} selectable>

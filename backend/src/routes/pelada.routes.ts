@@ -9,9 +9,13 @@ import {
   createPeladaSchema,
   drawTeamsSchema,
   joinByCodeSchema,
+  liveGoalSchema,
+  liveMatchupSchema,
+  liveTimerSchema,
   recordMatchSchema,
   rsvpSchema,
   setManualTeamsSchema,
+  teamPhotoSchema,
   updateCheckinSchema,
   updateGameConfigSchema,
   updatePaymentSchema,
@@ -35,6 +39,7 @@ router.get('/', authMiddleware, (req, res, next) => peladaController.list(req, r
 router.get('/explore', authMiddleware, (req, res, next) => peladaController.explore(req, res, next));
 router.post('/join-code', authMiddleware, validate(joinByCodeSchema), (req, res, next) => peladaController.joinByCode(req, res, next));
 
+router.get('/:id/sync', authMiddleware, (req, res, next) => peladaController.getSyncVersion(req, res, next));
 router.get('/:id', authMiddleware, (req, res, next) => peladaController.getById(req, res, next));
 router.put('/:id', authMiddleware, validate(updatePeladaSchema), (req, res, next) => peladaController.update(req, res, next));
 router.delete('/:id', authMiddleware, (req, res, next) => peladaController.delete(req, res, next));
@@ -56,5 +61,12 @@ router.post('/:id/next-cycle', authMiddleware, (req, res, next) => peladaControl
 router.post('/:id/matches', authMiddleware, validate(recordMatchSchema), (req, res, next) => peladaController.recordMatch(req, res, next));
 router.post('/:id/vote-mvp', authMiddleware, validate(voteMvpSchema), (req, res, next) => peladaController.voteMvp(req, res, next));
 router.post('/:id/vote-goalkeeper', authMiddleware, validate(voteGoalkeeperSchema), (req, res, next) => peladaController.voteGoalkeeper(req, res, next));
+
+// Sumula ao vivo (placar, gols, cronometro compartilhado) e escudos dos times
+router.post('/:id/live/goals', authMiddleware, validate(liveGoalSchema), (req, res, next) => peladaController.addLiveGoal(req, res, next));
+router.delete('/:id/live/goals/:eventId', authMiddleware, (req, res, next) => peladaController.removeLiveGoal(req, res, next));
+router.put('/:id/live/matchup', authMiddleware, validate(liveMatchupSchema), (req, res, next) => peladaController.setLiveMatchup(req, res, next));
+router.post('/:id/live/timer', authMiddleware, validate(liveTimerSchema), (req, res, next) => peladaController.controlLiveTimer(req, res, next));
+router.put('/:id/team-photo', authMiddleware, validate(teamPhotoSchema), (req, res, next) => peladaController.setTeamPhoto(req, res, next));
 
 export default router;

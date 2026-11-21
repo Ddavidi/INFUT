@@ -10,7 +10,8 @@ const app = express();
 
 // Middlewares globais
 app.use(cors());
-app.use(express.json());
+// Limite maior para fotos de perfil/escudos (enviadas ja redimensionadas pelo app)
+app.use(express.json({ limit: '3mb' }));
 
 // Health check
 app.get('/api/health', (_req, res) => {

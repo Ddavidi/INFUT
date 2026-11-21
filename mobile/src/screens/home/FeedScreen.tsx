@@ -18,6 +18,8 @@ import { listPeladas, joinPeladaByCode } from '../../services/peladaService';
 import { Pelada } from '../../types';
 import { colors, fonts, spacing, borderRadius, shadows } from '../../constants/theme';
 import { showMessage } from '../../utils/alerts';
+import { formatMainPrice, hasAnyPrice } from '../../utils/prices';
+import { maskInviteCode } from '../../utils/masks';
 import { formatPeladaSchedule } from '../../utils/dateTime';
 import { clearInviteCodeFromUrl, getInviteCodeFromUrl } from '../../utils/inviteLink';
 import { useResponsive } from '../../hooks/useResponsive';
@@ -186,8 +188,8 @@ function PeladaCard({
           <View style={styles.footerRight}>
             <View style={styles.pricePill}>
               <Text style={styles.priceText}>
-                {pelada.price != null && pelada.price > 0
-                  ? `R$ ${pelada.price.toFixed(2)}`
+                {hasAnyPrice(pelada)
+                  ? formatMainPrice(pelada)
                   : 'Gratuita'}
               </Text>
             </View>
@@ -356,7 +358,8 @@ export function FeedScreen({ navigation }: Props) {
               placeholder="Entrar com código (ex: QUINTA)"
               placeholderTextColor={colors.textMuted}
               value={inviteCode}
-              onChangeText={setInviteCode}
+              onChangeText={(v) => setInviteCode(maskInviteCode(v))}
+                  maxLength={12}
               autoCapitalize="characters"
               autoCorrect={false}
               returnKeyType="go"

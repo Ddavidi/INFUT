@@ -16,21 +16,30 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { AppStackParamList } from '../../navigation';
 import { PeladaConfigModal } from '../../components/pelada/PeladaConfigModal';
 import {
+  addLiveGoal,
   batchUpdatePlayerCheckin,
+  controlLiveTimer,
   drawPeladaTeams,
   getPeladaById,
   recordPeladaMatch,
+  removeLiveGoal,
+  setLiveMatchup,
   setManualPeladaTeams,
+  setTeamPhoto,
   updatePeladaStatus,
   updatePlayerCheckin,
   updatePlayerStats,
 } from '../../services/peladaService';
-import { AttendanceStatus, Pelada, PeladaPlayer } from '../../types';
+import { AttendanceStatus, LiveGoalEvent, Pelada, PeladaPlayer } from '../../types';
+import { MatchPitch } from '../../components/pelada/MatchPitch';
+import { Avatar } from '../../components/ui/Avatar';
+import { usePeladaLiveSync } from '../../hooks/usePeladaLiveSync';
+import { pickSquarePhoto } from '../../utils/imagePicker';
 import { colors, fonts, spacing, borderRadius, shadows, layout } from '../../constants/theme';
 import { showConfirm, showMessage } from '../../utils/alerts';
 import { buildInviteUrl, shareOrCopyText } from '../../utils/inviteLink';
 import { useResponsive } from '../../hooks/useResponsive';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { FadeInView, PulseDot } from '../../components/ui/Motion';
 
 type Props = NativeStackScreenProps<AppStackParamList, 'LivePelada'>;
@@ -66,16 +75,7 @@ export function LivePeladaScreen({ navigation, route }: Props) {
   const [expandLoserPool, setExpandLoserPool] = useState(true);
   const [expandMatches, setExpandMatches] = useState(false);
 
-  // Match timer state
-  const [timerDuration, setTimerDuration] = useState(600);
-  const [timerSeconds, setTimerSeconds] = useState(600);
-  const [timerRunning, setTimerRunning] = useState(false);
-
-  // Scoreboard & tie state
-  const [teamAIdx, setTeamAIdx] = useState(0);
-  const [teamBIdx, setTeamBIdx] = useState(1);
-  const [scoreA, setScoreA] = useState(0);
-  const [scoreB, setScoreB] = useState(0);
+  // Tie state (placar e cronometro agora vem da sumula ao vivo no servidor)
   const [tieDecision, setTieDecision] = useState<TieDecision>('TEAM_B');
 
   // Manual builder assignments
@@ -85,14 +85,6 @@ export function LivePeladaScreen({ navigation, route }: Props) {
     try {
       const data = await getPeladaById(peladaId);
       setPelada(data);
-
-      const configuredSeconds = (data.gameConfig?.matchDurationMinutes || 10) * 60;
-      setTimerDuration((prev) => {
-        if (prev !== configuredSeconds) {
-          setTimerSeconds(configuredSeconds);
-        }
-        return configuredSeconds;
-      });
     } catch (error: any) {
       const msg = error.response?.data?.error || 'Erro ao carregar pelada ao vivo';
       showMessage('Erro', msg);
@@ -122,20 +114,131 @@ export function LivePeladaScreen({ navigation, route }: Props) {
     }
   }, [openConfigOnStart, canManage, pelada]);
 
+  // ===== Súmula ao vivo (estado vem do servidor, igual para todos) =====
+  const clockOffsetRef = useRef(0);
+  const [tick, setTick] = useState(0);
+  const timeUpAlertKey = useRef<string | null>(null);
+  const [goalModal, setGoalModal] = useState<{ teamName: string } | null>(null);
+  const [goalScorerId, setGoalScorerId] = useState<string | null>(null);
+  const [goalAssistId, setGoalAssistId] = useState<string | null>(null);
+  const [goalOwnGoal, setGoalOwnGoal] = useState(false);
+
   useEffect(() => {
-    if (!timerRunning) return;
-    const interval = setInterval(() => {
-      setTimerSeconds((prev) => {
-        if (prev <= 1) {
-          setTimerRunning(false);
-          showMessage('Tempo esgotado', 'Fim do tempo da partida. Registre o placar abaixo.');
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [timerRunning]);
+    if (pelada?.serverNow) {
+      clockOffsetRef.current = pelada.serverNow - Date.now();
+    }
+  }, [pelada]);
+
+  function getLiveElapsedMs(): number {
+    const lm = pelada?.liveMatch;
+    if (!lm) return 0;
+    const t = lm.timer;
+    const serverNowEstimate = Date.now() + clockOffsetRef.current;
+    const running = t.running && t.startedAt ? serverNowEstimate - t.startedAt : 0;
+    return Math.max(0, (t.accumulatedMs || 0) + running);
+  }
+
+  const liveTimerRunning = Boolean(pelada?.liveMatch?.timer.running);
+  useEffect(() => {
+    if (!liveTimerRunning) return undefined;
+    const id = setInterval(() => setTick((t) => t + 1), 500);
+    return () => clearInterval(id);
+  }, [liveTimerRunning]);
+
+  useEffect(() => {
+    const lm = pelada?.liveMatch;
+    if (!pelada || !lm || !canManage || !liveTimerRunning) return;
+    const limitMs = (pelada.gameConfig?.matchDurationMinutes || 10) * 60000;
+    const key = `${pelada.matches.length}-${lm.teamAName}-${lm.teamBName}`;
+    if (getLiveElapsedMs() >= limitMs && timeUpAlertKey.current !== key) {
+      timeUpAlertKey.current = key;
+      showMessage('Tempo esgotado', 'Fim do tempo da partida. Encerre a partida para registrar o placar.');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tick, liveTimerRunning, canManage]);
+
+  // Tempo real: quem só está assistindo vê gols, placar e cronômetro mudando na hora
+  const silentReload = useCallback(async () => {
+    try {
+      setPelada(await getPeladaById(peladaId));
+    } catch {
+      // ignora falhas pontuais; tenta no proximo ciclo
+    }
+  }, [peladaId]);
+  usePeladaLiveSync(peladaId, {
+    currentVersion: pelada?.syncVersion,
+    reload: silentReload,
+    intervalMs: 2000,
+  });
+
+  function openGoalModal(teamName: string) {
+    setGoalScorerId(null);
+    setGoalAssistId(null);
+    setGoalOwnGoal(false);
+    setGoalModal({ teamName });
+  }
+
+  function handleConfirmGoal() {
+    if (!pelada || !goalModal) return;
+    const payload = {
+      teamName: goalModal.teamName,
+      scorerId: goalScorerId,
+      assistId: goalOwnGoal ? null : goalAssistId,
+      ownGoal: goalOwnGoal,
+    };
+    setGoalModal(null);
+    runAction(() => addLiveGoal(pelada.id, payload));
+  }
+
+  function handleRemoveGoal(ev: LiveGoalEvent) {
+    if (!pelada) return;
+    showConfirm(
+      'Apagar gol',
+      `Remover o gol ${ev.scorerName ? `de ${ev.scorerName} ` : ''}da súmula? As estatísticas do jogador também voltam.`,
+      () => runAction(() => removeLiveGoal(pelada.id, ev.id)),
+      'Apagar'
+    );
+  }
+
+  async function handlePickTeamPhoto(teamName: string) {
+    if (!pelada) return;
+    const photo = await pickSquarePhoto(192);
+    if (!photo) return;
+    runAction(() => setTeamPhoto(pelada.id, teamName, photo), 'Foto do time atualizada.');
+  }
+
+  function handleRemoveTeamPhoto(teamName: string) {
+    if (!pelada) return;
+    showConfirm(
+      'Remover foto',
+      `Remover a foto do ${teamName}?`,
+      () => runAction(() => setTeamPhoto(pelada.id, teamName, null)),
+      'Remover'
+    );
+  }
+
+  function cycleMatchupTeam(side: 'A' | 'B') {
+    const lm = pelada?.liveMatch;
+    if (!pelada || !lm) return;
+    const names = pelada.teams.map((t) => t.name);
+    const current = side === 'A' ? lm.teamAName : lm.teamBName;
+    const other = side === 'A' ? lm.teamBName : lm.teamAName;
+    const idx = names.indexOf(current);
+    for (let i = 1; i <= names.length; i++) {
+      const candidate = names[(idx + i) % names.length];
+      if (candidate !== other) {
+        runAction(() =>
+          setLiveMatchup(
+            pelada.id,
+            side === 'A'
+              ? { teamAName: candidate, teamBName: other }
+              : { teamAName: other, teamBName: candidate }
+          )
+        );
+        return;
+      }
+    }
+  }
 
   async function runAction(fn: () => Promise<Pelada>, successToast?: string) {
     setActionLoading(true);
@@ -155,11 +258,6 @@ export function LivePeladaScreen({ navigation, route }: Props) {
 
   function handleConfigSaved(updated: Pelada) {
     setPelada(updated);
-    const nextSeconds = (updated.gameConfig?.matchDurationMinutes || 10) * 60;
-    if (!timerRunning) {
-      setTimerDuration(nextSeconds);
-      setTimerSeconds(nextSeconds);
-    }
   }
 
   function getConfiguredTeamNames(): string[] {
@@ -197,8 +295,6 @@ export function LivePeladaScreen({ navigation, route }: Props) {
 
     const configuredNames = getConfiguredTeamNames();
     runAction(async () => {
-      setTeamAIdx(0);
-      setTeamBIdx(1);
       return drawPeladaTeams(pelada.id, {
         playersPerTeam: cfg?.playersPerTeam || pelada.playersPerTeam,
         gameMode: cfg?.gameMode || 'WINNER_STAYS_QUEUE',
@@ -241,56 +337,43 @@ export function LivePeladaScreen({ navigation, route }: Props) {
     runAction(async () => {
       const updated = await setManualPeladaTeams(pelada.id, builtTeams);
       setShowManualModal(false);
-      setTeamAIdx(0);
-      setTeamBIdx(1);
       return updated;
     }, 'Times definidos manualmente.');
   }
 
   function handleRecordMatch() {
-    if (!pelada || pelada.teams.length < 2) return;
-    const safeAIdx = teamAIdx < pelada.teams.length ? teamAIdx : 0;
-    const safeBIdx =
-      teamBIdx < pelada.teams.length && teamBIdx !== safeAIdx
-        ? teamBIdx
-        : safeAIdx === 0
-          ? 1
-          : 0;
-    const teamA = pelada.teams[safeAIdx];
-    const teamB = pelada.teams[safeBIdx];
-    if (!teamA || !teamB || teamA.name === teamB.name) {
-      showMessage('Times inválidos', 'Selecione dois times diferentes para registrar o placar.');
-      return;
-    }
+    const lm = pelada?.liveMatch;
+    if (!pelada || !lm) return;
 
     const isQueueMode =
       (pelada.gameConfig?.gameMode || 'WINNER_STAYS_QUEUE') === 'WINNER_STAYS_QUEUE';
 
     let leavingTeamName: string | undefined;
-    if (isQueueMode && scoreA === scoreB) {
+    if (isQueueMode && lm.scoreA === lm.scoreB) {
       if (tieDecision === 'BOTH') {
         leavingTeamName = 'AMBOS';
       } else if (tieDecision === 'TEAM_A') {
-        leavingTeamName = teamA.name;
+        leavingTeamName = lm.teamAName;
       } else {
-        leavingTeamName = teamB.name;
+        leavingTeamName = lm.teamBName;
       }
     }
 
-    runAction(async () => {
-      const updated = await recordPeladaMatch(pelada.id, {
-        teamAName: teamA.name,
-        teamBName: teamB.name,
-        scoreA,
-        scoreB,
-        ...(leavingTeamName ? { leavingTeamName } : {}),
-      });
-      setScoreA(0);
-      setScoreB(0);
-      setTimerRunning(false);
-      setTimerSeconds(timerDuration);
-      return updated;
-    });
+    showConfirm(
+      'Encerrar partida',
+      `${lm.teamAName} ${lm.scoreA} x ${lm.scoreB} ${lm.teamBName}. Confirmar o resultado?`,
+      () =>
+        runAction(() =>
+          recordPeladaMatch(pelada.id, {
+            teamAName: lm.teamAName,
+            teamBName: lm.teamBName,
+            scoreA: lm.scoreA,
+            scoreB: lm.scoreB,
+            ...(leavingTeamName ? { leavingTeamName } : {}),
+          })
+        ),
+      'Encerrar'
+    )
   }
 
   function handleFinishPelada() {
@@ -415,226 +498,335 @@ export function LivePeladaScreen({ navigation, route }: Props) {
         ? 'Aleatório'
         : 'Manual';
 
-  // Integrated Timer + Scoreboard Match Card (compact, keeps timer & scoreboard above fold)
+  // ===== Súmula ao vivo: placar, cronômetro compartilhado e gols =====
+  const live = pelada.liveMatch || null;
+  const liveTeamA = live ? pelada.teams.find((t) => t.name === live.teamAName) || null : null;
+  const liveTeamB = live ? pelada.teams.find((t) => t.name === live.teamBName) || null : null;
+  const teamPhotos = cfg.teamPhotos || {};
+  const durationMs = (cfg.matchDurationMinutes || 10) * 60000;
+  const elapsedMs = getLiveElapsedMs();
+  const remainingMs = durationMs - elapsedMs;
+  const timerRunning = Boolean(live?.timer.running);
+  const timerStarted = Boolean(live && (live.timer.running || live.timer.accumulatedMs > 0));
+  const clockText =
+    remainingMs >= 0
+      ? formatTimer(Math.ceil(remainingMs / 1000))
+      : `+${formatTimer(Math.floor(-remainingMs / 1000))}`;
+  const currentMinute = Math.floor(elapsedMs / 60000) + 1;
+  const scoreA = live?.scoreA ?? 0;
+  const scoreB = live?.scoreB ?? 0;
+
+  const renderCrest = (teamName: string) => {
+    const photo = teamPhotos[teamName];
+    const crest = (
+      <View>
+        <Avatar name={teamName.replace(/^time\s+/i, '')} photoUrl={photo} size={56} rounded borderColor={colors.borderStrong} />
+        {canManage ? (
+          <View style={styles.crestEditBadge}>
+            <Ionicons name="camera" size={11} color={colors.textInverse} />
+          </View>
+        ) : null}
+      </View>
+    );
+    if (!canManage) return crest;
+    return (
+      <TouchableOpacity
+        onPress={() => handlePickTeamPhoto(teamName)}
+        onLongPress={() => photo && handleRemoveTeamPhoto(teamName)}
+        accessibilityRole="button"
+        accessibilityLabel={`Alterar foto do ${teamName}`}
+        accessibilityHint="Toque para escolher uma foto. Segure para remover."
+      >
+        {crest}
+      </TouchableOpacity>
+    );
+  };
+
+  const renderTeamScoreCol = (teamName: string, consecutiveWins: number | undefined, score: number) => (
+    <View style={styles.liveTeamCol}>
+      {renderCrest(teamName)}
+      <Text style={styles.liveTeamName} numberOfLines={2}>
+        {teamName}
+      </Text>
+      {consecutiveWins && consecutiveWins > 0 ? (
+        <Text style={styles.teamStreakLabel} numberOfLines={1}>
+          {consecutiveWins}ª vitória seguida
+          {cfg.maxConsecutiveWins && cfg.maxConsecutiveWins > 0 && consecutiveWins >= cfg.maxConsecutiveWins
+            ? ' (limite)'
+            : ''}
+        </Text>
+      ) : null}
+      {canManage ? (
+        <TouchableOpacity
+          style={styles.goalBtn}
+          disabled={actionLoading}
+          onPress={() => openGoalModal(teamName)}
+          accessibilityRole="button"
+          accessibilityLabel={`Marcar gol do ${teamName}`}
+        >
+          <Ionicons name="football" size={14} color={colors.textInverse} />
+          <Text style={styles.goalBtnText}>Gol</Text>
+        </TouchableOpacity>
+      ) : null}
+    </View>
+  );
+
   const matchCardSection = (
     <View style={styles.sectionCard}>
-      <View style={styles.timerCompactRow}>
-        <View style={styles.timerLeft}>
-          <Text style={styles.timerMiniLabel}>CRONÔMETRO ({cfg.matchDurationMinutes} MIN)</Text>
-          <Text style={styles.timerDisplayCompact}>{formatTimer(timerSeconds)}</Text>
+      {!live || !liveTeamA || !liveTeamB ? (
+        <View style={styles.inlineEmptyBox}>
+          <Text style={styles.inlineEmptyTitle}>Placar ao vivo</Text>
+          <Text style={styles.inlineEmptySubtitle}>
+            Sorteie ou monte os times para começar a súmula da partida.
+          </Text>
         </View>
-        <View style={styles.timerControlsRow}>
-          <TouchableOpacity
-            style={[
-              styles.timerControlBtn,
-              { backgroundColor: timerRunning ? colors.warning : colors.primary },
-            ]}
-            onPress={() => setTimerRunning((r) => !r)}
-          >
-            <Text style={styles.timerControlBtnPrimaryText}>
-              {timerRunning ? 'Pausar' : 'Iniciar'}
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.timerResetBtn}
-            onPress={() => {
-              setTimerRunning(false);
-              setTimerSeconds(timerDuration);
-            }}
-          >
-            <Text style={styles.timerResetBtnText}>Resetar</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      {pelada.teams.length >= 2 && canManage && (() => {
-        const safeAIdx = teamAIdx < pelada.teams.length ? teamAIdx : 0;
-        const safeBIdx =
-          teamBIdx < pelada.teams.length && teamBIdx !== safeAIdx
-            ? teamBIdx
-            : safeAIdx === 0
-              ? 1
-              : 0;
-        const teamA = pelada.teams[safeAIdx];
-        const teamB = pelada.teams[safeBIdx];
-
-        return (
-          <View style={styles.scoreboardIntegrated}>
-            <View style={[styles.scoreboardBox, isCompact && styles.scoreboardBoxCompact]}>
-              <View style={styles.scoreTeamCol}>
-                <TouchableOpacity
-                  style={styles.teamPickerChip}
-                  disabled={pelada.teams.length <= 2}
-                  onPress={() => setTeamAIdx((i) => (i + 1) % pelada.teams.length)}
-                >
-                  <Text style={styles.teamPickerText} numberOfLines={1}>
-                    {teamA.name}
-                    {pelada.teams.length > 2 ? ' ↻' : ''}
-                  </Text>
-                  {teamA.consecutiveWins && teamA.consecutiveWins > 0 ? (
-                    <Text style={styles.teamStreakLabel} numberOfLines={1}>
-                      {teamA.consecutiveWins}ª vitória seguida
-                      {cfg.maxConsecutiveWins && cfg.maxConsecutiveWins > 0 && teamA.consecutiveWins >= cfg.maxConsecutiveWins ? ' (limite)' : ''}
-                    </Text>
-                  ) : null}
-                </TouchableOpacity>
-                <View style={styles.scoreControls}>
-                  <TouchableOpacity
-                    style={styles.scoreStepBtn}
-                    onPress={() => setScoreA((s) => Math.max(0, s - 1))}
-                  >
-                    <Text style={styles.scoreStepText}>-</Text>
-                  </TouchableOpacity>
-                  <Text style={styles.scoreNumber}>{scoreA}</Text>
-                  <TouchableOpacity
-                    style={styles.scoreStepBtn}
-                    onPress={() => setScoreA((s) => s + 1)}
-                  >
-                    <Text style={styles.scoreStepText}>+</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              <Text style={styles.scoreVs}>X</Text>
-
-              <View style={styles.scoreTeamCol}>
-                <TouchableOpacity
-                  style={styles.teamPickerChip}
-                  disabled={pelada.teams.length <= 2}
-                  onPress={() => setTeamBIdx((i) => (i + 1) % pelada.teams.length)}
-                >
-                  <Text style={styles.teamPickerText} numberOfLines={1}>
-                    {teamB.name}
-                    {pelada.teams.length > 2 ? ' ↻' : ''}
-                  </Text>
-                  {teamB.consecutiveWins && teamB.consecutiveWins > 0 ? (
-                    <Text style={styles.teamStreakLabel} numberOfLines={1}>
-                      {teamB.consecutiveWins}ª vitória seguida
-                      {cfg.maxConsecutiveWins && cfg.maxConsecutiveWins > 0 && teamB.consecutiveWins >= cfg.maxConsecutiveWins ? ' (limite)' : ''}
-                    </Text>
-                  ) : null}
-                </TouchableOpacity>
-                <View style={styles.scoreControls}>
-                  <TouchableOpacity
-                    style={styles.scoreStepBtn}
-                    onPress={() => setScoreB((s) => Math.max(0, s - 1))}
-                  >
-                    <Text style={styles.scoreStepText}>-</Text>
-                  </TouchableOpacity>
-                  <Text style={styles.scoreNumber}>{scoreB}</Text>
-                  <TouchableOpacity
-                    style={styles.scoreStepBtn}
-                    onPress={() => setScoreB((s) => s + 1)}
-                  >
-                    <Text style={styles.scoreStepText}>+</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </View>
-
-            {isQueueMode && hasOutsideQueue && scoreA === scoreB && (
-              <View style={styles.tieBox}>
-                <Text style={styles.tieLabel}>No empate, qual time dá lugar à fila?</Text>
-                <View style={styles.tieBtnsRow}>
-                  {(
-                    [
-                      { key: 'TEAM_A', label: `Sai ${teamA.name}` },
-                      { key: 'TEAM_B', label: `Sai ${teamB.name}` },
-                      { key: 'BOTH', label: 'Saem Ambos' },
-                    ] as { key: TieDecision; label: string }[]
-                  ).map((opt) => {
-                    const active = tieDecision === opt.key;
-                    return (
-                      <TouchableOpacity
-                        key={opt.key}
-                        style={[styles.tieBtn, active && styles.tieBtnActive]}
-                        onPress={() => setTieDecision(opt.key)}
-                      >
-                        <Text
-                          style={[
-                            styles.tieBtnText,
-                            active && { color: colors.primary, fontWeight: '800' },
-                          ]}
-                          numberOfLines={1}
-                        >
-                          {opt.label}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              </View>
-            )}
-
-            {isQueueMode && cfg.maxConsecutiveWins && cfg.maxConsecutiveWins > 0 ? (
-              (() => {
-                const nextA = (teamA.consecutiveWins || 0) + 1;
-                const nextB = (teamB.consecutiveWins || 0) + 1;
-                if (scoreA > scoreB && nextA >= cfg.maxConsecutiveWins) {
-                  return (
-                    <View style={styles.winLimitAlert}>
-                      <Text style={styles.winLimitAlertText}>
-                        Vitória do {teamA.name}: atingirá o limite de {cfg.maxConsecutiveWins} vitórias seguidas e rodará para a fila.
-                      </Text>
-                    </View>
-                  );
-                }
-                if (scoreB > scoreA && nextB >= cfg.maxConsecutiveWins) {
-                  return (
-                    <View style={styles.winLimitAlert}>
-                      <Text style={styles.winLimitAlertText}>
-                        Vitória do {teamB.name}: atingirá o limite de {cfg.maxConsecutiveWins} vitórias seguidas e rodará para a fila.
-                      </Text>
-                    </View>
-                  );
-                }
-                return null;
-              })()
-            ) : null}
-
-            <TouchableOpacity
-              style={[styles.primaryBtnFull, { marginTop: spacing.sm + 2 }]}
-              disabled={actionLoading}
-              onPress={handleRecordMatch}
-            >
-              <Text style={styles.primaryBtnText}>
-                {isQueueMode && hasOutsideQueue
-                  ? 'Encerrar Partida e Rotacionar Fila'
-                  : 'Registrar Placar (+1 Vitória)'}
+      ) : (
+        <>
+          <View style={styles.liveClockRow}>
+            <View style={[styles.liveMinutePill, timerRunning && styles.liveMinutePillRunning]}>
+              {timerRunning ? <PulseDot color={colors.error} size={6} /> : null}
+              <Text style={styles.liveMinuteText}>
+                {timerStarted ? `${currentMinute}'` : 'Não iniciada'}
               </Text>
-            </TouchableOpacity>
+            </View>
+            <Text style={[styles.liveClockText, remainingMs < 0 && { color: colors.error }]}>{clockText}</Text>
+            {canManage ? (
+              <View style={styles.timerControlsRow}>
+                <TouchableOpacity
+                  style={[styles.timerControlBtn, { backgroundColor: timerRunning ? colors.warning : colors.primary }]}
+                  disabled={actionLoading}
+                  onPress={() =>
+                    runAction(() => controlLiveTimer(pelada.id, timerRunning ? 'PAUSE' : 'START'))
+                  }
+                >
+                  <Text style={styles.timerControlBtnPrimaryText}>
+                    {timerRunning ? 'Pausar' : timerStarted ? 'Continuar' : 'Iniciar'}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.timerResetBtn}
+                  disabled={actionLoading}
+                  onPress={() => runAction(() => controlLiveTimer(pelada.id, 'RESET'))}
+                >
+                  <Text style={styles.timerResetBtnText}>Zerar</Text>
+                </TouchableOpacity>
+              </View>
+            ) : null}
           </View>
-        );
-      })()}
+
+          <View style={styles.liveScoreRow}>
+            {renderTeamScoreCol(liveTeamA.name, liveTeamA.consecutiveWins, scoreA)}
+            <View style={styles.liveScoreCenter}>
+              <Text style={styles.liveScoreText} accessibilityLabel={`Placar ${scoreA} a ${scoreB}`}>
+                {scoreA}
+                <Text style={styles.liveScoreX}> × </Text>
+                {scoreB}
+              </Text>
+            </View>
+            {renderTeamScoreCol(liveTeamB.name, liveTeamB.consecutiveWins, scoreB)}
+          </View>
+
+          {canManage && pelada.teams.length > 2 && live.events.length === 0 ? (
+            <View style={styles.matchupRow}>
+              <Text style={styles.helperText}>Trocar confronto:</Text>
+              <TouchableOpacity
+                style={styles.matchupChip}
+                disabled={actionLoading}
+                onPress={() => cycleMatchupTeam('A')}
+              >
+                <Text style={styles.matchupChipText}>{live.teamAName} ↻</Text>
+              </TouchableOpacity>
+              <Text style={styles.helperText}>x</Text>
+              <TouchableOpacity
+                style={styles.matchupChip}
+                disabled={actionLoading}
+                onPress={() => cycleMatchupTeam('B')}
+              >
+                <Text style={styles.matchupChipText}>{live.teamBName} ↻</Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
+
+          {/* Lances da partida (súmula) */}
+          <View style={styles.eventsBox}>
+            {live.events.length === 0 ? (
+              <Text style={styles.eventsEmpty}>
+                {canManage ? 'Toque em "Gol" no time que marcou para lançar na súmula.' : 'Nenhum gol ainda.'}
+              </Text>
+            ) : (
+              live.events.map((ev) => {
+                const isA = ev.teamName === live.teamAName;
+                return (
+                  <View key={ev.id} style={[styles.eventRow, !isA && styles.eventRowRight]}>
+                    <Text style={styles.eventMinute}>{ev.minute ? `${ev.minute}'` : '–'}</Text>
+                    <Ionicons name="football" size={14} color={ev.ownGoal ? colors.error : colors.textPrimary} />
+                    <View style={[styles.eventTextCol, !isA && { alignItems: 'flex-end' }]}>
+                      <Text style={styles.eventScorer} numberOfLines={1}>
+                        {ev.scorerName || 'Gol'}
+                        {ev.ownGoal ? ' (contra)' : ''}
+                      </Text>
+                      {ev.assistName ? (
+                        <Text style={styles.eventAssist} numberOfLines={1}>
+                          assist. {ev.assistName}
+                        </Text>
+                      ) : null}
+                    </View>
+                    {canManage ? (
+                      <TouchableOpacity
+                        hitSlop={HIT_SLOP}
+                        disabled={actionLoading}
+                        onPress={() => handleRemoveGoal(ev)}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Apagar gol de ${ev.scorerName || ev.teamName}`}
+                      >
+                        <Ionicons name="trash-outline" size={15} color={colors.textMuted} />
+                      </TouchableOpacity>
+                    ) : null}
+                  </View>
+                );
+              })
+            )}
+          </View>
+
+          {canManage ? (
+            <>
+              {isQueueMode && hasOutsideQueue && scoreA === scoreB && (
+                <View style={styles.tieBox}>
+                  <Text style={styles.tieLabel}>No empate, qual time dá lugar à fila?</Text>
+                  <View style={styles.tieBtnsRow}>
+                    {(
+                      [
+                        { key: 'TEAM_A', label: `Sai ${live.teamAName}` },
+                        { key: 'TEAM_B', label: `Sai ${live.teamBName}` },
+                        { key: 'BOTH', label: 'Saem Ambos' },
+                      ] as { key: TieDecision; label: string }[]
+                    ).map((opt) => {
+                      const active = tieDecision === opt.key;
+                      return (
+                        <TouchableOpacity
+                          key={opt.key}
+                          style={[styles.tieBtn, active && styles.tieBtnActive]}
+                          onPress={() => setTieDecision(opt.key)}
+                        >
+                          <Text
+                            style={[styles.tieBtnText, active && { color: colors.primary, fontWeight: '800' }]}
+                            numberOfLines={1}
+                          >
+                            {opt.label}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </View>
+              )}
+
+              {isQueueMode && cfg.maxConsecutiveWins && cfg.maxConsecutiveWins > 0
+                ? (() => {
+                    const nextA = (liveTeamA.consecutiveWins || 0) + 1;
+                    const nextB = (liveTeamB.consecutiveWins || 0) + 1;
+                    const limitTeam =
+                      scoreA > scoreB && nextA >= cfg.maxConsecutiveWins
+                        ? liveTeamA.name
+                        : scoreB > scoreA && nextB >= cfg.maxConsecutiveWins
+                          ? liveTeamB.name
+                          : null;
+                    if (!limitTeam) return null;
+                    return (
+                      <View style={styles.winLimitAlert}>
+                        <Text style={styles.winLimitAlertText}>
+                          Vitória do {limitTeam}: atinge o limite de {cfg.maxConsecutiveWins} vitórias seguidas e o
+                          time inteiro sai. Entram os próximos da fila, na ordem.
+                        </Text>
+                      </View>
+                    );
+                  })()
+                : null}
+
+              <TouchableOpacity
+                style={[styles.primaryBtnFull, { marginTop: spacing.sm + 2 }]}
+                disabled={actionLoading}
+                onPress={handleRecordMatch}
+              >
+                <Text style={styles.primaryBtnText}>
+                  {isQueueMode && hasOutsideQueue ? 'Encerrar Partida e Rotacionar Fila' : 'Encerrar Partida'}
+                </Text>
+              </TouchableOpacity>
+            </>
+          ) : null}
+        </>
+      )}
 
       {pelada.matches.length > 0 && (
         <View style={{ marginTop: spacing.sm + 2 }}>
-          <TouchableOpacity
-            style={styles.accordionHeader}
-            onPress={() => setExpandMatches((v) => !v)}
-          >
-            <Text style={styles.helperText}>
-              Partidas registradas hoje ({pelada.matches.length})
-            </Text>
+          <TouchableOpacity style={styles.accordionHeader} onPress={() => setExpandMatches((v) => !v)}>
+            <Text style={styles.helperText}>Partidas registradas hoje ({pelada.matches.length})</Text>
             <Text style={styles.accordionChevron}>{expandMatches ? '▴' : '▾'}</Text>
           </TouchableOpacity>
           {expandMatches &&
-            pelada.matches.map((m) => (
-              <View key={m.id} style={styles.matchHistoryRow}>
-                <Text style={styles.matchScoreText}>
-                  {m.teamAName} {m.scoreA} x {m.scoreB} {m.teamBName}
-                </Text>
-                <View style={styles.winnerPill}>
-                  <Text style={styles.matchWinnerText}>
-                    {m.winner === 'EMPATE' ? 'Empate' : m.winner}
+            [...pelada.matches].reverse().map((m) => (
+              <View key={m.id} style={styles.matchHistoryBlock}>
+                <View style={styles.matchHistoryRow}>
+                  <Text style={styles.matchScoreText}>
+                    {m.teamAName} {m.scoreA} x {m.scoreB} {m.teamBName}
                   </Text>
+                  <View style={styles.winnerPill}>
+                    <Text style={styles.matchWinnerText}>{m.winner === 'EMPATE' ? 'Empate' : m.winner}</Text>
+                  </View>
                 </View>
+                {m.events && m.events.length > 0 ? (
+                  <Text style={styles.matchEventsText}>
+                    {m.events
+                      .map(
+                        (ev) =>
+                          `${ev.scorerName || 'Gol'}${ev.ownGoal ? ' (contra)' : ''}${ev.minute ? ` ${ev.minute}'` : ''}`
+                      )
+                      .join(' • ')}
+                  </Text>
+                ) : null}
               </View>
             ))}
         </View>
       )}
     </View>
   );
+
+  const photoByPlayerId: Record<string, string | null | undefined> = {};
+  for (const p of pelada.players) {
+    photoByPlayerId[p.id] = p.user?.photoUrl;
+  }
+
+  const pitchSection =
+    live && liveTeamA && liveTeamB ? (
+      <View style={styles.sectionCard}>
+        <View style={styles.sectionHeaderRow}>
+          <Text style={styles.sectionTitleNoMargin}>Em campo</Text>
+          <Text style={styles.helperText}>
+            {liveTeamA.name} {scoreA} x {scoreB} {liveTeamB.name}
+          </Text>
+        </View>
+        <View style={{ marginTop: spacing.sm }}>
+          <MatchPitch
+            teamA={liveTeamA}
+            teamB={liveTeamB}
+            events={live.events}
+            photoByPlayerId={photoByPlayerId}
+            teamPhotos={teamPhotos}
+          />
+        </View>
+      </View>
+    ) : null;
+
+  // Modal de gol: jogadores do time que marcou (ou do adversario, se gol contra)
+  const goalTeam = goalModal ? pelada.teams.find((t) => t.name === goalModal.teamName) : null;
+  const opponentName = goalModal && live
+    ? goalModal.teamName === live.teamAName
+      ? live.teamBName
+      : live.teamAName
+    : null;
+  const opponentTeam = opponentName ? pelada.teams.find((t) => t.name === opponentName) : null;
+  const scorerCandidates = (goalOwnGoal ? opponentTeam?.players : goalTeam?.players) || [];
+  const assistCandidates = (goalTeam?.players || []).filter((p) => p.id !== goalScorerId);
 
   // Compact Call & Draw Launcher (opens Pop-up Modals instead of crowding screen)
   const callAndDrawCard = (
@@ -831,7 +1023,7 @@ export function LivePeladaScreen({ navigation, route }: Props) {
               setShowStatsModal(true);
             }}
           >
-            <Text style={styles.compactOpenBtnText}>Lançar</Text>
+            <Text style={styles.compactOpenBtnText}>Ajustar</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -931,6 +1123,7 @@ export function LivePeladaScreen({ navigation, route }: Props) {
                 {finishSection}
               </View>
               <View style={styles.desktopRightCol}>
+                {pitchSection}
                 {teamsSection}
                 {statsCompactCard}
               </View>
@@ -938,6 +1131,7 @@ export function LivePeladaScreen({ navigation, route }: Props) {
           ) : (
             <>
               {matchCardSection}
+              {pitchSection}
               {callAndDrawCard}
               {teamsSection}
               {statsCompactCard}
@@ -1266,6 +1460,115 @@ export function LivePeladaScreen({ navigation, route }: Props) {
         </Modal>
       )}
 
+      {/* POP-UP MODAL: MARCAR GOL NA SÚMULA */}
+      {canManage && goalModal && (
+        <Modal visible transparent animationType="fade" onRequestClose={() => setGoalModal(null)}>
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalCard}>
+              <View style={styles.modalHeader}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.modalEyebrow}>
+                    SÚMULA{timerStarted ? ` • ${currentMinute}'` : ''}
+                  </Text>
+                  <Text style={styles.modalTitle}>Gol do {goalModal.teamName}</Text>
+                </View>
+                <TouchableOpacity style={styles.modalCloseBtn} onPress={() => setGoalModal(null)}>
+                  <Ionicons name="close" size={18} color={colors.textSecondary} />
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView showsVerticalScrollIndicator={false} style={{ flexShrink: 1 }}>
+                <Text style={styles.goalSectionLabel}>
+                  {goalOwnGoal ? `Quem fez contra? (${opponentName})` : 'Quem fez o gol?'}
+                </Text>
+                <View style={styles.goalChipsWrap}>
+                  {scorerCandidates.map((p) => {
+                    const selected = goalScorerId === p.id;
+                    return (
+                      <TouchableOpacity
+                        key={p.id}
+                        style={[styles.goalChip, selected && styles.goalChipActive]}
+                        onPress={() => {
+                          setGoalScorerId(selected ? null : p.id);
+                          if (goalAssistId === p.id) setGoalAssistId(null);
+                        }}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected }}
+                      >
+                        <Avatar name={p.name} photoUrl={photoByPlayerId[p.id]} size={26} />
+                        <Text style={[styles.goalChipText, selected && styles.goalChipTextActive]} numberOfLines={1}>
+                          {p.isGoalkeeper ? '🧤 ' : ''}
+                          {p.name}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+                <TouchableOpacity
+                  style={[styles.goalToggle, goalOwnGoal && styles.goalToggleActive]}
+                  onPress={() => {
+                    setGoalOwnGoal((v) => !v);
+                    setGoalScorerId(null);
+                    setGoalAssistId(null);
+                  }}
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: goalOwnGoal }}
+                >
+                  <Ionicons
+                    name={goalOwnGoal ? 'checkbox' : 'square-outline'}
+                    size={18}
+                    color={goalOwnGoal ? colors.error : colors.textSecondary}
+                  />
+                  <Text style={styles.goalToggleText}>Foi gol contra (jogador do {opponentName})</Text>
+                </TouchableOpacity>
+
+                {!goalOwnGoal ? (
+                  <>
+                    <Text style={styles.goalSectionLabel}>Assistência (opcional)</Text>
+                    <View style={styles.goalChipsWrap}>
+                      {assistCandidates.map((p) => {
+                        const selected = goalAssistId === p.id;
+                        return (
+                          <TouchableOpacity
+                            key={p.id}
+                            style={[styles.goalChip, selected && styles.goalChipActive]}
+                            onPress={() => setGoalAssistId(selected ? null : p.id)}
+                            accessibilityRole="button"
+                            accessibilityState={{ selected }}
+                          >
+                            <MaterialCommunityIcons
+                              name="shoe-cleat"
+                              size={15}
+                              color={selected ? colors.primary : colors.textMuted}
+                            />
+                            <Text
+                              style={[styles.goalChipText, selected && styles.goalChipTextActive]}
+                              numberOfLines={1}
+                            >
+                              {p.name}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  </>
+                ) : null}
+              </ScrollView>
+
+              <TouchableOpacity
+                style={[styles.primaryBtnFull, { marginTop: spacing.md }]}
+                disabled={actionLoading}
+                onPress={handleConfirmGoal}
+              >
+                <Text style={styles.primaryBtnText}>
+                  {goalScorerId ? 'Confirmar gol' : 'Confirmar gol sem autor'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+      )}
+
       {/* POP-UP MODAL: ENGRENAGEM DE REGRAS */}
       {canManage && (
         <PeladaConfigModal
@@ -1281,6 +1584,238 @@ export function LivePeladaScreen({ navigation, route }: Props) {
 }
 
 const styles = StyleSheet.create({
+  liveClockRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  liveMinutePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: spacing.sm + 2,
+    paddingVertical: 4,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.surfaceLight,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  liveMinutePillRunning: {
+    borderColor: colors.error,
+    backgroundColor: colors.errorSoft,
+  },
+  liveMinuteText: {
+    color: colors.textPrimary,
+    fontSize: fonts.sizes.xs,
+    fontWeight: '800',
+    fontVariant: ['tabular-nums'],
+  },
+  liveClockText: {
+    color: colors.primary,
+    fontSize: 28,
+    fontWeight: '800',
+    fontVariant: ['tabular-nums'],
+    letterSpacing: 1,
+  },
+  liveScoreRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    marginTop: spacing.md,
+    gap: spacing.xs,
+  },
+  liveTeamCol: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 6,
+  },
+  liveTeamName: {
+    color: colors.textPrimary,
+    fontSize: fonts.sizes.sm,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
+  liveScoreCenter: {
+    paddingTop: 10,
+    minWidth: 96,
+    alignItems: 'center',
+  },
+  liveScoreText: {
+    color: colors.textPrimary,
+    fontSize: 40,
+    fontWeight: '900',
+    fontVariant: ['tabular-nums'],
+  },
+  liveScoreX: {
+    color: colors.textMuted,
+    fontSize: 24,
+    fontWeight: '700',
+  },
+  crestEditBadge: {
+    position: 'absolute',
+    right: -4,
+    bottom: -4,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: colors.card,
+  },
+  goalBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: colors.success,
+    borderRadius: borderRadius.full,
+    paddingHorizontal: spacing.md,
+    minHeight: 36,
+    marginTop: 2,
+  },
+  goalBtnText: {
+    color: colors.textInverse,
+    fontSize: fonts.sizes.sm,
+    fontWeight: '800',
+  },
+  matchupRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: spacing.xs + 2,
+    marginTop: spacing.sm,
+    justifyContent: 'center',
+  },
+  matchupChip: {
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
+    backgroundColor: colors.surfaceLight,
+    borderRadius: borderRadius.full,
+    paddingHorizontal: spacing.sm + 2,
+    minHeight: 32,
+    justifyContent: 'center',
+  },
+  matchupChipText: {
+    color: colors.textPrimary,
+    fontSize: fonts.sizes.xs,
+    fontWeight: '700',
+  },
+  eventsBox: {
+    marginTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.borderLight,
+    paddingTop: spacing.sm,
+    gap: 6,
+  },
+  eventsEmpty: {
+    color: colors.textMuted,
+    fontSize: fonts.sizes.xs,
+    textAlign: 'center',
+    paddingVertical: spacing.xs,
+  },
+  eventRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    maxWidth: '78%',
+  },
+  eventRowRight: {
+    alignSelf: 'flex-end',
+    flexDirection: 'row-reverse',
+  },
+  eventMinute: {
+    color: colors.textSecondary,
+    fontSize: fonts.sizes.xs,
+    fontWeight: '800',
+    minWidth: 26,
+    textAlign: 'center',
+    fontVariant: ['tabular-nums'],
+  },
+  eventTextCol: {
+    flexShrink: 1,
+  },
+  eventScorer: {
+    color: colors.textPrimary,
+    fontSize: fonts.sizes.sm,
+    fontWeight: '700',
+  },
+  eventAssist: {
+    color: colors.textMuted,
+    fontSize: fonts.sizes.xs,
+  },
+  matchHistoryBlock: {
+    borderTopWidth: 1,
+    borderTopColor: colors.borderLight,
+  },
+  matchEventsText: {
+    color: colors.textMuted,
+    fontSize: fonts.sizes.xs,
+    paddingBottom: spacing.sm,
+  },
+  goalSectionLabel: {
+    color: colors.textSecondary,
+    fontSize: fonts.sizes.xs,
+    fontWeight: '800',
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
+    marginTop: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  goalChipsWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs + 2,
+  },
+  goalChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
+    backgroundColor: colors.surfaceLight,
+    borderRadius: borderRadius.full,
+    paddingLeft: 4,
+    paddingRight: spacing.sm + 2,
+    minHeight: 36,
+    maxWidth: '100%',
+  },
+  goalChipActive: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primarySoft,
+  },
+  goalChipText: {
+    color: colors.textSecondary,
+    fontSize: fonts.sizes.xs + 1,
+    fontWeight: '700',
+    flexShrink: 1,
+  },
+  goalChipTextActive: {
+    color: colors.primary,
+  },
+  goalToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginTop: spacing.md,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  goalToggleActive: {
+    borderColor: colors.error,
+    backgroundColor: colors.errorSoft,
+  },
+  goalToggleText: {
+    color: colors.textPrimary,
+    fontSize: fonts.sizes.xs + 1,
+    fontWeight: '600',
+    flexShrink: 1,
+  },
   container: { flex: 1, backgroundColor: colors.background },
   centered: {
     flex: 1,

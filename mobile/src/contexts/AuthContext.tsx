@@ -1,6 +1,6 @@
 // Auth Context - Global authentication state (Issue #17)
 import React, { createContext, useState, useEffect, useCallback } from 'react';
-import { User, AuthResponse } from '../types';
+import { User, AuthResponse, ProfileExtras } from '../types';
 import { saveToken, getToken, removeToken, saveUser, getUser, removeUser, clearAll } from '../utils/storage';
 import { loginUser, registerUser } from '../services/authService';
 import { getProfile } from '../services/userService';
@@ -11,7 +11,7 @@ interface AuthContextData {
   isLoading: boolean;
   isAuthenticated: boolean;
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (name: string, email: string, password: string) => Promise<void>;
+  signUp: (name: string, email: string, password: string, extras?: ProfileExtras) => Promise<void>;
   signOut: () => Promise<void>;
   refreshUser: () => Promise<void>;
 }
@@ -66,8 +66,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await handleAuth(response);
   }, [handleAuth]);
 
-  const signUp = useCallback(async (name: string, email: string, password: string) => {
-    const response = await registerUser(name, email, password);
+  const signUp = useCallback(async (name: string, email: string, password: string, extras?: ProfileExtras) => {
+    const response = await registerUser(name, email, password, extras);
     await handleAuth(response);
   }, [handleAuth]);
 

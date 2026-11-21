@@ -22,6 +22,15 @@ import {
   calculateEndTimeText,
   parseDurationHours,
 } from '../../utils/dateTime';
+import { PriceFields, PriceFieldsValue, priceFieldsFromPelada, priceFieldsToPayload } from './PriceFields';
+import {
+  formatDateBR,
+  formatTimeHHMM,
+  isValidHttpUrl,
+  maskInteger,
+  parseDateTimeBR,
+  parseIntOrNull,
+} from '../../utils/masks';
 
 export type ConfigModalTab = 'rules' | 'details';
 
@@ -77,12 +86,11 @@ export function PeladaConfigModal({
   const [location, setLocation] = useState('');
   const [locationAddress, setLocationAddress] = useState('');
   const [whatsappGroupUrl, setWhatsappGroupUrl] = useState('');
-  const [price, setPrice] = useState('');
+  const [prices, setPrices] = useState<PriceFieldsValue>({ diarista: '', goalkeeper: '', monthly: '' });
   const [maxPlayers, setMaxPlayers] = useState('');
   const [cancelDeadlineHours, setCancelDeadlineHours] = useState('4');
   const [pixKey, setPixKey] = useState('');
   const [isPublic, setIsPublic] = useState(true);
-  const [goalkeepersExempt, setGoalkeepersExempt] = useState(true);
   const [recurrenceFreq, setRecurrenceFreq] = useState<'NONE' | '1X_WEEK' | '2X_WEEK'>('1X_WEEK');
   const [selectedRecurrenceDays, setSelectedRecurrenceDays] = useState<string[]>(['QUI']);
 
@@ -113,27 +121,17 @@ export function PeladaConfigModal({
 
     const d = new Date(pelada.dateTime);
     setTitle(pelada.title);
-    setDate(
-      `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1)
-        .toString()
-        .padStart(2, '0')}/${d.getFullYear()}`
-    );
-    setTime(
-      `${d.getHours().toString().padStart(2, '0')}:${d
-        .getMinutes()
-        .toString()
-        .padStart(2, '0')}`
-    );
+    setDate(formatDateBR(d));
+    setTime(formatTimeHHMM(d));
     setDurationHours(String(pelada.durationHours ?? 2));
     setLocation(pelada.location || '');
     setLocationAddress(pelada.locationAddress || '');
     setWhatsappGroupUrl(pelada.whatsappGroupUrl || '');
-    setPrice(pelada.price != null ? String(pelada.price) : '');
+    setPrices(priceFieldsFromPelada(pelada));
     setMaxPlayers(pelada.maxPlayers != null ? String(pelada.maxPlayers) : '');
     setCancelDeadlineHours(String(pelada.cancelDeadlineHours ?? 4));
     setPixKey(pelada.pixKey || '');
     setIsPublic(pelada.isPublic);
-    setGoalkeepersExempt(pelada.goalkeepersExempt);
 
     if (!pelada.isRecurring) {
       setRecurrenceFreq('NONE');
@@ -144,7 +142,10 @@ export function PeladaConfigModal({
       setRecurrenceFreq('1X_WEEK');
       setSelectedRecurrenceDays(pelada.recurrenceDay ? [pelada.recurrenceDay] : ['QUI']);
     }
-  }, [visible, pelada, initialTab]);
+    // Inicializa o formulario so ao abrir: atualizacoes em tempo real da pelada
+    // (outra pessoa confirmando presenca, por ex.) nao apagam o que esta sendo editado.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible, pelada?.id, initialTab]);
 
   const displayedTeamCount = gameMode === 'WINNER_STAYS_QUEUE' ? 2 : fixedTeamsCount;
 
@@ -197,22 +198,21 @@ export function PeladaConfigModal({
       return;
     }
 
-    const [day, month, year] = date.split('/');
-    const [hours, minutes] = time.split(':');
-    const dateTime = new Date(
-      parseInt(year || '2026', 10),
-      parseInt(month, 10) - 1,
-      parseInt(day, 10),
-      parseInt(hours, 10),
-      parseInt(minutes, 10)
-    );
-
-    if (isNaN(dateTime.getTime())) {
-      showMessage('Data inválida', 'Use DD/MM/AAAA e HH:MM.');
+    const dateTime = parseDateTimeBR(date, time);
+    if (!dateTime) {
+      showMessage('Data inválida', 'Confira a data (DD/MM/AAAA) e o horário (HH:MM).');
+      return;
+    }
+    if (whatsappGroupUrl.trim() && !isValidHttpUrl(whatsappGroupUrl)) {
+      showMessage('Link inválido', 'O link do grupo deve começar com https://');
+      return;
+    }
+    const max = parseIntOrNull(maxPlayers);
+    if (max !== null && max < 2) {
+      showMessage('Máximo de jogadores', 'O mínimo é 2 jogadores de linha.');
       return;
     }
 
-    const parsedPrice = price.trim() ? parseFloat(price.replace(',', '.')) : null;
     const parsedDuration = parseDurationHours(durationHours);
 
     setSaving(true);
@@ -224,13 +224,12 @@ export function PeladaConfigModal({
         location: location.trim(),
         locationAddress: locationAddress.trim() || null,
         whatsappGroupUrl: whatsappGroupUrl.trim() || null,
-        price: parsedPrice !== null && !isNaN(parsedPrice) ? parsedPrice : null,
-        maxPlayers: maxPlayers.trim() ? parseInt(maxPlayers, 10) : null,
-        playersPerTeam: playersPerTeam.trim() ? parseInt(playersPerTeam, 10) : 5,
-        cancelDeadlineHours: cancelDeadlineHours.trim() ? parseInt(cancelDeadlineHours, 10) : 4,
+        ...priceFieldsToPayload(prices),
+        maxPlayers: max,
+        playersPerTeam: Math.max(1, Math.min(20, parseIntOrNull(playersPerTeam) ?? 5)),
+        cancelDeadlineHours: Math.min(72, parseIntOrNull(cancelDeadlineHours) ?? 4),
         pixKey: pixKey.trim() || null,
         isPublic,
-        goalkeepersExempt,
         isRecurring: recurrenceFreq !== 'NONE',
         recurrenceDay: recurrenceFreq !== 'NONE' ? selectedRecurrenceDays[0] || 'QUI' : null,
         recurrenceDays:
@@ -322,7 +321,8 @@ export function PeladaConfigModal({
                     <TextInput
                       style={styles.inlineNumInput}
                       value={matchDurationMinutes}
-                      onChangeText={setMatchDurationMinutes}
+                      onChangeText={(v) => setMatchDurationMinutes(maskInteger(v, 3))}
+                      maxLength={3}
                       keyboardType="number-pad"
                       placeholder="10"
                       placeholderTextColor={colors.textMuted}
@@ -352,7 +352,8 @@ export function PeladaConfigModal({
                     <TextInput
                       style={styles.inlineNumInput}
                       value={playersPerTeam}
-                      onChangeText={setPlayersPerTeam}
+                      onChangeText={(v) => setPlayersPerTeam(maskInteger(v, 2))}
+                      maxLength={2}
                       keyboardType="number-pad"
                       placeholder="5"
                       placeholderTextColor={colors.textMuted}
@@ -510,6 +511,7 @@ export function PeladaConfigModal({
                           })
                         }
                         placeholder={`Nome do Time ${idx + 1}`}
+                        maxLength={30}
                         placeholderTextColor={colors.textMuted}
                       />
                     </View>
@@ -529,14 +531,14 @@ export function PeladaConfigModal({
               </View>
             ) : (
               <View>
-                <Input label="Título *" value={title} onChangeText={setTitle} />
+                <Input label="Título *" value={title} onChangeText={setTitle} maxLength={60} />
 
                 <View style={styles.row}>
                   <View style={styles.half}>
-                    <Input label="Data (DD/MM/AAAA)" value={date} onChangeText={setDate} keyboardType="numeric" />
+                    <Input label="Data" mask="date" value={date} onChangeText={setDate} />
                   </View>
                   <View style={styles.half}>
-                    <Input label="Início (HH:MM)" value={time} onChangeText={setTime} keyboardType="numeric" />
+                    <Input label="Início" mask="time" value={time} onChangeText={setTime} />
                   </View>
                 </View>
 
@@ -544,9 +546,9 @@ export function PeladaConfigModal({
                   <View style={styles.half}>
                     <Input
                       label="Duração (horas)"
+                      mask="decimal"
                       value={durationHours}
                       onChangeText={setDurationHours}
-                      keyboardType="decimal-pad"
                     />
                   </View>
                 </View>
@@ -669,12 +671,11 @@ export function PeladaConfigModal({
                 <Input label="Local *" value={location} onChangeText={setLocation} />
                 <Input label="Endereço" value={locationAddress} onChangeText={setLocationAddress} />
 
+                <PriceFields value={prices} onChange={setPrices} />
+
                 <View style={styles.row}>
                   <View style={styles.half}>
-                    <Input label="Valor (R$)" value={price} onChangeText={setPrice} keyboardType="decimal-pad" />
-                  </View>
-                  <View style={styles.half}>
-                    <Input label="Máx. linha" value={maxPlayers} onChangeText={setMaxPlayers} keyboardType="number-pad" />
+                    <Input label="Máx. linha" mask="integer" maxLength={2} value={maxPlayers} onChangeText={setMaxPlayers} />
                   </View>
                 </View>
 
@@ -682,20 +683,35 @@ export function PeladaConfigModal({
                   <View style={styles.half}>
                     <Input
                       label="Prazo desist. (h)"
+                      mask="integer"
+                      maxLength={2}
                       value={cancelDeadlineHours}
                       onChangeText={setCancelDeadlineHours}
-                      keyboardType="number-pad"
                     />
                   </View>
                 </View>
 
-                <Input label="Chave Pix" value={pixKey} onChangeText={setPixKey} autoCapitalize="none" />
+                <Input
+                  label="Chave Pix"
+                  value={pixKey}
+                  onChangeText={setPixKey}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  maxLength={77}
+                />
                 <Input
                   label="Link do Grupo WhatsApp"
                   placeholder="https://chat.whatsapp.com/..."
                   value={whatsappGroupUrl}
-                  onChangeText={setWhatsappGroupUrl}
+                  onChangeText={(v) => setWhatsappGroupUrl(v.trim())}
                   autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="url"
+                  error={
+                    whatsappGroupUrl && !isValidHttpUrl(whatsappGroupUrl)
+                      ? 'O link deve começar com https://'
+                      : undefined
+                  }
                 />
 
                 <View style={styles.switchRow}>
@@ -705,16 +721,6 @@ export function PeladaConfigModal({
                     onValueChange={setIsPublic}
                     trackColor={{ false: colors.border, true: colors.primaryDark }}
                     thumbColor={isPublic ? colors.primary : colors.textMuted}
-                  />
-                </View>
-
-                <View style={styles.switchRow}>
-                  <Text style={styles.switchLabel}>Goleiros isentos de taxa</Text>
-                  <Switch
-                    value={goalkeepersExempt}
-                    onValueChange={setGoalkeepersExempt}
-                    trackColor={{ false: colors.border, true: colors.primaryDark }}
-                    thumbColor={goalkeepersExempt ? colors.primary : colors.textMuted}
                   />
                 </View>
 

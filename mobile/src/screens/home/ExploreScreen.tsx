@@ -17,6 +17,7 @@ import { explorePeladas } from '../../services/peladaService';
 import { Pelada } from '../../types';
 import { colors, fonts, spacing, borderRadius, shadows } from '../../constants/theme';
 import { formatPeladaSchedule } from '../../utils/dateTime';
+import { formatMainPrice } from '../../utils/prices';
 import { useResponsive } from '../../hooks/useResponsive';
 import { FadeInView, ScalePressable } from '../../components/ui/Motion';
 
@@ -254,7 +255,7 @@ export function ExploreScreen({ navigation }: Props) {
                   <View style={styles.cardFooter}>
                     <View style={styles.pricePill}>
                       <Text style={styles.priceText}>
-                        {item.price && item.price > 0 ? `R$ ${item.price.toFixed(2)}` : 'Gratuita'}
+                        {formatMainPrice(item)}
                       </Text>
                     </View>
                     <View style={styles.actionHintRow}>

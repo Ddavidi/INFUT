@@ -21,6 +21,8 @@ import {
   parseDurationHours,
 } from '../../utils/dateTime';
 import { useResponsive } from '../../hooks/useResponsive';
+import { PriceFields, PriceFieldsValue, priceFieldsToPayload } from '../../components/pelada/PriceFields';
+import { isValidHttpUrl, parseDateTimeBR, parseIntOrNull } from '../../utils/masks';
 
 type Props = {
   navigation: NativeStackNavigationProp<any>;
@@ -46,13 +48,12 @@ export function CreatePeladaScreen({ navigation }: Props) {
   const [location, setLocation] = useState('');
   const [locationAddress, setLocationAddress] = useState('');
   const [whatsappGroupUrl, setWhatsappGroupUrl] = useState('');
-  const [price, setPrice] = useState('');
+  const [prices, setPrices] = useState<PriceFieldsValue>({ diarista: '', goalkeeper: '', monthly: '' });
   const [maxPlayers, setMaxPlayers] = useState('');
   const [playersPerTeam, setPlayersPerTeam] = useState('5');
   const [cancelDeadlineHours, setCancelDeadlineHours] = useState('4');
   const [pixKey, setPixKey] = useState('');
   const [isPublic, setIsPublic] = useState(true);
-  const [goalkeepersExempt, setGoalkeepersExempt] = useState(true);
   const [isRecurring, setIsRecurring] = useState(false);
   const [recurrenceDay, setRecurrenceDay] = useState('');
   const [loading, setLoading] = useState(false);
@@ -66,13 +67,12 @@ export function CreatePeladaScreen({ navigation }: Props) {
     setLocation('');
     setLocationAddress('');
     setWhatsappGroupUrl('');
-    setPrice('');
+    setPrices({ diarista: '', goalkeeper: '', monthly: '' });
     setMaxPlayers('');
     setPlayersPerTeam('5');
     setCancelDeadlineHours('4');
     setPixKey('');
     setIsPublic(true);
-    setGoalkeepersExempt(true);
     setIsRecurring(false);
     setRecurrenceDay('');
   }
@@ -86,24 +86,30 @@ export function CreatePeladaScreen({ navigation }: Props) {
       return;
     }
 
-    const [day, month, year] = date.split('/');
-    const [hours, minutes] = time.split(':');
-    const dateTime = new Date(
-      parseInt(year || '2026', 10),
-      parseInt(month, 10) - 1,
-      parseInt(day, 10),
-      parseInt(hours, 10),
-      parseInt(minutes, 10)
-    );
-
-    if (isNaN(dateTime.getTime())) {
-      showMessage('Data invalida', 'Use os formatos DD/MM/AAAA e HH:MM');
+    const dateTime = parseDateTimeBR(date, time);
+    if (!dateTime) {
+      showMessage('Data inválida', 'Confira a data (DD/MM/AAAA) e o horário (HH:MM).');
+      return;
+    }
+    if (dateTime.getTime() < Date.now() - 60 * 60 * 1000) {
+      showMessage('Data no passado', 'Escolha uma data e horário a partir de agora.');
+      return;
+    }
+    if (whatsappGroupUrl.trim() && !isValidHttpUrl(whatsappGroupUrl)) {
+      showMessage('Link inválido', 'O link do grupo deve começar com https://');
+      return;
+    }
+    const perTeam = parseIntOrNull(playersPerTeam) ?? 5;
+    if (perTeam < 1 || perTeam > 20) {
+      showMessage('Jogadores por time', 'Use um número entre 1 e 20.');
+      return;
+    }
+    const max = parseIntOrNull(maxPlayers);
+    if (max !== null && max < 2) {
+      showMessage('Máximo de jogadores', 'O mínimo é 2 jogadores de linha.');
       return;
     }
 
-    const parsedPrice = price.trim()
-      ? parseFloat(price.replace(',', '.'))
-      : null;
     const parsedDuration = parseDurationHours(durationHours);
 
     setLoading(true);
@@ -116,13 +122,12 @@ export function CreatePeladaScreen({ navigation }: Props) {
         whatsappGroupUrl: whatsappGroupUrl.trim() || null,
         location: location.trim(),
         locationAddress: locationAddress.trim() || null,
-        price: parsedPrice !== null && !isNaN(parsedPrice) ? parsedPrice : null,
-        maxPlayers: maxPlayers.trim() ? parseInt(maxPlayers, 10) : null,
-        playersPerTeam: playersPerTeam.trim() ? parseInt(playersPerTeam, 10) : 5,
-        cancelDeadlineHours: cancelDeadlineHours.trim() ? parseInt(cancelDeadlineHours, 10) : 4,
+        ...priceFieldsToPayload(prices),
+        maxPlayers: max,
+        playersPerTeam: perTeam,
+        cancelDeadlineHours: Math.min(72, parseIntOrNull(cancelDeadlineHours) ?? 4),
         pixKey: pixKey.trim() || null,
         isPublic,
-        goalkeepersExempt,
         isRecurring,
         recurrenceDay: isRecurring ? recurrenceDay || null : null,
       });
@@ -151,6 +156,7 @@ export function CreatePeladaScreen({ navigation }: Props) {
           placeholder="Ex: Pelada da Quinta"
           value={title}
           onChangeText={setTitle}
+          maxLength={60}
         />
 
         <Text style={styles.sectionLabel}>Esporte *</Text>
@@ -177,22 +183,10 @@ export function CreatePeladaScreen({ navigation }: Props) {
         <Text style={styles.cardStepLabel}>2. DATA E LOCALIZAÇÃO</Text>
         <View style={styles.row}>
           <View style={styles.halfInput}>
-            <Input
-              label="Data * (DD/MM/AAAA)"
-              placeholder="20/11/2026"
-              value={date}
-              onChangeText={setDate}
-              keyboardType="numeric"
-            />
+            <Input label="Data *" mask="date" value={date} onChangeText={setDate} />
           </View>
           <View style={styles.halfInput}>
-            <Input
-              label="Início * (HH:MM)"
-              placeholder="20:00"
-              value={time}
-              onChangeText={setTime}
-              keyboardType="numeric"
-            />
+            <Input label="Início *" mask="time" value={time} onChangeText={setTime} />
           </View>
         </View>
 
@@ -201,9 +195,9 @@ export function CreatePeladaScreen({ navigation }: Props) {
             <Input
               label="Duração (horas)"
               placeholder="2"
+              mask="decimal"
               value={durationHours}
               onChangeText={setDurationHours}
-              keyboardType="decimal-pad"
             />
           </View>
         </View>
@@ -257,23 +251,17 @@ export function CreatePeladaScreen({ navigation }: Props) {
   const section3 = (
     <View style={styles.sectionCard}>
       <Text style={styles.cardStepLabel}>3. REGRAS, TIME E FINANCEIRO</Text>
+      <PriceFields value={prices} onChange={setPrices} />
+
       <View style={styles.row}>
-        <View style={styles.halfInput}>
-          <Input
-            label="Valor (R$)"
-            placeholder="15.00"
-            value={price}
-            onChangeText={setPrice}
-            keyboardType="decimal-pad"
-          />
-        </View>
         <View style={styles.halfInput}>
           <Input
             label="Max jogadores linha"
             placeholder="14"
+            mask="integer"
+            maxLength={2}
             value={maxPlayers}
             onChangeText={setMaxPlayers}
-            keyboardType="number-pad"
           />
         </View>
       </View>
@@ -283,18 +271,20 @@ export function CreatePeladaScreen({ navigation }: Props) {
           <Input
             label="Linha por time"
             placeholder="5"
+            mask="integer"
+            maxLength={2}
             value={playersPerTeam}
             onChangeText={setPlayersPerTeam}
-            keyboardType="number-pad"
           />
         </View>
         <View style={styles.halfInput}>
           <Input
             label="Prazo desist. (horas)"
             placeholder="4"
+            mask="integer"
+            maxLength={2}
             value={cancelDeadlineHours}
             onChangeText={setCancelDeadlineHours}
-            keyboardType="number-pad"
           />
         </View>
       </View>
@@ -305,14 +295,23 @@ export function CreatePeladaScreen({ navigation }: Props) {
         value={pixKey}
         onChangeText={setPixKey}
         autoCapitalize="none"
+        autoCorrect={false}
+        maxLength={77}
       />
 
       <Input
         label="Link do Grupo no WhatsApp (opcional)"
         placeholder="https://chat.whatsapp.com/..."
         value={whatsappGroupUrl}
-        onChangeText={setWhatsappGroupUrl}
+        onChangeText={(v) => setWhatsappGroupUrl(v.trim())}
         autoCapitalize="none"
+        autoCorrect={false}
+        keyboardType="url"
+        error={
+          whatsappGroupUrl && !isValidHttpUrl(whatsappGroupUrl)
+            ? 'O link deve começar com https://'
+            : undefined
+        }
       />
 
       {/* Public toggle */}
@@ -328,20 +327,6 @@ export function CreatePeladaScreen({ navigation }: Props) {
           onValueChange={setIsPublic}
           trackColor={{ false: colors.border, true: colors.primaryDark }}
           thumbColor={isPublic ? colors.primary : colors.textMuted}
-        />
-      </View>
-
-      {/* Goalkeepers exempt toggle */}
-      <View style={styles.switchRow}>
-        <View style={{ flex: 1, paddingRight: spacing.sm }}>
-          <Text style={styles.switchLabel}>Goleiros isentos</Text>
-          <Text style={styles.switchSubLabel}>Goleiros não pagam taxa da quadra</Text>
-        </View>
-        <Switch
-          value={goalkeepersExempt}
-          onValueChange={setGoalkeepersExempt}
-          trackColor={{ false: colors.border, true: colors.primaryDark }}
-          thumbColor={goalkeepersExempt ? colors.primary : colors.textMuted}
         />
       </View>
 

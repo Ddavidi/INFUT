@@ -210,3 +210,54 @@ export async function voteGoalkeeper(
   const response = await api.post(`/peladas/${peladaId}/vote-goalkeeper`, { targetPlayerId });
   return response.data;
 }
+
+// ---------- Sincronizacao em tempo real ----------
+
+export async function getPeladaSyncVersion(
+  peladaId: string
+): Promise<{ syncVersion: string; status: string; serverNow: number }> {
+  const response = await api.get(`/peladas/${peladaId}/sync`, {
+    params: { t: Date.now() },
+  });
+  return response.data;
+}
+
+// ---------- Sumula ao vivo ----------
+
+export async function addLiveGoal(
+  peladaId: string,
+  data: { teamName: string; scorerId?: string | null; assistId?: string | null; ownGoal?: boolean }
+): Promise<Pelada> {
+  const response = await api.post(`/peladas/${peladaId}/live/goals`, data);
+  return response.data;
+}
+
+export async function removeLiveGoal(peladaId: string, eventId: string): Promise<Pelada> {
+  const response = await api.delete(`/peladas/${peladaId}/live/goals/${eventId}`);
+  return response.data;
+}
+
+export async function setLiveMatchup(
+  peladaId: string,
+  data: { teamAName: string; teamBName: string }
+): Promise<Pelada> {
+  const response = await api.put(`/peladas/${peladaId}/live/matchup`, data);
+  return response.data;
+}
+
+export async function controlLiveTimer(
+  peladaId: string,
+  action: 'START' | 'PAUSE' | 'RESET'
+): Promise<Pelada> {
+  const response = await api.post(`/peladas/${peladaId}/live/timer`, { action });
+  return response.data;
+}
+
+export async function setTeamPhoto(
+  peladaId: string,
+  teamName: string,
+  photoUrl: string | null
+): Promise<Pelada> {
+  const response = await api.put(`/peladas/${peladaId}/team-photo`, { teamName, photoUrl });
+  return response.data;
+}
