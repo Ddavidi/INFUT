@@ -14,7 +14,7 @@ import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
 import { LegalModal } from '../../components/ui/LegalModal';
 import { useAuth } from '../../hooks/useAuth';
-import { colors, fonts, spacing, borderRadius, layout, shadows } from '../../constants/theme';
+import { colors, fonts, spacing, borderRadius, layout, shadows, themed } from '../../constants/theme';
 import { showMessage } from '../../utils/alerts';
 import { useResponsive } from '../../hooks/useResponsive';
 import { SPORTS, getPositionsForSport } from '../../constants/sports';
@@ -233,7 +233,7 @@ export function RegisterScreen({ navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
@@ -361,4 +361,4 @@ const styles = StyleSheet.create({
     textDecorationLine: 'underline',
     textAlign: 'center',
   },
-});
+}));

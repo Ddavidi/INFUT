@@ -8,7 +8,7 @@ import {
   StyleSheet,
   TouchableOpacity,
 } from 'react-native';
-import { colors, fonts, spacing, borderRadius, layout, shadows } from '../../constants/theme';
+import { colors, fonts, spacing, borderRadius, layout, shadows, themed } from '../../constants/theme';
 
 interface LegalModalProps {
   visible: boolean;
@@ -85,7 +85,7 @@ export function LegalModal({ visible, onClose }: LegalModalProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   overlay: {
     flex: 1,
     backgroundColor: colors.overlay,
@@ -138,7 +138,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   heading: {
-    color: colors.primary,
+    color: colors.textPrimary,
     fontSize: fonts.sizes.sm,
     fontWeight: '700',
     marginTop: spacing.sm,
@@ -163,4 +163,4 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     fontSize: fonts.sizes.sm,
   },
-});
+}));

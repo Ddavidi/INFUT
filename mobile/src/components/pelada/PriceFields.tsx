@@ -2,7 +2,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Input } from '../ui/Input';
-import { colors, fonts, spacing } from '../../constants/theme';
+import { colors, fonts, spacing, themed } from '../../constants/theme';
 import { formatCurrencyInput, parseCurrency } from '../../utils/masks';
 
 export interface PriceFieldsValue {
@@ -86,7 +86,7 @@ export function priceFieldsToPayload(v: PriceFieldsValue) {
   };
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   heading: {
     color: colors.textSecondary,
     fontSize: fonts.sizes.xs,
@@ -104,4 +104,4 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 120,
   },
-});
+}));

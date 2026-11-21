@@ -1,7 +1,7 @@
 // Reusable Input component — Night Pitch Recessed Field (com mascaras de digitacao)
 import React, { useState } from 'react';
 import { View, TextInput, Text, StyleSheet, TextInputProps } from 'react-native';
-import { colors, fonts, spacing, borderRadius } from '../../constants/theme';
+import { colors, fonts, spacing, borderRadius, themed } from '../../constants/theme';
 import { applyMask, maskInteger, MaskType, MASK_DEFAULTS } from '../../utils/masks';
 
 interface InputProps extends TextInputProps {
@@ -97,7 +97,7 @@ export function Input({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   container: {
     marginBottom: spacing.md,
   },
@@ -111,7 +111,7 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   labelFocused: {
-    color: colors.primary,
+    color: colors.textPrimary,
   },
   input: {
     backgroundColor: colors.surface,
@@ -162,4 +162,4 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     marginTop: spacing.xs,
   },
-});
+}));

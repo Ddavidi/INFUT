@@ -25,7 +25,7 @@ import {
   updatePlayerPayment,
 } from '../../services/peladaService';
 import { PaymentStatus, Pelada, PeladaPastEdition, PeladaPlayer } from '../../types';
-import { colors, fonts, spacing, borderRadius, shadows } from '../../constants/theme';
+import { colors, fonts, spacing, borderRadius, shadows, themed } from '../../constants/theme';
 import { showConfirm, showMessage } from '../../utils/alerts';
 import { describePrices, hasAnyPrice } from '../../utils/prices';
 import { formatBRL } from '../../utils/masks';
@@ -376,7 +376,7 @@ export function PeladaDetailsScreen({ navigation, route }: Props) {
         </View>
         {pelada.isLatestEdition !== false && (
           <View style={styles.nextGameBadge}>
-            <Ionicons name="sparkles" size={12} color={colors.primary} />
+            <Ionicons name="sparkles" size={12} color={colors.info} />
             <Text style={styles.nextGameBadgeText}>Próxima Pelada</Text>
           </View>
         )}
@@ -459,7 +459,7 @@ export function PeladaDetailsScreen({ navigation, route }: Props) {
           accessibilityRole="button"
           accessibilityLabel="Entrar no grupo do WhatsApp da pelada"
         >
-          <Ionicons name="logo-whatsapp" size={16} color={colors.primary} />
+          <Ionicons name="logo-whatsapp" size={16} color="#25D366" />
           <Text style={styles.whatsappGroupBtnText}>Grupo do WhatsApp</Text>
         </TouchableOpacity>
       ) : null}
@@ -479,8 +479,8 @@ export function PeladaDetailsScreen({ navigation, route }: Props) {
                 {
                   backgroundColor:
                     peladaStatus === 'OPEN'
-                      ? colors.primary
-                      : colors.success,
+                      ? colors.success
+                      : colors.info,
                 },
               ]}
             />
@@ -657,7 +657,19 @@ export function PeladaDetailsScreen({ navigation, route }: Props) {
       <Text style={styles.sectionTitle}>Sua Presença</Text>
       <Text style={styles.myStatusText}>
         Status atual:{' '}
-        <Text style={{ color: colors.primary, fontWeight: '800' }}>
+        <Text
+          style={{
+            fontWeight: '800',
+            color:
+              pelada.myStatus === 'CONFIRMED'
+                ? colors.success
+                : pelada.myStatus === 'WAITLIST'
+                  ? colors.warning
+                  : pelada.myStatus === 'DECLINED'
+                    ? colors.error
+                    : colors.textSecondary,
+          }}
+        >
           {pelada.myStatus === 'CONFIRMED'
             ? pelada.myPlayer?.isGoalkeeper
               ? 'Confirmado (Goleiro)'
@@ -1539,7 +1551,7 @@ function PlayerRow({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   centered: {
     flex: 1,
@@ -1567,9 +1579,9 @@ const styles = StyleSheet.create({
   },
   errorText: { color: colors.textSecondary, fontSize: fonts.sizes.md, textAlign: 'center' },
   backBtnPill: {
-    backgroundColor: colors.primarySoft,
+    backgroundColor: colors.surfaceLight,
     borderWidth: 1,
-    borderColor: colors.primary,
+    borderColor: colors.borderStrong,
     borderRadius: borderRadius.md,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm + 2,
@@ -1585,7 +1597,7 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   backBtn: { minHeight: 44, justifyContent: 'center', paddingRight: spacing.md },
-  backBtnText: { color: colors.primary, fontSize: fonts.sizes.md, fontWeight: '800' },
+  backBtnText: { color: colors.textPrimary, fontSize: fonts.sizes.md, fontWeight: '800' },
   topBarRight: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: spacing.xs },
   gearTopBtn: {
     backgroundColor: colors.surfaceLight,
@@ -1609,14 +1621,14 @@ const styles = StyleSheet.create({
   },
   membersTopBtnText: { color: colors.textPrimary, fontSize: fonts.sizes.xs, fontWeight: '700' },
   codePill: {
-    backgroundColor: colors.primarySoft,
+    backgroundColor: colors.surfaceLight,
     borderWidth: 1,
-    borderColor: colors.primary,
+    borderColor: colors.borderStrong,
     borderRadius: borderRadius.md,
     paddingHorizontal: spacing.md,
     paddingVertical: 6,
   },
-  codePillText: { color: colors.primary, fontWeight: '900', fontSize: fonts.sizes.xs },
+  codePillText: { color: colors.textSecondary, fontWeight: '900', fontSize: fonts.sizes.xs },
   scrollContent: { paddingVertical: spacing.md, paddingBottom: 80 },
   pageContainer: {
     width: '100%',
@@ -1651,13 +1663,13 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   sportTag: {
-    backgroundColor: colors.primarySoft,
+    backgroundColor: colors.surfaceLight,
     paddingHorizontal: spacing.sm,
     paddingVertical: 3,
     borderRadius: borderRadius.sm,
   },
   sportTagText: {
-    color: colors.primary,
+    color: colors.textSecondary,
     fontSize: fonts.sizes.xs,
     fontWeight: '800',
     textTransform: 'uppercase',
@@ -1873,7 +1885,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   accordionChevron: {
-    color: colors.primary,
+    color: colors.textMuted,
     fontSize: fonts.sizes.md,
     fontWeight: '800',
   },
@@ -2040,7 +2052,7 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   playerAvatarText: {
-    color: colors.primary,
+    color: colors.textSecondary,
     fontWeight: '800',
     fontSize: fonts.sizes.sm,
   },
@@ -2099,9 +2111,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   timerDisplay: {
+    fontFamily: fonts.display,
     fontSize: 48,
     fontWeight: '900',
-    color: colors.primary,
+    color: colors.textPrimary,
     letterSpacing: 3,
     fontVariant: ['tabular-nums'],
   },
@@ -2130,8 +2143,7 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     borderWidth: 1,
     borderColor: colors.borderLight,
-    borderLeftWidth: 4,
-    borderLeftColor: colors.primary,
+    borderLeftColor: colors.border,
   },
   teamHeaderRow: {
     flexDirection: 'row',
@@ -2140,7 +2152,7 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   teamTitle: {
-    color: colors.primary,
+    color: colors.textPrimary,
     fontWeight: '800',
     fontSize: fonts.sizes.sm,
   },
@@ -2186,6 +2198,7 @@ const styles = StyleSheet.create({
   },
   scoreStepText: { color: colors.textPrimary, fontSize: fonts.sizes.md, fontWeight: '900' },
   scoreNumber: {
+    fontFamily: fonts.display,
     color: colors.textPrimary,
     fontSize: fonts.sizes.xxl,
     fontWeight: '900',
@@ -2224,7 +2237,7 @@ const styles = StyleSheet.create({
   },
   mvpName: { color: colors.textPrimary, fontWeight: '700', fontSize: fonts.sizes.sm },
   mvpVotes: {
-    color: colors.primary,
+    color: colors.gold,
     fontWeight: '800',
     fontSize: fonts.sizes.sm,
     fontVariant: ['tabular-nums'],
@@ -2303,7 +2316,7 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
   },
   pixKeyText: {
-    color: colors.primary,
+    color: colors.textPrimary,
     fontSize: fonts.sizes.md,
     fontWeight: '800',
     backgroundColor: colors.surface,
@@ -2391,15 +2404,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    backgroundColor: colors.primarySoft,
-    borderColor: colors.primaryBorder,
+    backgroundColor: colors.infoSoft,
+    borderColor: colors.infoBorder,
     borderWidth: 1,
     paddingHorizontal: spacing.sm + 2,
     paddingVertical: 3,
     borderRadius: borderRadius.full,
   },
   nextGameBadgeText: {
-    color: colors.primary,
+    color: colors.info,
     fontSize: fonts.sizes.xs,
     fontWeight: '800',
   },
@@ -2740,4 +2753,4 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     textAlign: 'center',
   },
-});
+}));

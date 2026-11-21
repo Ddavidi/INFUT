@@ -13,7 +13,7 @@ import { Input } from '../ui/Input';
 import { Button } from '../ui/Button';
 import { updatePelada } from '../../services/peladaService';
 import { Pelada } from '../../types';
-import { colors, fonts, spacing, borderRadius, layout, shadows } from '../../constants/theme';
+import { colors, fonts, spacing, borderRadius, layout, shadows, themed } from '../../constants/theme';
 import { showMessage } from '../../utils/alerts';
 import {
   DURATION_PRESETS,
@@ -247,7 +247,7 @@ export function EditPeladaModal({ visible, pelada, onClose, onSaved }: EditPelad
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   overlay: {
     flex: 1,
     backgroundColor: colors.overlay,
@@ -325,17 +325,17 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   endTimeBanner: {
-    backgroundColor: colors.primarySoft,
+    backgroundColor: colors.infoSoft,
     borderWidth: 1,
-    borderColor: colors.primary,
+    borderColor: colors.infoBorder,
     borderRadius: borderRadius.md,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     marginBottom: spacing.sm + 2,
   },
   endTimeBannerText: {
-    color: colors.primary,
+    color: colors.info,
     fontSize: fonts.sizes.xs,
     fontWeight: '700',
   },
-});
+}));

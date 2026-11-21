@@ -18,7 +18,7 @@ import { Button } from '../../components/ui/Button';
 import { useAuth } from '../../hooks/useAuth';
 import { getPublicPeladaByCode } from '../../services/peladaService';
 import { Pelada } from '../../types';
-import { colors, fonts, spacing, borderRadius, layout, shadows } from '../../constants/theme';
+import { colors, fonts, spacing, borderRadius, layout, shadows, themed } from '../../constants/theme';
 import { showMessage } from '../../utils/alerts';
 import { maskInviteCode } from '../../utils/masks';
 import { describePrices, hasAnyPrice } from '../../utils/prices';
@@ -286,7 +286,7 @@ export function LoginScreen({ navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   scroll: {
     flexGrow: 1,
@@ -325,9 +325,10 @@ const styles = StyleSheet.create({
   },
   emoji: { fontSize: 36 },
   title: {
+    fontFamily: fonts.display,
     fontSize: fonts.sizes.xxxl,
     fontWeight: '900',
-    color: colors.primary,
+    color: colors.textPrimary,
     letterSpacing: 4,
   },
   subtitle: {
@@ -363,13 +364,13 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xs,
   },
   visitorPill: {
-    backgroundColor: colors.primarySoft,
+    backgroundColor: colors.infoSoft,
     paddingHorizontal: spacing.sm,
     paddingVertical: 3,
     borderRadius: borderRadius.sm,
   },
   visitorPillText: {
-    color: colors.primary,
+    color: colors.info,
     fontSize: fonts.sizes.xs,
     fontWeight: '800',
     letterSpacing: 0.6,
@@ -401,16 +402,16 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   visitorBtn: {
-    backgroundColor: colors.darkTeal,
+    backgroundColor: colors.surfaceLight,
     borderWidth: 1,
-    borderColor: colors.primary,
+    borderColor: colors.borderStrong,
     borderRadius: borderRadius.md,
     paddingHorizontal: spacing.md,
     minHeight: 44,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  visitorBtnText: { color: colors.primary, fontWeight: '700', fontSize: fonts.sizes.xs },
+  visitorBtnText: { color: colors.textPrimary, fontWeight: '700', fontSize: fonts.sizes.xs },
   modalOverlay: {
     flex: 1,
     backgroundColor: colors.overlay,
@@ -450,7 +451,7 @@ const styles = StyleSheet.create({
   closeBtn: { fontSize: fonts.sizes.md, color: colors.textSecondary, fontWeight: '700' },
   modalSport: {
     fontSize: fonts.sizes.xs,
-    color: colors.primary,
+    color: colors.textSecondary,
     fontWeight: '800',
     textTransform: 'uppercase',
     letterSpacing: 0.4,
@@ -490,4 +491,4 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     paddingVertical: spacing.xs,
   },
-});
+}));

@@ -4,7 +4,7 @@ import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'rea
 import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from './Avatar';
 import { pickSquarePhoto } from '../../utils/imagePicker';
-import { colors, fonts, spacing, borderRadius } from '../../constants/theme';
+import { colors, fonts, spacing, borderRadius, themed } from '../../constants/theme';
 
 interface PhotoPickerProps {
   name: string;
@@ -61,7 +61,7 @@ export function PhotoPicker({ name, value, onChange, size = 88 }: PhotoPickerPro
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -108,4 +108,4 @@ const styles = StyleSheet.create({
     fontSize: fonts.sizes.xs,
     fontWeight: '700',
   },
-});
+}));

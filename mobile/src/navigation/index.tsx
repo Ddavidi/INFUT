@@ -1,6 +1,6 @@
 // Root Navigator — Night Pitch Dark Theme & Smooth Transitions
 import React from 'react';
-import { NavigationContainer, DarkTheme } from '@react-navigation/native';
+import { NavigationContainer, DarkTheme, DefaultTheme, NavigationState } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useAuth } from '../hooks/useAuth';
 import { AuthStack } from './AuthStack';
@@ -10,7 +10,7 @@ import { ManageMembersScreen } from '../screens/pelada/ManageMembersScreen';
 import { LivePeladaScreen } from '../screens/pelada/LivePeladaScreen';
 import { PostGameScreen } from '../screens/pelada/PostGameScreen';
 import { ActivityIndicator, View } from 'react-native';
-import { colors } from '../constants/theme';
+import { colors, themeState } from '../constants/theme';
 
 export type AppStackParamList = {
   MainTabs: undefined;
@@ -22,18 +22,24 @@ export type AppStackParamList = {
 
 const AppStack = createNativeStackNavigator<AppStackParamList>();
 
-const InfutNavTheme = {
-  ...DarkTheme,
-  colors: {
-    ...DarkTheme.colors,
-    primary: colors.primary,
-    background: colors.background,
-    card: colors.surface,
-    text: colors.textPrimary,
-    border: colors.border,
-    notification: colors.primary,
-  },
-};
+function buildNavTheme() {
+  const base = themeState.mode === 'light' ? DefaultTheme : DarkTheme;
+  return {
+    ...base,
+    colors: {
+      ...base.colors,
+      primary: colors.primary,
+      background: colors.background,
+      card: colors.surface,
+      text: colors.textPrimary,
+      border: colors.border,
+      notification: colors.primary,
+    },
+  };
+}
+
+// Guarda a tela atual para que trocar a paleta (que remonta a arvore) nao volte ao inicio
+let savedNavState: NavigationState | undefined;
 
 function AuthenticatedStack() {
   return (
@@ -88,7 +94,13 @@ export function RootNavigator() {
   }
 
   return (
-    <NavigationContainer theme={InfutNavTheme}>
+    <NavigationContainer
+      theme={buildNavTheme()}
+      initialState={savedNavState}
+      onStateChange={(state) => {
+        savedNavState = state;
+      }}
+    >
       {isAuthenticated ? <AuthenticatedStack /> : <AuthStack />}
     </NavigationContainer>
   );

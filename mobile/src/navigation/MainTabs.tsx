@@ -8,7 +8,7 @@ import { ExploreScreen } from '../screens/home/ExploreScreen';
 import { RankingScreen } from '../screens/home/RankingScreen';
 import { CreatePeladaScreen } from '../screens/pelada/CreatePeladaScreen';
 import { EditProfileScreen } from '../screens/profile/EditProfileScreen';
-import { colors, fonts, borderRadius, spacing } from '../constants/theme';
+import { colors, fonts, borderRadius, spacing, themed } from '../constants/theme';
 import { useResponsive } from '../hooks/useResponsive';
 
 const Tab = createBottomTabNavigator();
@@ -38,9 +38,9 @@ export function MainTabs() {
               backgroundColor: colors.surface,
               borderTopColor: colors.border,
               borderTopWidth: 1,
-              height: Platform.OS === 'ios' ? 82 : 68,
+              height: Platform.OS === 'ios' ? 82 : 72,
               paddingTop: 8,
-              paddingBottom: Platform.OS === 'ios' ? 22 : 10,
+              paddingBottom: Platform.OS === 'ios' ? 22 : 12,
             },
         tabBarItemStyle: isDesktop
           ? {
@@ -147,7 +147,7 @@ export function MainTabs() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   createIconWrap: {
     width: 28,
     height: 28,
@@ -162,4 +162,4 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
     borderColor: colors.primary,
   },
-});
+}));

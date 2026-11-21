@@ -1,7 +1,7 @@
-// Reusable Button component — Night Pitch Tactile Design
+// Botao padrao: primary = acao principal (cor da paleta); outline = secundaria (neutra); ghost = link
 import React from 'react';
 import { Text, StyleSheet, ActivityIndicator, ViewStyle, StyleProp } from 'react-native';
-import { colors, fonts, spacing, borderRadius, shadows } from '../../constants/theme';
+import { colors, fonts, spacing, borderRadius, shadows, themed } from '../../constants/theme';
 import { ScalePressable } from './Motion';
 
 interface ButtonProps {
@@ -33,7 +33,7 @@ export function Button({ title, onPress, variant = 'primary', loading, disabled,
       accessibilityState={{ disabled: !!isDisabled, busy: !!loading }}
     >
       {loading ? (
-        <ActivityIndicator color={variant === 'primary' ? colors.textInverse : colors.primary} />
+        <ActivityIndicator color={variant === 'primary' ? colors.textInverse : colors.textPrimary} />
       ) : (
         <Text
           style={[
@@ -50,7 +50,7 @@ export function Button({ title, onPress, variant = 'primary', loading, disabled,
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   base: {
     paddingVertical: 14,
     paddingHorizontal: spacing.lg,
@@ -61,12 +61,12 @@ const styles = StyleSheet.create({
   },
   primary: {
     backgroundColor: colors.primary,
-    ...shadows.primaryGlow,
+    ...shadows.card,
   },
   outline: {
-    backgroundColor: colors.primarySoft,
+    backgroundColor: colors.surfaceLight,
     borderWidth: 1,
-    borderColor: colors.primaryBorder,
+    borderColor: colors.borderStrong,
   },
   ghost: {
     backgroundColor: 'transparent',
@@ -85,11 +85,11 @@ const styles = StyleSheet.create({
     color: colors.textInverse,
   },
   textOutline: {
-    color: colors.primary,
+    color: colors.textPrimary,
   },
   textGhost: {
     color: colors.primary,
     fontSize: fonts.sizes.sm,
     fontWeight: '700',
   },
-});
+}));

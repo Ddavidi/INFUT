@@ -13,7 +13,7 @@ import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
 import { createPelada } from '../../services/peladaService';
 import { SPORTS } from '../../constants/sports';
-import { colors, fonts, spacing, borderRadius, shadows } from '../../constants/theme';
+import { colors, fonts, spacing, borderRadius, shadows, themed } from '../../constants/theme';
 import { showMessage } from '../../utils/alerts';
 import {
   DURATION_PRESETS,
@@ -419,7 +419,7 @@ export function CreatePeladaScreen({ navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   content: {},
   pageContainer: {
@@ -450,7 +450,7 @@ const styles = StyleSheet.create({
     ...shadows.card,
   },
   cardStepLabel: {
-    color: colors.primary,
+    color: colors.textMuted,
     fontSize: fonts.sizes.xs,
     fontWeight: '800',
     letterSpacing: 0.8,
@@ -501,9 +501,9 @@ const styles = StyleSheet.create({
   switchLabel: { color: colors.textPrimary, fontSize: fonts.sizes.sm, fontWeight: '700' },
   switchSubLabel: { color: colors.textMuted, fontSize: fonts.sizes.xs, marginTop: 2 },
   endTimeBanner: {
-    backgroundColor: colors.primarySoft,
+    backgroundColor: colors.infoSoft,
     borderWidth: 1,
-    borderColor: colors.primary,
+    borderColor: colors.infoBorder,
     borderRadius: borderRadius.md,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
@@ -511,8 +511,8 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   endTimeBannerText: {
-    color: colors.primary,
+    color: colors.info,
     fontSize: fonts.sizes.xs,
     fontWeight: '700',
   },
-});
+}));

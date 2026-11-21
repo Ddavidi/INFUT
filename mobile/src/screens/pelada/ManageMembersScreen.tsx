@@ -21,7 +21,7 @@ import {
   updatePlayerRole,
 } from '../../services/peladaService';
 import { Pelada, PeladaPlayer } from '../../types';
-import { colors, fonts, spacing, borderRadius, shadows } from '../../constants/theme';
+import { colors, fonts, spacing, borderRadius, shadows, themed } from '../../constants/theme';
 import { showConfirm, showMessage } from '../../utils/alerts';
 import { useResponsive } from '../../hooks/useResponsive';
 import { usePeladaLiveSync } from '../../hooks/usePeladaLiveSync';
@@ -250,7 +250,7 @@ export function ManageMembersScreen({ navigation, route }: Props) {
               <Text
                 style={[
                   styles.actionChipText,
-                  { color: player.role === 'CO_ORGANIZER' ? colors.primary : colors.textSecondary },
+                  { color: player.role === 'CO_ORGANIZER' ? colors.info : colors.textSecondary },
                 ]}
               >
                 {player.role === 'CO_ORGANIZER' ? 'Co-org ✓' : '+ Co-org'}
@@ -461,7 +461,7 @@ export function ManageMembersScreen({ navigation, route }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   centered: {
     flex: 1,
@@ -524,7 +524,7 @@ const styles = StyleSheet.create({
     minHeight: 44,
     justifyContent: 'center',
   },
-  backBtnText: { color: colors.primary, fontSize: fonts.sizes.md, fontWeight: '700' },
+  backBtnText: { color: colors.textPrimary, fontSize: fonts.sizes.md, fontWeight: '700' },
   topTitle: {
     flex: 1,
     minWidth: 120,
@@ -534,15 +534,15 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   codePill: {
-    backgroundColor: colors.primarySoft,
+    backgroundColor: colors.surfaceLight,
     paddingHorizontal: spacing.sm + 4,
     paddingVertical: spacing.xs + 3,
     borderRadius: borderRadius.full,
     borderWidth: 1,
-    borderColor: colors.primary,
+    borderColor: colors.borderStrong,
   },
   codePillText: {
-    color: colors.primary,
+    color: colors.textSecondary,
     fontSize: fonts.sizes.xs,
     fontWeight: '800',
     letterSpacing: 1,
@@ -700,7 +700,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   avatarText: {
-    color: colors.primary,
+    color: colors.textSecondary,
     fontSize: fonts.sizes.sm,
     fontWeight: '800',
   },
@@ -745,5 +745,5 @@ const styles = StyleSheet.create({
     fontSize: fonts.sizes.xs + 1,
     fontWeight: '700',
   },
-});
+}));
 

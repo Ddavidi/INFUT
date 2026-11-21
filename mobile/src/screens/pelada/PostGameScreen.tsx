@@ -23,7 +23,7 @@ import {
   voteMvp,
 } from '../../services/peladaService';
 import { Pelada, PeladaPlayer } from '../../types';
-import { colors, fonts, spacing, borderRadius, shadows, layout } from '../../constants/theme';
+import { colors, fonts, spacing, borderRadius, shadows, layout, themed } from '../../constants/theme';
 import { showConfirm, showMessage } from '../../utils/alerts';
 import { formatPeladaSchedule } from '../../utils/dateTime';
 import { buildInviteUrl, shareOrCopyText } from '../../utils/inviteLink';
@@ -779,7 +779,7 @@ export function PostGameScreen({ navigation, route }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   centered: {
     flex: 1,
@@ -836,7 +836,7 @@ const styles = StyleSheet.create({
     minHeight: 44,
     justifyContent: 'center',
   },
-  backBtnText: { color: colors.primary, fontSize: fonts.sizes.md, fontWeight: '700' },
+  backBtnText: { color: colors.textPrimary, fontSize: fonts.sizes.md, fontWeight: '700' },
   topTitle: {
     flex: 1,
     minWidth: 120,
@@ -883,7 +883,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   stepEyebrow: {
-    color: colors.primary,
+    color: colors.textMuted,
     fontSize: fonts.sizes.xs,
     fontWeight: '800',
     letterSpacing: 0.7,
@@ -1019,14 +1019,14 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceElevated,
     borderRadius: borderRadius.lg,
     borderWidth: 1,
-    borderColor: colors.primary,
+    borderColor: colors.goldBorder,
     padding: spacing.md + 2,
     marginBottom: spacing.md,
     gap: spacing.sm + 2,
     ...shadows.card,
   },
   winnersEyebrow: {
-    color: colors.primary,
+    color: colors.gold,
     fontSize: fonts.sizes.xs,
     fontWeight: '800',
     letterSpacing: 0.8,
@@ -1080,7 +1080,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   rankVotes: {
-    color: colors.primary,
+    color: colors.textPrimary,
     fontSize: fonts.sizes.xs + 1,
     fontWeight: '800',
     fontVariant: ['tabular-nums'],
@@ -1091,7 +1091,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   accordionChevron: {
-    color: colors.primary,
+    color: colors.textMuted,
     fontSize: fonts.sizes.md,
     fontWeight: '800',
   },
@@ -1167,7 +1167,7 @@ const styles = StyleSheet.create({
   },
   statRankNum: {
     width: 26,
-    color: colors.primary,
+    color: colors.textMuted,
     fontSize: fonts.sizes.sm,
     fontWeight: '800',
   },
@@ -1339,4 +1339,4 @@ const styles = StyleSheet.create({
     fontSize: fonts.sizes.xs,
     fontWeight: '700',
   },
-});
+}));

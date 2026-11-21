@@ -16,7 +16,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { listPeladas, joinPeladaByCode } from '../../services/peladaService';
 import { Pelada } from '../../types';
-import { colors, fonts, spacing, borderRadius, shadows } from '../../constants/theme';
+import { colors, fonts, spacing, borderRadius, shadows, themed } from '../../constants/theme';
 import { showMessage } from '../../utils/alerts';
 import { formatMainPrice, hasAnyPrice } from '../../utils/prices';
 import { maskInviteCode } from '../../utils/masks';
@@ -40,7 +40,7 @@ function getSportIconName(sport: string): keyof typeof Ionicons.glyphMap {
 
 function getStatusBadge(pelada: Pelada): { label: string; color: string; bg: string } {
   if (pelada.myRole === 'ORGANIZER') {
-    return { label: 'Organizador', color: colors.primary, bg: colors.primarySoft };
+    return { label: 'Organizador', color: colors.gold, bg: colors.goldSoft };
   }
   if (pelada.myRole === 'CO_ORGANIZER') {
     return { label: 'Co-org', color: colors.info, bg: colors.infoSoft };
@@ -82,7 +82,7 @@ function PeladaCard({
   const barColor =
     occupancyPct !== null && occupancyPct >= 100
       ? colors.warning
-      : colors.primary;
+      : colors.success;
 
   return (
     <FadeInView
@@ -101,7 +101,7 @@ function PeladaCard({
             <Ionicons
               name={getSportIconName(pelada.sport)}
               size={20}
-              color={isLive ? colors.error : colors.primary}
+              color={isLive ? colors.error : colors.textPrimary}
             />
           </View>
           <View style={styles.cardHeaderText}>
@@ -195,7 +195,7 @@ function PeladaCard({
             </View>
             <View style={styles.openLinkRow}>
               <Text style={styles.openLink}>Abrir</Text>
-              <Ionicons name="arrow-forward" size={14} color={colors.primary} />
+              <Ionicons name="arrow-forward" size={14} color={colors.textPrimary} />
             </View>
           </View>
         </View>
@@ -341,7 +341,7 @@ export function FeedScreen({ navigation }: Props) {
                   accessibilityRole="button"
                   accessibilityLabel="Instalar aplicativo INFUT na tela inicial"
                 >
-                  <Ionicons name="download-outline" size={14} color={colors.primary} />
+                  <Ionicons name="download-outline" size={14} color={colors.textPrimary} />
                   <Text style={styles.installAppPillText}>Instalar</Text>
                 </TouchableOpacity>
               )}
@@ -425,7 +425,7 @@ export function FeedScreen({ navigation }: Props) {
           ListEmptyComponent={
             <FadeInView style={styles.emptyCard}>
               <View style={styles.emptyIconCircle}>
-                <Ionicons name="football-outline" size={28} color={colors.primary} />
+                <Ionicons name="football-outline" size={28} color={colors.textSecondary} />
               </View>
               <Text style={styles.emptyTitle}>Nenhuma pelada por aqui ainda</Text>
               <Text style={styles.emptySubtitle}>
@@ -459,7 +459,7 @@ export function FeedScreen({ navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   headerWrapper: {
     width: '100%',
@@ -493,6 +493,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   headerTitle: {
+    fontFamily: fonts.display,
     fontSize: fonts.sizes.xxl,
     fontWeight: '800',
     color: colors.textPrimary,
@@ -507,16 +508,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    backgroundColor: colors.primarySoft,
+    backgroundColor: colors.surfaceLight,
     paddingHorizontal: spacing.sm + 4,
     paddingVertical: 7,
     borderRadius: borderRadius.full,
     borderWidth: 1,
-    borderColor: colors.primaryBorder,
+    borderColor: colors.borderStrong,
     minHeight: 34,
   },
   installAppPillText: {
-    color: colors.primary,
+    color: colors.textPrimary,
     fontSize: fonts.sizes.xs,
     fontWeight: '700',
   },
@@ -624,9 +625,9 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 12,
-    backgroundColor: colors.primarySoft,
+    backgroundColor: colors.surfaceLight,
     borderWidth: 1,
-    borderColor: colors.primaryBorder,
+    borderColor: colors.borderStrong,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -776,7 +777,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   openLink: {
-    color: colors.primary,
+    color: colors.textPrimary,
     fontSize: fonts.sizes.xs + 1,
     fontWeight: '800',
   },
@@ -793,9 +794,9 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: colors.primarySoft,
+    backgroundColor: colors.surfaceLight,
     borderWidth: 1,
-    borderColor: colors.primaryBorder,
+    borderColor: colors.borderStrong,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.md,
@@ -855,4 +856,4 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: fonts.sizes.sm,
   },
-});
+}));

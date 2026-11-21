@@ -1,66 +1,57 @@
-# INFUT — Design System (`Night Pitch`)
+# INFUT — Design System
 
-## 1. Visual Identity & Direction
-- **Mode:** Operate (Sports Match & Community Management — Mobile-first & Responsive Web)
-- **Theme:** **Night Pitch** — Inspired by floodlit nighttime football courts and modern sports performance apps (FotMob, Strava, Nike Run Club).
-- **Core Principle:** Precision, scanability, and tactile speed on the court. Zero emoji clutter, zero generic purple/orange SaaS templates, zero nested-card bloat.
+## 1. Direção
+- **Modo:** Operate. É um app de organizar peladas; a pessoa precisa achar status, horário, valor e ação em segundos.
+- **Princípio:** cor carrega **significado**, não decoração. A cor da paleta só marca a ação principal, a aba ativa e a seleção. Todo o resto é neutro ou usa uma cor semântica.
+- **Assinatura:** números de placar, cronômetro e a marca `INFUT` em **Barlow Condensed** (placar de estádio). O texto corrido usa a fonte do sistema.
 
-## 2. Color System (Semantic Tokens)
-
-### Surface Ramp (Dark Obsidian with Subtle Pitch Undertone)
-| Token | Hex / Value | Usage |
+## 2. Papéis de cor (valem em todas as paletas)
+| Token | Papel | Exemplos |
 |---|---|---|
-| `background` | `#070A0D` | App root canvas |
-| `surface` | `#0D1217` | Navigation bars, sidebars, recessed trays |
-| `card` | `#121820` | Primary elevated content surfaces |
-| `surfaceLight` | `#18202B` | Secondary buttons, chips, segmented controls |
-| `surfaceElevated` | `#1F2937` | Active hover/pressed surface states |
+| `primary` / `primarySoft` / `primaryBorder` | Marca e ação principal | Botão principal, aba ativa, chip selecionado, foco |
+| `success` | Confirmado, pago, vagas abertas | "Confirmado", "Pago", barra de ocupação |
+| `warning` | Pendente, espera, alerta de regra | "Em análise", lista de espera, limite de vitórias |
+| `error` | Ao vivo, recusa, destrutivo | "Ao vivo", "Não vou", "Pendente", excluir |
+| `info` | Goleiro, informação, próxima pelada | "Semanal", "Próxima Pelada", co-organizador |
+| `gold` | MVP, 1º lugar, sequência, organizador | Votos de MVP, líder do ranking |
+| `textPrimary/Secondary/Muted` + superfícies | Todo o resto | Voltar, código da pelada, ícones, rótulos |
 
-### Accents & Semantics
-| Token | Hex / Value | Contrast Role |
-|---|---|---|
-| `primary` | `#16D97C` | Floodlight Emerald — primary CTAs, active tabs, confirmed states (text: `#04120B`, >10:1) |
-| `primaryLight` | `#34EEA0` | Hover / highlighted primary |
-| `primaryDark` | `#0EA860` | Pressed primary |
-| `primarySoft` | `rgba(22, 217, 124, 0.12)` | Subtle tinted badges & active nav backgrounds |
-| `gold` | `#FBBF24` | Championship Gold — strictly for MVP crowns & #1 rankings |
-| `error` / `live` | `#F43F5E` | Matchday Crimson — Live match pulse, declines, destructive actions |
-| `warning` | `#F59E0B` | Waitlist, pending payment confirmation |
-| `info` | `#38BDF8` | Goalkeeper tags, informational badges |
+Cada cor semântica tem `xxxSoft` (fundo) e `xxxBorder` (borda), gerados a partir da cor base.
 
-### Typography Contrast
-| Token | Hex | Min Contrast |
-|---|---|---|
-| `textPrimary` | `#F4F7FA` | >14:1 on `#121820` |
-| `textSecondary` | `#B4C0CE` | >8.5:1 on `#121820` |
-| `textMuted` | `#7D8B9D` | >4.6:1 on `#0D1217` (WCAG AA) |
-| `textInverse` | `#04120B` | >10.5:1 on `#16D97C` |
+**Não fazer:** usar `primary` em ícone decorativo, botão "Voltar", código, chevron ou rótulo; borda colorida só de um lado (use borda inteira ou fundo tingido); botão secundário colorido (`outline` é neutro).
 
-### Borders
-- `border`: `rgba(255, 255, 255, 0.08)`
-- `borderStrong`: `rgba(255, 255, 255, 0.15)`
-- `borderLight`: `rgba(255, 255, 255, 0.05)`
+## 3. Paletas (Perfil › Aparência)
+Definidas em `mobile/src/constants/theme.ts` (`palettes`). A escolha fica salva no aparelho (`infut.palette`).
 
-## 3. Typography
-- **Font Family:** `Plus Jakarta Sans` (Web via Google Fonts, System sans fallback on native)
-- **Weight Hierarchy:**
-  - `800` ExtraBold: Screen titles, scoreboards, timers, primary buttons
-  - `700` Bold: Card titles, section headers, active chips
-  - `600` SemiBold: Navigation labels, badges, secondary buttons
-  - `400` / `500` Regular/Medium: Body copy and metadata
-- **Tabular Numerals:** Mandatory (`fontVariant: ['tabular-nums']`) for all scores, timers, player counts, and currency values.
+| id | Nome | Fundo | Primária | Modo |
+|---|---|---|---|---|
+| `classico` (padrão) | Noite de Jogo | `#0A0D14` azul-marinho | `#FF7A1A` laranja | escuro |
+| `canarinho` | Canarinho | `#06111F` azul profundo | `#FFD33D` amarelo | escuro |
+| `celeste` | Celeste | `#0C0D10` grafite | `#5AB0FF` azul-celeste | escuro |
+| `gramado` | Gramado | `#070A0D` obsidiana | `#16D97C` verde | escuro |
+| `dia` | Dia de Jogo | `#F2F3F6` claro | `#C2410C` laranja escuro | claro |
 
-## 4. Spacing, Radii & Touch Targets
-- **Spacing Rhythm:** 4px / 8px grid (`xs: 4`, `sm: 8`, `md: 16`, `lg: 24`, `xl: 32`, `xxl: 48`)
-- **Border Radius:**
-  - Cards: `16px` (`borderRadius.lg`)
-  - Modals: `20px–24px` (`borderRadius.xl`)
-  - Inputs & Buttons: `12px` (`borderRadius.md`)
-  - Chips & Status Pills: `9999px` (`borderRadius.full`)
-- **Touch Targets:** Minimum `44x44pt` for all interactive controls.
+Contraste: texto do botão principal (`textInverse`) ≥ 4.5:1 sobre `primary` em todas as paletas; `textMuted` ≥ 4.5:1 sobre `surface`.
 
-## 5. Motion & Transitions
-- **Press Feedback:** Tactile `ScalePressable` (`0.975` scale, `90ms` ease-out) without shifting layout bounds.
-- **Entrances:** `FadeInView` with `240ms` cubic ease-out and `8px` vertical settle (respects Reduced Motion).
-- **Live Indicator:** Breathing `PulseDot` (`1400ms` loop) for matches in progress.
-- **Navigation:** Smooth stack transitions (`fade_from_bottom` / `slide_from_right`).
+## 4. Como escrever estilos
+```ts
+import { colors, themed } from '../constants/theme';
+const styles = themed(() => StyleSheet.create({ card: { backgroundColor: colors.card } }));
+```
+`themed` recria o StyleSheet quando a paleta muda. Cores usadas direto no JSX (`color={colors.textPrimary}`) também acompanham, porque o `ThemeProvider` remonta as telas ao trocar a paleta (a navegação mantém a tela atual). Não guarde cores em constantes de módulo fora de `themed`.
+
+## 5. Tipografia
+- Texto: fonte do sistema (Segoe UI / SF / Roboto).
+- `fonts.display` (Barlow Condensed 600–800, web): placar, cronômetros e marca.
+- Pesos: 800 para títulos e números, 700 para títulos de card, 600 para rótulos, 400/500 para texto.
+- Números de placar, tempo e dinheiro com `tabular-nums`.
+
+## 6. Espaço, raios e toque
+- Grade de 4/8px (`xs 4`, `sm 8`, `md 16`, `lg 24`, `xl 32`, `xxl 48`).
+- Raios: cards 16, modais 22, botões e campos 12, chips `full`.
+- Alvos de toque com no mínimo 44×44.
+
+## 7. Movimento
+- Toque: `ScalePressable` (escala 0.975, 90ms).
+- Entrada: `FadeInView` (240ms, sobe 8px; respeita movimento reduzido).
+- Ao vivo: `PulseDot` (1400ms).

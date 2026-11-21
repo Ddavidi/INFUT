@@ -15,7 +15,7 @@ import { Button } from '../ui/Button';
 import { Ionicons } from '@expo/vector-icons';
 import { updatePelada, updatePeladaGameConfig } from '../../services/peladaService';
 import { Pelada, PeladaDrawMode, PeladaGameMode } from '../../types';
-import { colors, fonts, spacing, borderRadius, layout, shadows } from '../../constants/theme';
+import { colors, fonts, spacing, borderRadius, layout, shadows, themed } from '../../constants/theme';
 import { showMessage } from '../../utils/alerts';
 import {
   DURATION_PRESETS,
@@ -739,7 +739,7 @@ export function PeladaConfigModal({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   overlay: {
     flex: 1,
     backgroundColor: colors.overlay,
@@ -767,7 +767,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   eyebrow: {
-    color: colors.primary,
+    color: colors.textMuted,
     fontSize: fonts.sizes.xs,
     fontWeight: '800',
     letterSpacing: 0.8,
@@ -961,8 +961,8 @@ const styles = StyleSheet.create({
     marginVertical: spacing.sm,
   },
   endTimeBannerText: {
-    color: colors.primary,
+    color: colors.info,
     fontSize: fonts.sizes.xs,
     fontWeight: '700',
   },
-});
+}));

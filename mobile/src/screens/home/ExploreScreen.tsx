@@ -15,7 +15,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { explorePeladas } from '../../services/peladaService';
 import { Pelada } from '../../types';
-import { colors, fonts, spacing, borderRadius, shadows } from '../../constants/theme';
+import { colors, fonts, spacing, borderRadius, shadows, themed } from '../../constants/theme';
 import { formatPeladaSchedule } from '../../utils/dateTime';
 import { formatMainPrice } from '../../utils/prices';
 import { useResponsive } from '../../hooks/useResponsive';
@@ -188,7 +188,7 @@ export function ExploreScreen({ navigation }: Props) {
                       <Ionicons
                         name={getSportIconName(item.sport)}
                         size={20}
-                        color={colors.primary}
+                        color={colors.textPrimary}
                       />
                     </View>
                     <View style={{ flex: 1, minWidth: 0 }}>
@@ -244,7 +244,7 @@ export function ExploreScreen({ navigation }: Props) {
                             {
                               width: `${occupancyPct}%`,
                               backgroundColor:
-                                occupancyPct >= 100 ? colors.warning : colors.primary,
+                                occupancyPct >= 100 ? colors.warning : colors.success,
                             },
                           ]}
                         />
@@ -260,7 +260,7 @@ export function ExploreScreen({ navigation }: Props) {
                     </View>
                     <View style={styles.actionHintRow}>
                       <Text style={styles.actionHint}>Ver detalhes</Text>
-                      <Ionicons name="arrow-forward" size={14} color={colors.primary} />
+                      <Ionicons name="arrow-forward" size={14} color={colors.textPrimary} />
                     </View>
                   </View>
                 </ScalePressable>
@@ -270,7 +270,7 @@ export function ExploreScreen({ navigation }: Props) {
           ListEmptyComponent={
             <FadeInView style={styles.emptyCard}>
               <View style={styles.emptyIconCircle}>
-                <Ionicons name="compass-outline" size={28} color={colors.primary} />
+                <Ionicons name="compass-outline" size={28} color={colors.textSecondary} />
               </View>
               <Text style={styles.emptyTitle}>Nenhuma pelada encontrada</Text>
               <Text style={styles.emptySubtitle}>
@@ -310,7 +310,7 @@ export function ExploreScreen({ navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   headerWrapper: {
     width: '100%',
@@ -432,9 +432,9 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 12,
-    backgroundColor: colors.primarySoft,
+    backgroundColor: colors.surfaceLight,
     borderWidth: 1,
-    borderColor: colors.primaryBorder,
+    borderColor: colors.borderStrong,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -462,7 +462,7 @@ const styles = StyleSheet.create({
   },
   recurringText: { fontSize: 11, color: colors.info, fontWeight: '700' },
   spotsBadge: {
-    backgroundColor: colors.primarySoft,
+    backgroundColor: colors.successSoft,
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: borderRadius.full,
@@ -470,7 +470,7 @@ const styles = StyleSheet.create({
   },
   spotsText: {
     fontSize: 11,
-    color: colors.primary,
+    color: colors.success,
     fontWeight: '800',
     fontVariant: ['tabular-nums'],
   },
@@ -554,9 +554,9 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: colors.primarySoft,
+    backgroundColor: colors.surfaceLight,
     borderWidth: 1,
-    borderColor: colors.primaryBorder,
+    borderColor: colors.borderStrong,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.md,
@@ -614,4 +614,4 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: fonts.sizes.sm,
   },
-});
+}));

@@ -15,10 +15,11 @@ import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
 import { LegalModal } from '../../components/ui/LegalModal';
 import { SPORTS, getPositionsForSport } from '../../constants/sports';
-import { colors, fonts, spacing, borderRadius, shadows } from '../../constants/theme';
+import { colors, fonts, spacing, borderRadius, shadows, themed } from '../../constants/theme';
 import { showConfirm, showMessage } from '../../utils/alerts';
 import { useResponsive } from '../../hooks/useResponsive';
 import { Avatar } from '../../components/ui/Avatar';
+import { PalettePicker } from '../../components/profile/PalettePicker';
 import {
   EMPTY_PROFILE_EXTRAS,
   ProfileExtrasFields,
@@ -220,7 +221,7 @@ export function EditProfileScreen() {
             <Text style={styles.statLabel}>Assist.</Text>
           </View>
           <View style={styles.statBox}>
-            <Text style={[styles.statValue, { color: colors.primary }]}>{stats.mvpVotes}</Text>
+            <Text style={[styles.statValue, { color: colors.gold }]}>{stats.mvpVotes}</Text>
             <Text style={styles.statLabel}>MVP</Text>
           </View>
         </View>
@@ -232,7 +233,7 @@ export function EditProfileScreen() {
     <>
       {/* Cartao de Dados do Perfil */}
       <View style={styles.formCard}>
-        <Text style={styles.cardSectionHeading}>DADOS E PREFERÊNCIAS</Text>
+        <Text style={styles.cardTitle}>Seus dados</Text>
         <Input label="Nome" placeholder="Seu nome" value={name} onChangeText={setName} />
         <Input
           label="Região / Bairro"
@@ -300,9 +301,16 @@ export function EditProfileScreen() {
         />
       </View>
 
+      {/* Aparência */}
+      <View style={styles.formCard}>
+        <Text style={styles.cardTitle}>Aparência</Text>
+        <Text style={styles.cardHint}>Escolha as cores do app. Vale só para este aparelho.</Text>
+        <PalettePicker />
+      </View>
+
       {/* Alteração de Senha */}
       <View style={styles.formCard}>
-        <Text style={styles.cardSectionHeading}>SEGURANÇA — ALTERAR SENHA</Text>
+        <Text style={styles.cardTitle}>Alterar senha</Text>
         <Input
           label="Senha Atual"
           placeholder="Digite sua senha atual"
@@ -384,7 +392,7 @@ export function EditProfileScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   loadingScreen: {
     flex: 1,
     justifyContent: 'center',
@@ -438,7 +446,7 @@ const styles = StyleSheet.create({
     width: 74,
     height: 74,
     borderRadius: 37,
-    backgroundColor: colors.primaryDark,
+    backgroundColor: colors.surfaceElevated,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -447,12 +455,12 @@ const styles = StyleSheet.create({
   email: { color: colors.textSecondary, fontSize: fonts.sizes.xs, marginTop: 2 },
   sportTagPill: {
     marginTop: spacing.sm,
-    backgroundColor: colors.primarySoft,
+    backgroundColor: colors.surfaceLight,
     paddingHorizontal: spacing.md,
     paddingVertical: 4,
     borderRadius: borderRadius.full,
   },
-  sportTagText: { color: colors.primary, fontSize: fonts.sizes.xs, fontWeight: '700' },
+  sportTagText: { color: colors.textSecondary, fontSize: fonts.sizes.xs, fontWeight: '700' },
   statsCard: {
     backgroundColor: colors.card,
     borderRadius: borderRadius.lg,
@@ -516,11 +524,18 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
     ...shadows.card,
   },
-  cardSectionHeading: {
-    color: colors.primary,
-    fontSize: fonts.sizes.xs,
+  cardTitle: {
+    color: colors.textPrimary,
+    fontSize: fonts.sizes.lg,
     fontWeight: '800',
-    letterSpacing: 0.8,
+    letterSpacing: -0.2,
+    marginBottom: spacing.md,
+  },
+  cardHint: {
+    color: colors.textSecondary,
+    fontSize: fonts.sizes.sm,
+    lineHeight: 20,
+    marginTop: -spacing.sm,
     marginBottom: spacing.md,
   },
   sectionLabel: {
@@ -579,4 +594,4 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     textDecorationLine: 'underline',
   },
-});
+}));

@@ -12,7 +12,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { getRanking } from '../../services/userService';
 import { RankingPlayer } from '../../types';
-import { colors, fonts, spacing, borderRadius, shadows } from '../../constants/theme';
+import { colors, fonts, spacing, borderRadius, shadows, themed } from '../../constants/theme';
 import { useResponsive } from '../../hooks/useResponsive';
 import { FadeInView, ScalePressable } from '../../components/ui/Motion';
 
@@ -176,7 +176,7 @@ export function RankingScreen() {
             const medalColor = isLeader
               ? colors.gold
               : isSecond
-                ? '#CBD5E1'
+                ? colors.textSecondary
                 : isThird
                   ? '#D97706'
                   : colors.textMuted;
@@ -260,7 +260,7 @@ export function RankingScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   headerWrapper: {
     width: '100%',
@@ -357,7 +357,7 @@ const styles = StyleSheet.create({
   },
   cardLeader: {
     borderColor: colors.goldBorder,
-    backgroundColor: '#161B22',
+    backgroundColor: colors.goldSoft,
   },
   rankBadge: {
     width: 34,
@@ -383,9 +383,9 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: colors.primarySoft,
+    backgroundColor: colors.surfaceLight,
     borderWidth: 1,
-    borderColor: colors.primaryBorder,
+    borderColor: colors.borderStrong,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -394,7 +394,7 @@ const styles = StyleSheet.create({
     borderColor: colors.goldBorder,
   },
   avatarText: {
-    color: colors.primary,
+    color: colors.textSecondary,
     fontSize: fonts.sizes.md,
     fontWeight: '800',
   },
@@ -416,7 +416,7 @@ const styles = StyleSheet.create({
     minWidth: 58,
   },
   metricValue: {
-    color: colors.primary,
+    color: colors.textPrimary,
     fontSize: fonts.sizes.xl,
     fontWeight: '800',
     fontVariant: ['tabular-nums'],
@@ -459,4 +459,4 @@ const styles = StyleSheet.create({
     lineHeight: 21,
     maxWidth: 380,
   },
-});
+}));

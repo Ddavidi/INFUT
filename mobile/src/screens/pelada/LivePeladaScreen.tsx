@@ -35,7 +35,7 @@ import { MatchPitch } from '../../components/pelada/MatchPitch';
 import { Avatar } from '../../components/ui/Avatar';
 import { usePeladaLiveSync } from '../../hooks/usePeladaLiveSync';
 import { pickSquarePhoto } from '../../utils/imagePicker';
-import { colors, fonts, spacing, borderRadius, shadows, layout } from '../../constants/theme';
+import { colors, fonts, spacing, borderRadius, shadows, layout, themed } from '../../constants/theme';
 import { showConfirm, showMessage } from '../../utils/alerts';
 import { buildInviteUrl, shareOrCopyText } from '../../utils/inviteLink';
 import { useResponsive } from '../../hooks/useResponsive';
@@ -940,7 +940,7 @@ export function LivePeladaScreen({ navigation, route }: Props) {
           </View>
 
           {waitingQueue.length > 0 && (
-            <View style={[styles.teamCard, { borderLeftColor: colors.info }]}>
+            <View style={[styles.teamCard, { borderColor: colors.infoBorder }]}>
               <TouchableOpacity
                 style={styles.accordionHeader}
                 onPress={() => setExpandQueue((v) => !v)}
@@ -965,7 +965,7 @@ export function LivePeladaScreen({ navigation, route }: Props) {
           )}
 
           {lastLoserPool.length > 0 && (
-            <View style={[styles.teamCard, { borderLeftColor: colors.warning }]}>
+            <View style={[styles.teamCard, { borderColor: colors.warningBorder }]}>
               <TouchableOpacity
                 style={styles.accordionHeader}
                 onPress={() => setExpandLoserPool((v) => !v)}
@@ -1583,7 +1583,7 @@ export function LivePeladaScreen({ navigation, route }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   liveClockRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1613,7 +1613,8 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
   },
   liveClockText: {
-    color: colors.primary,
+    fontFamily: fonts.display,
+    color: colors.textPrimary,
     fontSize: 28,
     fontWeight: '800',
     fontVariant: ['tabular-nums'],
@@ -1877,7 +1878,7 @@ const styles = StyleSheet.create({
     minHeight: 44,
     justifyContent: 'center',
   },
-  backBtnText: { color: colors.primary, fontSize: fonts.sizes.md, fontWeight: '700' },
+  backBtnText: { color: colors.textPrimary, fontSize: fonts.sizes.md, fontWeight: '700' },
   topTitle: {
     flex: 1,
     minWidth: 100,
@@ -1971,7 +1972,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   ruleBadgeText: {
-    color: colors.primary,
+    color: colors.textSecondary,
     fontSize: fonts.sizes.xs,
     fontWeight: '700',
     marginTop: 4,
@@ -2003,9 +2004,10 @@ const styles = StyleSheet.create({
     letterSpacing: 0.6,
   },
   timerDisplayCompact: {
+    fontFamily: fonts.display,
     fontSize: 34,
     fontWeight: '800',
-    color: colors.primary,
+    color: colors.textPrimary,
     fontVariant: ['tabular-nums'],
     letterSpacing: 1,
   },
@@ -2115,7 +2117,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   accordionChevron: {
-    color: colors.primary,
+    color: colors.textMuted,
     fontSize: fonts.sizes.md,
     fontWeight: '800',
   },
@@ -2150,7 +2152,7 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   rotationBannerLabel: {
-    color: colors.primary,
+    color: colors.textSecondary,
     fontSize: 10,
     fontWeight: '800',
     letterSpacing: 0.6,
@@ -2171,8 +2173,7 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.md,
     borderWidth: 1,
     borderColor: colors.border,
-    borderLeftWidth: 3,
-    borderLeftColor: colors.primary,
+    borderLeftColor: colors.border,
     padding: spacing.sm + 4,
   },
   teamCardHalf: {
@@ -2258,7 +2259,8 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   scoreNumber: {
-    color: colors.primary,
+    fontFamily: fonts.display,
+    color: colors.textPrimary,
     fontSize: 36,
     fontWeight: '800',
     minWidth: 34,
@@ -2312,30 +2314,30 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   streakPill: {
-    backgroundColor: colors.primarySoft,
+    backgroundColor: colors.goldSoft,
     paddingHorizontal: 7,
     paddingVertical: 2,
     borderRadius: borderRadius.full,
     borderWidth: 1,
-    borderColor: colors.primaryBorder,
+    borderColor: colors.goldBorder,
   },
   streakPillText: {
-    color: colors.primary,
+    color: colors.gold,
     fontSize: 10,
     fontWeight: '800',
   },
   teamStreakLabel: {
-    color: colors.primary,
+    color: colors.gold,
     fontSize: 10,
     fontWeight: '800',
     marginTop: 2,
   },
   winLimitAlert: {
     marginTop: spacing.sm,
-    backgroundColor: colors.primarySoft,
+    backgroundColor: colors.warningSoft,
     borderRadius: borderRadius.md,
     borderWidth: 1,
-    borderColor: colors.primaryBorder,
+    borderColor: colors.warningBorder,
     paddingHorizontal: spacing.sm + 2,
     paddingVertical: spacing.xs + 3,
   },
@@ -2419,7 +2421,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   modalEyebrow: {
-    color: colors.primary,
+    color: colors.textMuted,
     fontSize: fonts.sizes.xs,
     fontWeight: '800',
     letterSpacing: 0.7,
@@ -2618,4 +2620,4 @@ const styles = StyleSheet.create({
     fontSize: fonts.sizes.xs + 1,
     fontWeight: '800',
   },
-});
+}));
