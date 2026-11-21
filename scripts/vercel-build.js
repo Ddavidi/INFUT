@@ -70,12 +70,10 @@ if (fs.existsSync(rootPrismaClientDir) && fs.existsSync(backendPrismaClientDir))
   }
 }
 
-if (!fs.existsSync(path.join(mobileDir, 'node_modules', 'expo'))) {
-  console.log('3. Installing mobile dependencies...');
-  execSync('npm install', { stdio: 'inherit', cwd: mobileDir });
-} else {
-  console.log('3. Mobile dependencies already installed.');
-}
+// Sempre sincroniza: o cache de build da Vercel restaura um node_modules antigo,
+// e pular a instalacao deixava de fora dependencias novas (ex.: @expo/vector-icons).
+console.log('3. Syncing mobile dependencies...');
+execSync('npm install --no-audit --no-fund', { stdio: 'inherit', cwd: mobileDir });
 
 console.log('4. Exporting Expo Web static bundle...');
 execSync('npx expo export --platform web', {
