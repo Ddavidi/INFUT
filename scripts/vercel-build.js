@@ -7,6 +7,32 @@ const mobileDir = path.join(rootDir, 'mobile');
 const rootPrismaClientDir = path.join(rootDir, 'node_modules', '.prisma', 'client');
 const backendPrismaClientDir = path.join(rootDir, 'backend', 'node_modules', '.prisma', 'client');
 
+// 0. Migracoes aditivas e idempotentes (ADD COLUMN IF NOT EXISTS) antes de publicar o codigo novo.
+//    Se falhar, o build falha e o deploy anterior continua no ar.
+const migrationsDir = path.join(rootDir, 'backend', 'prisma', 'sql');
+const migrationUrl =
+  process.env.DATABASE_URL_UNPOOLED ||
+  process.env.POSTGRES_URL_NON_POOLING ||
+  process.env.DATABASE_URL ||
+  process.env.POSTGRES_PRISMA_URL ||
+  process.env.POSTGRES_URL;
+
+if (fs.existsSync(migrationsDir)) {
+  const sqlFiles = fs.readdirSync(migrationsDir).filter((f) => f.endsWith('.sql')).sort();
+  if (sqlFiles.length > 0) {
+    if (!migrationUrl || !migrationUrl.startsWith('postgres')) {
+      throw new Error('Nenhuma URL PostgreSQL disponivel no build para aplicar as migracoes.');
+    }
+    for (const file of sqlFiles) {
+      console.log(`0. Aplicando migracao ${file}...`);
+      execSync(
+        `npx prisma db execute --schema=prisma/schema.prisma --file="${path.join(migrationsDir, file)}"`,
+        { stdio: 'inherit', cwd: rootDir, env: { ...process.env, DATABASE_URL: migrationUrl } }
+      );
+    }
+  }
+}
+
 console.log('1. Generating Prisma Client into root node_modules...');
 execSync('npx prisma generate --schema=prisma/schema.prisma', {
   stdio: 'inherit',
