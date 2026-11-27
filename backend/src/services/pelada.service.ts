@@ -20,6 +20,18 @@ import {
   UpdateStatsInput,
 } from '../schemas/pelada.schema';
 import { rotateWinnerAtLimit, shuffleArray } from './rotation';
+import { peladaSyncCache } from '../utils/syncCache';
+import {
+  computeLiveScore,
+  getPlayerUnitPrice,
+  getTimerElapsedMs,
+  isPeladaFree,
+  newLiveMatch,
+  resolvePaymentStatus,
+  summarizeFinances,
+} from './pelada.rules';
+
+export { getPlayerUnitPrice } from './pelada.rules';
 
 export type PeladaGameMode = 'WINNER_STAYS_QUEUE' | 'FIXED_TEAMS';
 export type PeladaDrawMode = 'POSITION' | 'RANDOM' | 'MANUAL';
@@ -97,67 +109,6 @@ export interface MatchRecord {
   winner: string;
   finishedAt: string;
   events?: LiveGoalEvent[];
-}
-
-type PricedPelada = {
-  price?: number | null;
-  priceGoalkeeper?: number | null;
-  priceMonthly?: number | null;
-  goalkeepersExempt?: boolean;
-};
-
-/** Valor que um participante deve pagar conforme o tipo (goleiro, mensalista ou avulso). */
-export function getPlayerUnitPrice(
-  pelada: PricedPelada,
-  player: { isGoalkeeper?: boolean; memberType?: string | null }
-): number {
-  if (player.isGoalkeeper) {
-    if (pelada.priceGoalkeeper !== null && pelada.priceGoalkeeper !== undefined) {
-      return Math.max(0, pelada.priceGoalkeeper);
-    }
-    return pelada.goalkeepersExempt ? 0 : Math.max(0, pelada.price || 0);
-  }
-  if (player.memberType === 'MENSALISTA') {
-    if (pelada.priceMonthly !== null && pelada.priceMonthly !== undefined) {
-      return Math.max(0, pelada.priceMonthly);
-    }
-  }
-  return Math.max(0, pelada.price || 0);
-}
-
-function isPeladaFree(pelada: PricedPelada): boolean {
-  return (
-    !(pelada.price && pelada.price > 0) &&
-    !(pelada.priceGoalkeeper && pelada.priceGoalkeeper > 0) &&
-    !(pelada.priceMonthly && pelada.priceMonthly > 0)
-  );
-}
-
-/** Ajusta EXEMPT/PENDING conforme o valor devido; nunca mexe em PAID/WAITING_CONFIRMATION. */
-function resolvePaymentStatus(currentStatus: string | null | undefined, unitPrice: number): string {
-  const current = currentStatus || 'PENDING';
-  if (current === 'PAID' || current === 'WAITING_CONFIRMATION') return current;
-  return unitPrice <= 0 ? 'EXEMPT' : 'PENDING';
-}
-
-function computeLiveScore(live: LiveMatchState) {
-  const scoreA = live.events.filter((e) => e.teamName === live.teamAName).length;
-  const scoreB = live.events.filter((e) => e.teamName === live.teamBName).length;
-  return { scoreA, scoreB };
-}
-
-function getTimerElapsedMs(timer: LiveMatchTimer, now = Date.now()): number {
-  const running = timer.running && timer.startedAt ? now - timer.startedAt : 0;
-  return Math.max(0, (timer.accumulatedMs || 0) + running);
-}
-
-function newLiveMatch(teamAName: string, teamBName: string): LiveMatchState {
-  return {
-    teamAName,
-    teamBName,
-    events: [],
-    timer: { running: false, startedAt: null, accumulatedMs: 0 },
-  };
 }
 
 function normalizeText(value: string): string {
@@ -494,32 +445,10 @@ export class PeladaService {
         ? 'ORGANIZER'
         : myPlayer?.role || null;
 
-    const unitPrice = pelada.price || 0;
-    const priceOf = (p: any) => getPlayerUnitPrice(pelada, p);
-    const payableConfirmed = confirmedPlayers.filter((p: any) => p.paymentStatus !== 'EXEMPT');
-    const paidPlayers = confirmedPlayers.filter((p: any) => p.paymentStatus === 'PAID');
-    const paidCount = paidPlayers.length;
-    const waitingCount = confirmedPlayers.filter((p: any) => p.paymentStatus === 'WAITING_CONFIRMATION').length;
-    const pendingCount = confirmedPlayers.filter((p: any) => p.paymentStatus === 'PENDING').length;
-    const exemptCount = confirmedPlayers.filter((p: any) => p.paymentStatus === 'EXEMPT').length;
-    const sumPrices = (list: any[]) =>
-      Number(list.reduce((sum: number, p: any) => sum + priceOf(p), 0).toFixed(2));
-
     for (const p of players) {
-      p.unitPrice = priceOf(p);
+      p.unitPrice = getPlayerUnitPrice(pelada, p);
     }
-
-    const financialSummary = {
-      unitPrice,
-      goalkeeperPrice: getPlayerUnitPrice(pelada, { isGoalkeeper: true }),
-      monthlyPrice: getPlayerUnitPrice(pelada, { memberType: 'MENSALISTA' }),
-      totalExpected: sumPrices(payableConfirmed),
-      totalPaid: sumPrices(paidPlayers),
-      paidCount,
-      waitingCount,
-      pendingCount,
-      exemptCount,
-    };
+    const financialSummary = summarizeFinances(pelada, confirmedPlayers);
 
     const envelope = this.parseTeamsEnvelope(pelada);
     const matches = this.safeJsonParse<MatchRecord[]>(pelada.matchesJson, []);
@@ -1844,25 +1773,27 @@ export class PeladaService {
   }
 
   async getSyncVersion(peladaId: string) {
-    const [pelada, agg] = await Promise.all([
-      prisma.pelada.findUnique({
-        where: { id: peladaId },
-        select: { updatedAt: true, status: true },
-      }),
-      prisma.peladaPlayer.aggregate({
-        where: { peladaId },
-        _max: { updatedAt: true },
-        _count: { _all: true },
-      }),
-    ]);
-    if (!pelada) {
-      throw this.createHttpError('Peladinha nao encontrada', 404);
-    }
-    return {
-      syncVersion: this.buildSyncVersion(pelada.updatedAt, agg._max.updatedAt, agg._count._all),
-      status: pelada.status,
-      serverNow: Date.now(),
-    };
+    const cached = await peladaSyncCache.get(peladaId, async () => {
+      const [pelada, agg] = await Promise.all([
+        prisma.pelada.findUnique({
+          where: { id: peladaId },
+          select: { updatedAt: true, status: true },
+        }),
+        prisma.peladaPlayer.aggregate({
+          where: { peladaId },
+          _max: { updatedAt: true },
+          _count: { _all: true },
+        }),
+      ]);
+      if (!pelada) {
+        throw this.createHttpError('Peladinha nao encontrada', 404);
+      }
+      return {
+        syncVersion: this.buildSyncVersion(pelada.updatedAt, agg._max.updatedAt, agg._count._all),
+        status: pelada.status,
+      };
+    });
+    return { ...cached, serverNow: Date.now() };
   }
 
   async addLiveGoal(peladaId: string, actorUserId: string, input: LiveGoalInput) {

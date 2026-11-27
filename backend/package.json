@@ -10,7 +10,8 @@
         "prisma:migrate": "npx prisma migrate dev",
         "start": "node build/server.js",
         "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
-        "prisma:studio": "npx prisma studio"
+        "prisma:studio": "npx prisma studio",
+        "test": "vitest run"
     },
     "keywords": [],
     "author": "",

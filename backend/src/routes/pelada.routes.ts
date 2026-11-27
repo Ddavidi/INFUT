@@ -3,6 +3,7 @@ import { Router } from 'express';
 import { PeladaController } from '../controllers/pelada.controller';
 import { authMiddleware } from '../middlewares/auth.middleware';
 import { validate } from '../middlewares/validate.middleware';
+import { peladaSyncCache } from '../utils/syncCache';
 import {
   addGuestSchema,
   batchCheckinSchema,
@@ -30,6 +31,16 @@ import {
 
 const router = Router();
 const peladaController = new PeladaController();
+
+// Qualquer alteracao em /peladas/:id/... apaga a versao em cache dessa pelada assim que
+// a resposta sai, para quem esta acompanhando ver a mudanca na proxima consulta.
+router.use('/:id', (req, res, next) => {
+  if (req.method !== 'GET' && req.method !== 'HEAD' && req.method !== 'OPTIONS') {
+    const id = String(req.params.id);
+    res.on('finish', () => peladaSyncCache.invalidate(id));
+  }
+  next();
+});
 
 // Rota publica de visitante (sem login) antes de /:id
 router.get('/public/:inviteCode', (req, res, next) => peladaController.getPublicByCode(req, res, next));

@@ -7,6 +7,11 @@ const mobileDir = path.join(rootDir, 'mobile');
 const rootPrismaClientDir = path.join(rootDir, 'node_modules', '.prisma', 'client');
 const backendPrismaClientDir = path.join(rootDir, 'backend', 'node_modules', '.prisma', 'client');
 
+// Testes das regras (rotacao, valores, placar) antes de tudo: se algum falhar,
+// o build para aqui, sem tocar no banco, e o deploy anterior continua no ar.
+console.log('Running unit tests...');
+execSync('npx vitest run', { stdio: 'inherit', cwd: rootDir });
+
 // 0. Migracoes aditivas e idempotentes (ADD COLUMN IF NOT EXISTS) antes de publicar o codigo novo.
 //    Se falhar, o build falha e o deploy anterior continua no ar.
 const migrationsDir = path.join(rootDir, 'backend', 'prisma', 'sql');

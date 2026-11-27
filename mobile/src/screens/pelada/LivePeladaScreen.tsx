@@ -169,6 +169,8 @@ export function LivePeladaScreen({ navigation, route }: Props) {
     currentVersion: pelada?.syncVersion,
     reload: silentReload,
     intervalMs: 2000,
+    // partida rolando: gols precisam aparecer rapido; parada: pode espacar mais
+    maxIntervalMs: liveTimerRunning ? 4000 : 6000,
   });
 
   function openGoalModal(teamName: string) {

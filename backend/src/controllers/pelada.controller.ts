@@ -1,5 +1,6 @@
 // src/controllers/pelada.controller.ts
 import { Request, Response, NextFunction } from 'express';
+import { peladaSyncCache } from '../utils/syncCache';
 import { PeladaService } from '../services/pelada.service';
 
 const peladaService = new PeladaService();
@@ -81,6 +82,8 @@ export class PeladaController {
     try {
       const userId = req.user!.userId;
       const pelada = await peladaService.joinByCode(userId, req.body.inviteCode);
+      // a URL nao tem o id da pelada, entao a rota nao invalida sozinha
+      if (pelada?.id) peladaSyncCache.invalidate(String(pelada.id));
       res.status(200).json(pelada);
     } catch (error) {
       next(error);
